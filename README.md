@@ -1,4 +1,4 @@
-CoLoRe - Cosmological Lognormal Realizations
+#CoLoRe - Cosmological Lognormal Realizations
 
 
 1 Methods.
