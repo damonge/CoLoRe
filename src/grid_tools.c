@@ -123,7 +123,11 @@ void get_sources(ParamCoLoRe *par)
     par->nsources_this+=np_tot_thr[ii];
 
   par->nsources_total=0;
+#ifdef _HAVE_MPI
   MPI_Allreduce(&(par->nsources_this),&(par->nsources_total),1,LINT_MPI,MPI_SUM,MPI_COMM_WORLD);
+#else //_HAVE_MPI
+  par->nsources_total=par->nsources_this;
+#endif //_HAVE_MPI
 
   print_info("  There will be %ld particles in total\n",(long)(par->nsources_total));
   //#ifdef _DEBUG
