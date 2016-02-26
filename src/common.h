@@ -96,6 +96,13 @@ void print_info(char *fmt,...);
 void report_error(int level,char *fmt,...);
 
 typedef struct {
+  float ra;     //Right ascension
+  float dec;    //Declination
+  float z0;     //Cosmological redshift
+  float dz_rsd; //RSD contribution
+} Gal;
+
+typedef struct {
   char fnamePk[256];
   char fnameBz[256];
   char fnameNz[256];
@@ -139,7 +146,7 @@ typedef struct {
   int iz0_here;
 
   char prefixOut[256];
-  int use_fits;
+  int output_format; //0-> ASCII, 1-> FITS, 2-> HDF5
   double pos_obs[3];
 
   dftw_complex *grid_dens_f;
@@ -159,11 +166,7 @@ typedef struct {
 
   lint nsources_this;
   lint nsources_total;
-  float *z0_arr;
-  float *ra_arr;
-  float *dec_arr;
-  float *rsd_arr;
-
+  Gal *gals;
 } ParamCoLoRe;
 void *my_malloc(size_t size);
 void *my_calloc(size_t nmemb,size_t size);

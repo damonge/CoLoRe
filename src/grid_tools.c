@@ -123,7 +123,11 @@ void get_sources(ParamCoLoRe *par)
     par->nsources_this+=np_tot_thr[ii];
 
   par->nsources_total=0;
+#ifdef _HAVE_MPI
   MPI_Allreduce(&(par->nsources_this),&(par->nsources_total),1,LINT_MPI,MPI_SUM,MPI_COMM_WORLD);
+#else //_HAVE_MPI
+  par->nsources_total=par->nsources_this;
+#endif //_HAVE_MPI
 
   print_info("  There will be %ld particles in total\n",(long)(par->nsources_total));
   //#ifdef _DEBUG
@@ -146,10 +150,7 @@ void get_sources(ParamCoLoRe *par)
   fftw_free(par->grid_dens_f);
 #endif //_SPREC
   par->grid_dens_f=NULL;
-  par->z0_arr=my_malloc(par->nsources_this*sizeof(float));
-  par->ra_arr=my_malloc(par->nsources_this*sizeof(float));
-  par->dec_arr=my_malloc(par->nsources_this*sizeof(float));
-  par->rsd_arr=my_malloc(par->nsources_this*sizeof(float));
+  par->gals=my_malloc(par->nsources_this*sizeof(Gal));
 
   if(NodeThis==0) timer(0);
   print_info("Assigning coordinates\n");
@@ -194,10 +195,10 @@ void get_sources(ParamCoLoRe *par)
 	      double y=y0+dx*rng_01(rng_thr);
 	      double z=z0+dx*rng_01(rng_thr);
 	      cart2sph(x,y,z,&r,&cth,&phi);
-	      par->z0_arr[pid]=z_of_r(par,r);
-	      par->dec_arr[pid]=90-RTOD*acos(cth);
-	      par->ra_arr[pid]=RTOD*phi;
-	      par->rsd_arr[pid]=dz_rsd;
+	      par->gals[pid].ra=RTOD*phi;
+	      par->gals[pid].dec=90-RTOD*acos(cth);
+	      par->gals[pid].z0=z_of_r(par,r);
+	      par->gals[pid].dz_rsd=dz_rsd;
 	      np_tot_thr[ithr]++;
 	    }
 	  }

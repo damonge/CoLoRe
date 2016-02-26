@@ -20,7 +20,13 @@
 //                                                                   //
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
+#ifdef _HAVE_FITS
 #include <fitsio.h>
+#endif //_HAVE_FITS
+#ifdef _HAVE_HDF5
+#include <hdf5.h>
+#include <hdf5_hl.h>
+#endif //_HAVE_HDF5
 
 static ParamCoLoRe *param_colore_new(void)
 {
@@ -59,7 +65,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->nz_here=512;
   par->iz0_here=0;
   sprintf(par->prefixOut,"default");
-  par->use_fits=0;
+  par->output_format=0;
   par->grid_dens_f=NULL;
   par->grid_dens=NULL;
   par->grid_vpot_f=NULL;
@@ -71,10 +77,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->intacc_bz=NULL;
   par->spline_nz=NULL;
   par->intacc_nz=NULL;
-  par->z0_arr=NULL;
-  par->ra_arr=NULL;
-  par->dec_arr=NULL;
-  par->rsd_arr=NULL;
+  par->gals=NULL;
 
   return par;
 }
@@ -105,10 +108,22 @@ ParamCoLoRe *read_run_params(char *fname)
     if(!strcmp(s1,"prefix_out="))
       sprintf(par->prefixOut,"%s",s2);
     else if(!strcmp(s1,"output_format=")) {
-      if(!strcmp(s2,"FITS"))
-	par->use_fits=1;
+      if(!strcmp(s2,"HDF5")) {
+#ifdef _HAVE_HDF5
+	par->output_format=2;
+#else //_HAVE_HDF5
+	report_error(1,"HDF5 format not supported\n");
+#endif //_HAVE_HDF5
+      }
+      else if(!strcmp(s2,"FITS")) {
+#ifdef _HAVE_FITS
+	par->output_format=1;
+#else //_HAVE_FITS
+	report_error(1,"FITS format not supported\n");
+#endif //_HAVE_FITS
+      }
       else if(!strcmp(s2,"ASCII"))
-	par->use_fits=0;
+	par->output_format=0;
       else
 	report_error(1,"Unrecognized format %s\n",s2);
     }
@@ -178,26 +193,86 @@ void write_catalog(ParamCoLoRe *par)
   char fname[256];
   
   if(NodeThis==0) timer(0);
-  if(par->use_fits) {
+  if(par->output_format==2) { //HDF5
+#ifdef _HAVE_HDF5
+    hid_t file_id,gal_types[4];
+    hsize_t chunk_size=128;
+    size_t dst_offset[4]={HOFFSET(Gal,ra),HOFFSET(Gal,dec),HOFFSET(Gal,z0),HOFFSET(Gal,dz_rsd)};
+    const char *names[4]={"RA" ,"DEC","Z_COSMO","DZ_RSD"};
+    char *tunit[4]=      {"DEG","DEG","NA"     ,"NA"    };
+    gal_types[0]=H5T_NATIVE_FLOAT;
+    gal_types[1]=H5T_NATIVE_FLOAT;
+    gal_types[2]=H5T_NATIVE_FLOAT;
+    gal_types[3]=H5T_NATIVE_FLOAT;
+
+    print_info("*** Writing output (HDF5)\n");
+    sprintf(fname,"%s_%d.h5",par->prefixOut,NodeThis);
+
+    //Create file
+    file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
+    //Write table
+    H5TBmake_table("source_data",file_id,"/sources",4,par->nsources_this,sizeof(Gal),
+		   names,dst_offset,gal_types,chunk_size,NULL,0,par->gals);
+    H5LTset_attribute_string(file_id,"/sources","FIELD_0_UNITS",tunit[0]);
+    H5LTset_attribute_string(file_id,"/sources","FIELD_1_UNITS",tunit[1]);
+    H5LTset_attribute_string(file_id,"/sources","FIELD_2_UNITS",tunit[2]);
+    H5LTset_attribute_string(file_id,"/sources","FIELD_3_UNITS",tunit[3]);
+
+    //End file
+    H5Fclose(file_id);
+#else //_HAVE_HDF5
+    printf("HDF5 not supported\n");
+#endif //_HAVE_HDF5
+  }
+  else if(par->output_format==1) { //FITS
+#ifdef _HAVE_FITS
+    long ii,row_here=0,nrw=0;
     int status=0;
     fitsfile *fptr;
+    float *ra_arr,*dec_arr,*z0_arr,*rsd_arr;
     char *ttype[]={"RA" ,"DEC","Z_COSMO","DZ_RSD"};
     char *tform[]={"1E" ,"1E" ,"1E"     ,"1E"    };
     char *tunit[]={"DEG","DEG","NA"     ,"NA"    };
 
     print_info("*** Writing output (FITS)\n");
-
     sprintf(fname,"!%s_%d.fits",par->prefixOut,NodeThis);
 
     fits_create_file(&fptr,fname,&status);
     fits_create_tbl(fptr,BINARY_TBL,0,4,ttype,tform,tunit,NULL,&status);
 
-    fits_write_col(fptr,TFLOAT,1,1,1,par->nsources_this,par->ra_arr,&status);
-    fits_write_col(fptr,TFLOAT,2,1,1,par->nsources_this,par->dec_arr,&status);
-    fits_write_col(fptr,TFLOAT,3,1,1,par->nsources_this,par->z0_arr,&status);
-    fits_write_col(fptr,TFLOAT,4,1,1,par->nsources_this,par->rsd_arr,&status);
+    fits_get_rowsize(fptr,&nrw,&status);
+    ra_arr=my_malloc(nrw*sizeof(float));
+    dec_arr=my_malloc(nrw*sizeof(float));
+    z0_arr=my_malloc(nrw*sizeof(float));
+    rsd_arr=my_malloc(nrw*sizeof(float));
+    while(row_here<par->nsources_this) {
+      long nrw_here;
+      if(row_here+nrw>par->nsources_this)
+	nrw_here=par->nsources_this-row_here;
+      else
+	nrw_here=nrw;
+
+      for(ii=0;ii<nrw_here;ii++) {
+	ra_arr[ii]=par->gals[row_here+ii].ra;
+	dec_arr[ii]=par->gals[row_here+ii].dec;
+	z0_arr[ii]=par->gals[row_here+ii].z0;
+	rsd_arr[ii]=par->gals[row_here+ii].dz_rsd;
+      }
+      fits_write_col(fptr,TFLOAT,1,row_here+1,1,nrw_here,ra_arr,&status);
+      fits_write_col(fptr,TFLOAT,2,row_here+1,1,nrw_here,dec_arr,&status);
+      fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,z0_arr,&status);
+      fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,rsd_arr,&status);
     
+      row_here+=nrw_here;
+    }
     fits_close_file(fptr,&status);
+    free(ra_arr);
+    free(dec_arr);
+    free(z0_arr);
+    free(rsd_arr);
+#else //_HAVE_FITS
+    printf("FITS not supported\n");
+#endif //_HAVE_FITS
   }
   else   {
     print_info("*** Writing output (ASCII)\n");
@@ -206,11 +281,11 @@ void write_catalog(ParamCoLoRe *par)
     lint jj;
     FILE *fil=fopen(fname,"w");
     if(fil==NULL) error_open_file(fname);
-    fprintf(fil,"#[1]z0, [2]RA, [3]dec, [4]dz_RSD\n");
+    fprintf(fil,"#[1]RA, [2]dec, [3]z0, [4]dz_RSD\n");
     for(jj=0;jj<par->nsources_this;jj++) {
       fprintf(fil,"%E %E %E %E\n",
-	      par->z0_arr[jj],par->ra_arr[jj],
-	      par->dec_arr[jj],par->rsd_arr[jj]);
+	      par->gals[jj].ra,par->gals[jj].dec,
+	      par->gals[jj].z0,par->gals[jj].dz_rsd);
     }
     fclose(fil);
   }
@@ -241,9 +316,7 @@ void param_colore_free(ParamCoLoRe *par)
   gsl_spline_free(par->spline_nz);
   gsl_interp_accel_free(par->intacc_bz);
   gsl_interp_accel_free(par->intacc_nz);
-  if(par->z0_arr!=NULL) free(par->z0_arr);
-  if(par->ra_arr!=NULL) free(par->ra_arr);
-  if(par->dec_arr!=NULL) free(par->dec_arr);
-  if(par->rsd_arr!=NULL) free(par->rsd_arr);
+  if(par->gals!=NULL)
+    free(par->gals);
   end_fftw();
 }

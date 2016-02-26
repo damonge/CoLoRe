@@ -12,6 +12,10 @@ DEFINEFLAGS += -D_LONGIDS
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
 USE_SINGLE_PRECISION = yes
+#Compile with HDF5 capability? Set to "yes" or "no"
+USE_HDF5 = yes
+#Compile with HDF5 capability? Set to "yes" or "no"
+USE_FITS = yes
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
@@ -29,6 +33,9 @@ FFTW_LIB = -L/home/anze/local/lib
 #cfitsio
 FITS_INC = 
 FITS_LIB = 
+#cfitsio
+HDF5_INC = 
+HDF5_LIB = 
 #
 ########## End of user-definable ##########
 
@@ -70,8 +77,17 @@ endif #SINGLE_PRECISION
 
 OPTIONS += $(DEFINEFLAGS)
 
-INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC)
-LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) -lgsl -lgslcblas $(LIB_FFTW) -lcfitsio -lm
+INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC)
+LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) -lgsl -lgslcblas $(LIB_FFTW)
+ifeq ($(strip $(USE_HDF5)),yes)
+DEFINEFLAGS += -D_HAVE_HDF5
+LIB_ALL += -lhdf5 -lhdf5_hl
+endif #HDF5
+ifeq ($(strip $(USE_FITS)),yes)
+DEFINEFLAGS += -D_HAVE_FITS
+LIB_ALL += -lcfitsio
+endif #FITS
+LIB_ALL += -lm
 
 COMMONO = src/common.o
 COSMOMADO = src/cosmo_mad.o
