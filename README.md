@@ -33,10 +33,11 @@ to "yes".
 MPI parallelization is enabled by setting the option USE_MPI
 to "yes".
 
-CoLoRe uses 3 external packages:
+CoLoRe uses 4 external packages:
  - GSL. The GNU Scientific Library (tested for versions 3.*)
  - FFTW. The Fastest Fourier Transform of the West (versions 3.*)
- - CFITSIO. FITS format library.
+ - CFITSIO. FITS format library. This package is optional.
+ - HDF5. HDF5 format library. This package is optional.
 The paths to the corresponding headers and libraries should be correctly
 set in the Makefile.
 
@@ -68,6 +69,8 @@ as ASCII or FITS files. Each source is characterized by 4 quantities:
  - DEC -> declination
  - RSD -> RSD contribution to the redshift
           (i.e. true redshift = Z0 + RSD).
+A python script (read_colore.py) is also provided to illustrate how
+to read in CoLoRe's output.
 
 
 ##5 License:
