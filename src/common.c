@@ -263,3 +263,11 @@ void report_error(int level,char *fmt,...)
     fprintf(stderr,"Node %d, Warning: %s",NodeThis,msg);
   }
 }
+
+size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
+{
+  if(fwrite(ptr,size,nmemb,stream)!=nmemb)
+    report_error(1,"Error fwriting\n");
+
+  return nmemb;
+}

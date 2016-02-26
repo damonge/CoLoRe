@@ -35,6 +35,7 @@ static ParamCoLoRe *param_colore_new(void)
   sprintf(par->fnamePk,"default");
   sprintf(par->fnameBz,"default");
   sprintf(par->fnameNz,"default");
+  par->output_density=0;
   par->OmegaM=0.3;
   par->OmegaL=0.7;
   par->OmegaB=0.05;
@@ -157,6 +158,8 @@ ParamCoLoRe *read_run_params(char *fname)
       par->n_grid=atoi(s2);
     else if(!strcmp(s1,"seed="))
       par->seed_rng=atoi(s2);
+    else if(!strcmp(s1,"output_density="))
+      par->output_density=atoi(s2);
     else
       fprintf(stderr,"CoLoRe: Unknown parameter %s\n",s1);
   }
@@ -186,6 +189,37 @@ ParamCoLoRe *read_run_params(char *fname)
   print_info("\n");
   
   return par;
+}
+
+void write_grid(ParamCoLoRe *par)
+{
+  FILE *fo;
+  char fname[256];
+  int iz;
+  int ngx=2*(par->n_grid/2+1);
+  int size_flouble=sizeof(flouble);
+
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing density field (native format)\n");
+  sprintf(fname,"%s_dens_%d.dat",par->prefixOut,NodeThis);
+  fo=fopen(fname,"wb");
+  if(fo==NULL) error_open_file(fname);
+  my_fwrite(&NNodes,sizeof(int),1,fo);
+  my_fwrite(&size_flouble,sizeof(int),1,fo);
+  my_fwrite(&(par->l_box),sizeof(double),1,fo);
+  my_fwrite(&(par->n_grid),sizeof(int),1,fo);
+  my_fwrite(&(par->nz_here),sizeof(int),1,fo);
+  my_fwrite(&(par->iz0_here),sizeof(int),1,fo);
+  for(iz=0;iz<par->nz_here;iz++) {
+    int iy;
+    for(iy=0;iy<par->n_grid;iy++) {
+      lint index0=ngx*((lint)(iy+iz*par->n_grid));
+      my_fwrite(&(par->grid_dens[index0]),sizeof(flouble),par->n_grid,fo);
+    }
+  }
+  fclose(fo);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
 }
 
 void write_catalog(ParamCoLoRe *par)

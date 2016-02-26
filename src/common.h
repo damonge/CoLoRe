@@ -91,10 +91,6 @@ extern int NNodes;
 extern int IThread0;
 extern int MPIThreadsOK;
 
-void mpi_init(int* p_argc,char*** p_argv);
-void print_info(char *fmt,...);
-void report_error(int level,char *fmt,...);
-
 typedef struct {
   float ra;     //Right ascension
   float dec;    //Declination
@@ -147,6 +143,7 @@ typedef struct {
 
   char prefixOut[256];
   int output_format; //0-> ASCII, 1-> FITS, 2-> HDF5
+  int output_density;
   double pos_obs[3];
 
   dftw_complex *grid_dens_f;
@@ -168,10 +165,14 @@ typedef struct {
   lint nsources_total;
   Gal *gals;
 } ParamCoLoRe;
+void mpi_init(int* p_argc,char*** p_argv);
 void *my_malloc(size_t size);
 void *my_calloc(size_t nmemb,size_t size);
+size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream);
 void error_open_file(char *fname);
 void error_read_line(char *fname,int nlin);
+void print_info(char *fmt,...);
+void report_error(int level,char *fmt,...);
 int linecount(FILE *f);
 void timer(int i);
 gsl_rng *init_rng(unsigned int seed);
@@ -198,7 +199,7 @@ double bias_of_z(ParamCoLoRe *par,double z);
 // Functions defined in io_gh.c
 ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
-//void write_maps(ParamCoLoRe *par);
+void write_grid(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
 

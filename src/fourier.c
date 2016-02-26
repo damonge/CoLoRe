@@ -433,5 +433,9 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
 
   compute_sigma_dens(par);
 
+  //Output density field if necessary
+  if(par->output_density)
+    write_grid(par);
+
   print_info("\n");
 }
