@@ -25,7 +25,7 @@ GSL_INC = -I/home/damonge/include
 GSL_LIB = -L/home/damonge/lib
 #FFTW
 FFTW_INC = 
-FFTW_LIB = 
+FFTW_LIB = -L/home/anze/local/lib 
 #cfitsio
 FITS_INC = 
 FITS_LIB = 
