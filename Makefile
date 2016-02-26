@@ -14,7 +14,7 @@ DEFINEFLAGS += -D_DEBUG
 USE_SINGLE_PRECISION = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
 USE_HDF5 = yes
-#Compile with HDF5 capability? Set to "yes" or "no"
+#Compile with FITS capability? Set to "yes" or "no"
 USE_FITS = yes
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
