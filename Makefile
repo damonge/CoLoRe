@@ -14,7 +14,7 @@ DEFINEFLAGS += -D_DEBUG
 USE_SINGLE_PRECISION = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
 USE_HDF5 = yes
-#Compile with HDF5 capability? Set to "yes" or "no"
+#Compile with FITS capability? Set to "yes" or "no"
 USE_FITS = yes
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
@@ -29,7 +29,7 @@ GSL_INC = -I/home/damonge/include
 GSL_LIB = -L/home/damonge/lib
 #FFTW
 FFTW_INC = 
-FFTW_LIB = 
+FFTW_LIB = -L/home/anze/local/lib 
 #cfitsio
 FITS_INC = 
 FITS_LIB = 
