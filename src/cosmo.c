@@ -330,7 +330,6 @@ static void pk_linear_set(ParamCoLoRe *par)
   print_info("Reading P_k from file: %s\n",par->fnamePk);
   fpk=fopen(par->fnamePk,"r");
   if(fpk==NULL) error_open_file(par->fnamePk);
-
   par->numk=linecount(fpk);
   par->logkarr=(double *)my_malloc(par->numk*sizeof(double));
   par->pkarr=(double *)my_malloc(par->numk*sizeof(double));
@@ -341,10 +340,22 @@ static void pk_linear_set(ParamCoLoRe *par)
     par->pkarr[ii]=ppk;
     par->logkarr[ii]=log10(kk); //log(k) in h Mpc^-1
   }
+  fclose(fpk);
+  
   par->logkmin=par->logkarr[0];
   par->logkmax=par->logkarr[par->numk-1];
-  par->idlogk=(par->numk-1)/(par->logkarr[par->numk-1]-par->logkarr[0]);
-  fclose(fpk);
+  par->idlogk=(par->numk-1)/(par->logkmax-par->logkmin);
+
+  gsl_interp_accel *intacc=gsl_interp_accel_alloc();
+  gsl_spline *spline=gsl_spline_alloc(gsl_interp_cspline,par->numk);
+  gsl_spline_init(spline,par->logkarr,par->pkarr,par->numk);
+  for(ii=0;ii<par->numk-1;ii++) {
+    double lk=par->logkmin+ii/(par->idlogk);
+    par->pkarr[ii]=gsl_spline_eval(spline,lk,intacc);
+    par->logkarr[ii]=lk;
+  }
+  gsl_spline_free(spline);
+  gsl_interp_accel_free(intacc);
 
   // normalize
   double norm_pk=par->sig8*par->sig8/sigL2(par,8,8,"TopHat","TopHat");
@@ -410,8 +421,11 @@ void cosmo_set(ParamCoLoRe *par)
     rz=csm_radial_comoving_distance(pars,a);
     fzarr[ii]*=RTOD*RTOD*hz/(rz*rz);
   }
+  //Correct for z[0]=0
+  if(zarr[0]==0)
+    fzarr[0]=fzarr[1];
   if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
-    report_error(1,"Bias z-range is too small\n");
+    report_error(1,"N(z) z-range is too small\n");
   par->spline_nz=gsl_spline_alloc(gsl_interp_cspline,nz);
   par->intacc_nz=gsl_interp_accel_alloc();
   gsl_spline_init(par->spline_nz,zarr,fzarr,nz);
