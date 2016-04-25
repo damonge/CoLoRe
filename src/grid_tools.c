@@ -91,25 +91,26 @@ void get_sources(ParamCoLoRe *par)
 	lint indexy=iy*ngx;
 	double y0=(iy+0.5)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
-	  int npp=0;
-	  double dz_rsd=0;
+	  int ipop;
 	  lint index=ix+indexy+indexz;
 	  double x0=(ix+0.5)*dx-par->pos_obs[1];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double redshift=z_of_r(par,r);
-	  double ndens=ndens_of_z(par,redshift);
-	  if(ndens>0) {
-	    double bias=bias_of_z(par,redshift);
-	    double gfb=dgrowth_of_r(par,r)*bias;
-	    double lambda=ndens*cell_vol*
-	      exp(gfb*(par->grid_dens[index]-0.5*gfb*par->sigma2_gauss));
-	    npp=rng_poisson(lambda,rng_thr);
-	    dz_rsd=par->grid_rvel[index]*vgrowth_of_r(par,r);
+	  double vg=vgrowth_of_r(par,r);
+	  double dg=dgrowth_of_r(par,r);
+	  par->grid_rvel[index]=vg*par->grid_rvel[index];
+	  for(ipop=0;ipop<par->n_pop;ipop++) {
+	    int npp=0;
+	    double ndens=ndens_of_z(par,redshift,ipop);
+	    if(ndens>0) {
+	      double bias=bias_of_z(par,redshift,ipop);
+	      double gfb=dg*bias;
+	      double lambda=ndens*cell_vol*exp(gfb*(par->grid_dens[index]-0.5*gfb*par->sigma2_gauss));
+	      npp=rng_poisson(lambda,rng_thr);
+	    }
+	    par->nsources[par->n_pop*index+ipop]=npp;
+	    np_tot_thr[ithr]+=npp;
 	  }
-
-	  par->grid_rvel[index]=dz_rsd;
-	  par->nsources[index]=npp;
-	  np_tot_thr[ithr]+=npp;
 	}
       }
     }//end omp for
@@ -182,24 +183,28 @@ void get_sources(ParamCoLoRe *par)
 	lint indexy=iy*ngx;
 	double y0=iy*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
+	  int ipop;
 	  double x0=ix*dx-par->pos_obs[1];
 	  lint index=ix+indexy+indexz;
-	  int npp=par->nsources[index];
-	  if(npp>0) {
-	    int ip;
-	    double dz_rsd=par->grid_rvel[index];
-	    for(ip=0;ip<npp;ip++) {
-	      double cth,phi,r;
-	      lint pid=np_tot_thr[ithr];
-	      double x=x0+dx*rng_01(rng_thr);
-	      double y=y0+dx*rng_01(rng_thr);
-	      double z=z0+dx*rng_01(rng_thr);
-	      cart2sph(x,y,z,&r,&cth,&phi);
-	      par->gals[pid].ra=RTOD*phi;
-	      par->gals[pid].dec=90-RTOD*acos(cth);
-	      par->gals[pid].z0=z_of_r(par,r);
-	      par->gals[pid].dz_rsd=dz_rsd;
-	      np_tot_thr[ithr]++;
+	  double dz_rsd=par->grid_rvel[index];
+	  for(ipop=0;ipop<par->n_pop;ipop++) {
+	    int npp=par->nsources[par->n_pop*index+ipop];
+	    if(npp>0) {
+	      int ip;
+	      for(ip=0;ip<npp;ip++) {
+		double cth,phi,r;
+		lint pid=np_tot_thr[ithr];
+		double x=x0+dx*rng_01(rng_thr);
+		double y=y0+dx*rng_01(rng_thr);
+		double z=z0+dx*rng_01(rng_thr);
+		cart2sph(x,y,z,&r,&cth,&phi);
+		par->gals[pid].ra=RTOD*phi;
+		par->gals[pid].dec=90-RTOD*acos(cth);
+		par->gals[pid].z0=z_of_r(par,r);
+		par->gals[pid].dz_rsd=dz_rsd;
+		par->gals[pid].type=ipop;
+		np_tot_thr[ithr]++;
+	      }
 	    }
 	  }
 	}

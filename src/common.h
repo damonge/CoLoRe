@@ -50,6 +50,7 @@
 #define TWOPIPIINV  0.05066059182116889 //1/(2*pi^2)
 #define DZ 0.001
 #define NZ 5001
+#define NPOP_MAX 10
 
 #ifdef _HAVE_MPI
 
@@ -96,12 +97,11 @@ typedef struct {
   float dec;    //Declination
   float z0;     //Cosmological redshift
   float dz_rsd; //RSD contribution
+  int type;     //Population type
 } Gal;
 
 typedef struct {
   char fnamePk[256];
-  char fnameBz[256];
-  char fnameNz[256];
   double OmegaM;
   double OmegaL;
   double OmegaB;
@@ -154,15 +154,18 @@ typedef struct {
   flouble *slice_right;
   flouble *grid_rvel;
   double sigma2_gauss;
-  int *nsources;
-  
-  gsl_spline *spline_bz;
-  gsl_spline *spline_nz;
-  gsl_interp_accel *intacc_bz;
-  gsl_interp_accel *intacc_nz;
+
+  int n_pop;
+  char fnameBz[NPOP_MAX][256];
+  char fnameNz[NPOP_MAX][256];
+  gsl_spline *spline_bz[NPOP_MAX];
+  gsl_spline *spline_nz[NPOP_MAX];
+  gsl_interp_accel *intacc_bz[NPOP_MAX];
+  gsl_interp_accel *intacc_nz[NPOP_MAX];
 
   lint nsources_this;
   lint nsources_total;
+  int *nsources;
   Gal *gals;
 } ParamCoLoRe;
 void mpi_init(int* p_argc,char*** p_argv);
@@ -191,8 +194,8 @@ double r_of_z(ParamCoLoRe *par,double z);
 double z_of_r(ParamCoLoRe *par,double r);
 double dgrowth_of_r(ParamCoLoRe *par,double r);
 double vgrowth_of_r(ParamCoLoRe *par,double r);
-double ndens_of_z(ParamCoLoRe *par,double z);
-double bias_of_z(ParamCoLoRe *par,double z);
+double ndens_of_z(ParamCoLoRe *par,double z,int ipop);
+double bias_of_z(ParamCoLoRe *par,double z,int ipop);
 
 
 //////

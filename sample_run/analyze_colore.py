@@ -7,9 +7,9 @@ import sys
 import os
 
 def read_ascii(fname) :
-    ra_arr,dec_arr,z0_arr,rsd_arr=np.loadtxt(fname,unpack=True)
+    ra_arr,dec_arr,z0_arr,rsd_arr,type_arr=np.loadtxt(fname,unpack=True)
 
-    return ra_arr,dec_arr,z0_arr+rsd_arr
+    return ra_arr,dec_arr,z0_arr+rsd_arr,type_arr
 
 def read_hdf5(fname) :
     ff=h5.File(fname,"r")
@@ -18,8 +18,9 @@ def read_hdf5(fname) :
     dec_arr=ff['/sources']['DEC']
     z0_arr=ff['/sources']['Z_COSMO']
     rsd_arr=ff['/sources']['DZ_RSD']
+    type_arr=ff['/sources']['TYPE']
 
-    return ra_arr,dec_arr,z0_arr+rsd_arr
+    return ra_arr,dec_arr,z0_arr+rsd_arr,type_arr
 
 def read_fits(fname) :
     data=(fits.open(fname)[1]).data
@@ -28,8 +29,9 @@ def read_fits(fname) :
     dec_arr=data['DEC']
     z0_arr=data['Z_COSMO']
     rsd_arr=data['DZ_RSD']
+    type_arr=data['TYPE']
 
-    return ra_arr,dec_arr,z0_arr,rsd_arr
+    return ra_arr,dec_arr,z0_arr,rsd_arr,type_arr
 
 def mkmap(ra,dec,z0,rsd,zi,zf,nside,wrsd) :
     z=np.copy(z0)
@@ -70,7 +72,7 @@ def run_colore(seed) :
     f.close()
 
     os.system('./CoLoRe param_dum.ini')
-    ra_arr,dec_arr,z0_arr,rsd_arr=read_fits("dum_0.fits")
+    ra_arr,dec_arr,z0_arr,rsd_arr,type_arr=read_fits("dum_0.fits")
     os.system('rm param_dum.ini dum_0.fits')
 
     return ra_arr,dec_arr,z0_arr,rsd_arr

@@ -63,23 +63,26 @@ functionality of these parameters.
 ##4 Output.
 
 The main output of CoLoRe is a catalogue of sources written either
-as ASCII or FITS files. Each source is characterized by 4 quantities:
+as ASCII or FITS files. Each source is characterized by 5 quantities:
  - Z0 -> cosmological redshift (without RSDs)
  - RA -> right ascension
  - DEC -> declination
  - RSD -> RSD contribution to the redshift
           (i.e. true redshift = Z0 + RSD).
+ - TYPE -> Population type (integer)
 A python script (read_colore.py) is also provided to illustrate how
 to read in CoLoRe's output.
 
 
 ##5 License:
+
 CoLoRe is distributed under the GPL license (see COPYING in the root
 directory). We kindly ask you to report the program's website
 "https://github.com/damonge/CoLoRe" when using it.
 
 
 ##6 Contact:
+
 Regarding bugs, suggestions, questions or petitions, feel free to contact
 the author:
     David Alonso: david.alonso@astro.ox.ac.uk

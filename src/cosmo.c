@@ -85,20 +85,20 @@ double vgrowth_of_r(ParamCoLoRe *par,double r)
   }
 }
 
-double bias_of_z(ParamCoLoRe *par,double z)
+double bias_of_z(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
     return 0;
   else
-    return gsl_spline_eval(par->spline_bz,z,par->intacc_bz);
+    return gsl_spline_eval(par->spline_bz[ipop],z,par->intacc_bz[ipop]);
 }
 
-double ndens_of_z(ParamCoLoRe *par,double z)
+double ndens_of_z(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
     return 0;
   else
-    return gsl_spline_eval(par->spline_nz,z,par->intacc_nz);
+    return gsl_spline_eval(par->spline_nz[ipop],z,par->intacc_nz[ipop]);
 }
 
 static void int_error_handle(int status,double result,
@@ -371,7 +371,7 @@ void cosmo_set(ParamCoLoRe *par)
   // This initializes the cosmological model
   // at redshift z_s
 
-  int ii,nz;
+  int ii,ipop,nz;
   double *zarr,*fzarr;
   FILE *fi;
 
@@ -390,47 +390,49 @@ void cosmo_set(ParamCoLoRe *par)
   par->pos_obs[1]=0.5*par->l_box;
   par->pos_obs[2]=0.5*par->l_box;
 
-  fi=fopen(par->fnameBz,"r");
-  if(fi==NULL) error_open_file(par->fnameBz);
-  nz=linecount(fi); rewind(fi);
-  zarr=my_malloc(nz*sizeof(double));
-  fzarr=my_malloc(nz*sizeof(double));
-  for(ii=0;ii<nz;ii++) {
-    int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-    if(stat!=2) error_read_line(par->fnameBz,ii+1);
-  }
-  if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
-    report_error(1,"Bias z-range is too small\n");
-  par->spline_bz=gsl_spline_alloc(gsl_interp_cspline,nz);
-  par->intacc_bz=gsl_interp_accel_alloc();
-  gsl_spline_init(par->spline_bz,zarr,fzarr,nz);
-  free(zarr); free(fzarr);
-  fclose(fi);
+  for(ipop=0;ipop<par->n_pop;ipop++) {
+    fi=fopen(par->fnameBz[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameBz[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameBz[0],ii+1);
+    }
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"Bias z-range is too small\n");
+    par->spline_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    par->intacc_bz[ipop]=gsl_interp_accel_alloc();
+    gsl_spline_init(par->spline_bz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
 
-  fi=fopen(par->fnameNz,"r");
-  if(fi==NULL) error_open_file(par->fnameNz);
-  nz=linecount(fi); rewind(fi);
-  zarr=my_malloc(nz*sizeof(double));
-  fzarr=my_malloc(nz*sizeof(double));
-  for(ii=0;ii<nz;ii++) {
-    double rz,hz,a;
-    int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-    if(stat!=2) error_read_line(par->fnameNz,ii+1);
-    a=1./(1+zarr[ii]);
-    hz=csm_hubble(pars,a);
-    rz=csm_radial_comoving_distance(pars,a);
-    fzarr[ii]*=RTOD*RTOD*hz/(rz*rz);
+    fi=fopen(par->fnameNz[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameNz[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      double rz,hz,a;
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameNz[ipop],ii+1);
+      a=1./(1+zarr[ii]);
+      hz=csm_hubble(pars,a);
+      rz=csm_radial_comoving_distance(pars,a);
+      fzarr[ii]*=RTOD*RTOD*hz/(rz*rz);
+    }
+    //Correct for z[0]=0
+    if(zarr[0]==0)
+      fzarr[0]=fzarr[1];
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"N(z) z-range is too small\n");
+    par->spline_nz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    par->intacc_nz[ipop]=gsl_interp_accel_alloc();
+    gsl_spline_init(par->spline_nz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
   }
-  //Correct for z[0]=0
-  if(zarr[0]==0)
-    fzarr[0]=fzarr[1];
-  if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
-    report_error(1,"N(z) z-range is too small\n");
-  par->spline_nz=gsl_spline_alloc(gsl_interp_cspline,nz);
-  par->intacc_nz=gsl_interp_accel_alloc();
-  gsl_spline_init(par->spline_nz,zarr,fzarr,nz);
-  free(zarr); free(fzarr);
-  fclose(fi);
 
   //Set z-dependent functions
   for(ii=0;ii<NZ;ii++) {

@@ -25,8 +25,8 @@ USE_MPI = yes
 ###If two or more of the dependencies reside in the same paths, only
 ###one instance is necessary.
 #GSL
-GSL_INC =
-GSL_LIB =
+GSL_INC = -I/add/path
+GSL_LIB = -L/add/path
 #FFTW
 FFTW_INC =
 FFTW_LIB =

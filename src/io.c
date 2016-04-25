@@ -30,11 +30,10 @@
 
 static ParamCoLoRe *param_colore_new(void)
 {
+  int ii;
   ParamCoLoRe *par=my_malloc(sizeof(ParamCoLoRe));
 
   sprintf(par->fnamePk,"default");
-  sprintf(par->fnameBz,"default");
-  sprintf(par->fnameNz,"default");
   par->output_density=0;
   par->OmegaM=0.3;
   par->OmegaL=0.7;
@@ -73,12 +72,19 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_vpot=NULL;
   par->grid_rvel=NULL;
   par->sigma2_gauss=-1;
-  par->nsources=NULL;
-  par->spline_bz=NULL;
-  par->intacc_bz=NULL;
-  par->spline_nz=NULL;
-  par->intacc_nz=NULL;
+  par->n_pop=-1;
+  for(ii=0;ii<NPOP_MAX;ii++) {
+    sprintf(par->fnameBz[ii],"default");
+    sprintf(par->fnameNz[ii],"default");
+    par->spline_bz[ii]=NULL;
+    par->intacc_bz[ii]=NULL;
+    par->spline_nz[ii]=NULL;
+    par->intacc_nz[ii]=NULL;
+  }
   par->gals=NULL;
+  par->nsources_this=-1;
+  par->nsources_total=-1;
+  par->nsources=NULL;
 
   return par;
 }
@@ -98,68 +104,102 @@ ParamCoLoRe *read_run_params(char *fname)
   n_lin=linecount(fi);
   rewind(fi);
   for(ii=0;ii<n_lin;ii++) {
-    char s0[512],s1[64],s2[256];
+    int istr,nstr;
+    char s0[512];
+    char *s1,*pch;
+    char *s2[NPOP_MAX];
+      //,s1[64],s2[NPOP_MAX][256];
     if(fgets(s0,sizeof(s0),fi)==NULL)
       error_read_line(fname,ii+1);
     if((s0[0]=='#')||(s0[0]=='\n')) continue;
-    int sr=sscanf(s0,"%s %s",s1,s2);
-    if(sr!=2)
+
+    nstr=0;
+    s1=strtok(s0," \n");
+    pch=strtok(NULL," \n");
+    while(pch!=NULL) {
+      s2[nstr]=pch;
+      nstr++;
+      pch=strtok(NULL," \n");
+    }
+    if(nstr<=0)
       error_read_line(fname,ii+1);
 
     if(!strcmp(s1,"prefix_out="))
-      sprintf(par->prefixOut,"%s",s2);
+      sprintf(par->prefixOut,"%s",s2[0]);
     else if(!strcmp(s1,"output_format=")) {
-      if(!strcmp(s2,"HDF5")) {
+      if(!strcmp(s2[0],"HDF5")) {
 #ifdef _HAVE_HDF5
 	par->output_format=2;
 #else //_HAVE_HDF5
 	report_error(1,"HDF5 format not supported\n");
 #endif //_HAVE_HDF5
       }
-      else if(!strcmp(s2,"FITS")) {
+      else if(!strcmp(s2[0],"FITS")) {
 #ifdef _HAVE_FITS
 	par->output_format=1;
 #else //_HAVE_FITS
 	report_error(1,"FITS format not supported\n");
 #endif //_HAVE_FITS
       }
-      else if(!strcmp(s2,"ASCII"))
+      else if(!strcmp(s2[0],"ASCII"))
 	par->output_format=0;
       else
-	report_error(1,"Unrecognized format %s\n",s2);
+	report_error(1,"Unrecognized format %s\n",s2[0]);
     }
-    else if(!strcmp(s1,"nz_filename="))
-      sprintf(par->fnameNz,"%s",s2);
-    else if(!strcmp(s1,"bias_filename="))
-      sprintf(par->fnameBz,"%s",s2);
+    else if(!strcmp(s1,"nz_filename=")) {
+      if(par->n_pop==-1)
+	par->n_pop=nstr;
+      else {
+	if(par->n_pop!=nstr)
+	  report_error(1,"Inconsistent number of populations %d %d\n",par->n_pop,nstr);
+      }
+      if(par->n_pop>NPOP_MAX)
+	report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_pop);
+      for(istr=0;istr<par->n_pop;istr++) {
+	sprintf(par->fnameNz[istr],"%s",s2[istr]);
+      }
+    }
+    else if(!strcmp(s1,"bias_filename=")) {
+      if(par->n_pop==-1)
+	par->n_pop=nstr;
+      else {
+	if(par->n_pop!=nstr)
+	  report_error(1,"Inconsistent number of populations %d %d\n",par->n_pop,nstr);
+      }
+      if(par->n_pop>NPOP_MAX)
+	report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_pop);
+      for(istr=0;istr<par->n_pop;istr++) {
+	sprintf(par->fnameBz[istr],"%s",s2[istr]);
+      }
+    }
     else if(!strcmp(s1,"pk_filename="))
-      sprintf(par->fnamePk,"%s",s2);
+      sprintf(par->fnamePk,"%s",s2[0]);
     else if(!strcmp(s1,"omega_M="))
-      par->OmegaM=atof(s2);
+      par->OmegaM=atof(s2[0]);
     else if(!strcmp(s1,"omega_L="))
-      par->OmegaL=atof(s2);
+      par->OmegaL=atof(s2[0]);
     else if(!strcmp(s1,"omega_B="))
-      par->OmegaB=atof(s2);
+      par->OmegaB=atof(s2[0]);
     else if(!strcmp(s1,"h="))
-      par->hhub=atof(s2);
+      par->hhub=atof(s2[0]);
     else if(!strcmp(s1,"w="))
-      par->weos=atof(s2);
+      par->weos=atof(s2[0]);
     else if(!strcmp(s1,"ns="))
-      par->n_scal=atof(s2);
+      par->n_scal=atof(s2[0]);
     else if(!strcmp(s1,"sigma_8="))
-      par->sig8=atof(s2);
+      par->sig8=atof(s2[0]);
     else if(!strcmp(s1,"r_smooth="))
-      par->r2_smooth=atof(s2);
+      par->r2_smooth=atof(s2[0]);
     else if(!strcmp(s1,"z_min="))
-      par->z_min=atof(s2);
+      par->z_min=atof(s2[0]);
     else if(!strcmp(s1,"z_max="))
-      par->z_max=atof(s2);
+      par->z_max=atof(s2[0]);
     else if(!strcmp(s1,"n_grid="))
-      par->n_grid=atoi(s2);
+      par->n_grid=atoi(s2[0]);
     else if(!strcmp(s1,"seed="))
-      par->seed_rng=atoi(s2);
+      par->seed_rng=atoi(s2[0]);
     else if(!strcmp(s1,"output_density="))
-      par->output_density=atoi(s2);
+      par->output_density=atoi(s2[0]);
     else
       fprintf(stderr,"CoLoRe: Unknown parameter %s\n",s1);
   }
@@ -229,15 +269,16 @@ void write_catalog(ParamCoLoRe *par)
   if(NodeThis==0) timer(0);
   if(par->output_format==2) { //HDF5
 #ifdef _HAVE_HDF5
-    hid_t file_id,gal_types[4];
+    hid_t file_id,gal_types[5];
     hsize_t chunk_size=128;
-    size_t dst_offset[4]={HOFFSET(Gal,ra),HOFFSET(Gal,dec),HOFFSET(Gal,z0),HOFFSET(Gal,dz_rsd)};
-    const char *names[4]={"RA" ,"DEC","Z_COSMO","DZ_RSD"};
-    char *tunit[4]=      {"DEG","DEG","NA"     ,"NA"    };
+    size_t dst_offset[5]={HOFFSET(Gal,ra),HOFFSET(Gal,dec),HOFFSET(Gal,z0),HOFFSET(Gal,dz_rsd),HOFFSET(Gal,type)};
+    const char *names[5]={"RA" ,"DEC","Z_COSMO","DZ_RSD","TYPE"};
+    char *tunit[5]=      {"DEG","DEG","NA"     ,"NA"    ,"NA"  };
     gal_types[0]=H5T_NATIVE_FLOAT;
     gal_types[1]=H5T_NATIVE_FLOAT;
     gal_types[2]=H5T_NATIVE_FLOAT;
     gal_types[3]=H5T_NATIVE_FLOAT;
+    gal_types[4]=H5T_NATIVE_INT;
 
     print_info("*** Writing output (HDF5)\n");
     sprintf(fname,"%s_%d.h5",par->prefixOut,NodeThis);
@@ -245,12 +286,13 @@ void write_catalog(ParamCoLoRe *par)
     //Create file
     file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
     //Write table
-    H5TBmake_table("source_data",file_id,"/sources",4,par->nsources_this,sizeof(Gal),
+    H5TBmake_table("source_data",file_id,"/sources",5,par->nsources_this,sizeof(Gal),
 		   names,dst_offset,gal_types,chunk_size,NULL,0,par->gals);
     H5LTset_attribute_string(file_id,"/sources","FIELD_0_UNITS",tunit[0]);
     H5LTset_attribute_string(file_id,"/sources","FIELD_1_UNITS",tunit[1]);
     H5LTset_attribute_string(file_id,"/sources","FIELD_2_UNITS",tunit[2]);
     H5LTset_attribute_string(file_id,"/sources","FIELD_3_UNITS",tunit[3]);
+    H5LTset_attribute_string(file_id,"/sources","FIELD_4_UNITS",tunit[4]);
 
     //End file
     H5Fclose(file_id);
@@ -263,22 +305,24 @@ void write_catalog(ParamCoLoRe *par)
     long ii,row_here=0,nrw=0;
     int status=0;
     fitsfile *fptr;
+    int *type_arr;
     float *ra_arr,*dec_arr,*z0_arr,*rsd_arr;
-    char *ttype[]={"RA" ,"DEC","Z_COSMO","DZ_RSD"};
-    char *tform[]={"1E" ,"1E" ,"1E"     ,"1E"    };
-    char *tunit[]={"DEG","DEG","NA"     ,"NA"    };
+    char *ttype[]={"RA" ,"DEC","Z_COSMO","DZ_RSD","TYPE"};
+    char *tform[]={"1E" ,"1E" ,"1E"     ,"1E"    ,"1J"  };
+    char *tunit[]={"DEG","DEG","NA"     ,"NA"    ,"NA"  };
 
     print_info("*** Writing output (FITS)\n");
     sprintf(fname,"!%s_%d.fits",par->prefixOut,NodeThis);
 
     fits_create_file(&fptr,fname,&status);
-    fits_create_tbl(fptr,BINARY_TBL,0,4,ttype,tform,tunit,NULL,&status);
+    fits_create_tbl(fptr,BINARY_TBL,0,5,ttype,tform,tunit,NULL,&status);
 
     fits_get_rowsize(fptr,&nrw,&status);
     ra_arr=my_malloc(nrw*sizeof(float));
     dec_arr=my_malloc(nrw*sizeof(float));
     z0_arr=my_malloc(nrw*sizeof(float));
     rsd_arr=my_malloc(nrw*sizeof(float));
+    type_arr=my_malloc(nrw*sizeof(int));
     while(row_here<par->nsources_this) {
       long nrw_here;
       if(row_here+nrw>par->nsources_this)
@@ -291,11 +335,13 @@ void write_catalog(ParamCoLoRe *par)
 	dec_arr[ii]=par->gals[row_here+ii].dec;
 	z0_arr[ii]=par->gals[row_here+ii].z0;
 	rsd_arr[ii]=par->gals[row_here+ii].dz_rsd;
+	type_arr[ii]=par->gals[row_here+ii].type;
       }
       fits_write_col(fptr,TFLOAT,1,row_here+1,1,nrw_here,ra_arr,&status);
       fits_write_col(fptr,TFLOAT,2,row_here+1,1,nrw_here,dec_arr,&status);
       fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,z0_arr,&status);
       fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,rsd_arr,&status);
+      fits_write_col(fptr,TINT  ,5,row_here+1,1,nrw_here,type_arr,&status);
     
       row_here+=nrw_here;
     }
@@ -304,6 +350,7 @@ void write_catalog(ParamCoLoRe *par)
     free(dec_arr);
     free(z0_arr);
     free(rsd_arr);
+    free(type_arr);
 #else //_HAVE_FITS
     printf("FITS not supported\n");
 #endif //_HAVE_FITS
@@ -315,11 +362,12 @@ void write_catalog(ParamCoLoRe *par)
     lint jj;
     FILE *fil=fopen(fname,"w");
     if(fil==NULL) error_open_file(fname);
-    fprintf(fil,"#[1]RA, [2]dec, [3]z0, [4]dz_RSD\n");
+    fprintf(fil,"#[1]RA, [2]dec, [3]z0, [4]dz_RSD, [5]type\n");
     for(jj=0;jj<par->nsources_this;jj++) {
-      fprintf(fil,"%E %E %E %E\n",
+      fprintf(fil,"%E %E %E %E %d\n",
 	      par->gals[jj].ra,par->gals[jj].dec,
-	      par->gals[jj].z0,par->gals[jj].dz_rsd);
+	      par->gals[jj].z0,par->gals[jj].dz_rsd,
+	      par->gals[jj].type);
     }
     fclose(fil);
   }
@@ -329,6 +377,7 @@ void write_catalog(ParamCoLoRe *par)
 
 void param_colore_free(ParamCoLoRe *par)
 {
+  int ii;
   free(par->logkarr);
   free(par->pkarr);
 #ifdef _SPREC
@@ -345,11 +394,13 @@ void param_colore_free(ParamCoLoRe *par)
   free(par->slice_right);
 #endif //_HAVE_MPI
   free(par->grid_rvel);
+  for(ii=0;ii<par->n_pop;ii++) {
+    gsl_spline_free(par->spline_bz[ii]);
+    gsl_spline_free(par->spline_nz[ii]);
+    gsl_interp_accel_free(par->intacc_bz[ii]);
+    gsl_interp_accel_free(par->intacc_nz[ii]);
+  }
   free(par->nsources);
-  gsl_spline_free(par->spline_bz);
-  gsl_spline_free(par->spline_nz);
-  gsl_interp_accel_free(par->intacc_bz);
-  gsl_interp_accel_free(par->intacc_nz);
   if(par->gals!=NULL)
     free(par->gals);
   end_fftw();
