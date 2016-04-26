@@ -190,7 +190,6 @@ void init_fftw(ParamCoLoRe *par)
   par->grid_vpot=(flouble *)(par->grid_vpot_f);
 
   par->grid_rvel=my_malloc(2*dsize*sizeof(flouble));
-  par->nsources=my_malloc(2*dsize*par->n_pop*sizeof(int));
 #ifdef _HAVE_MPI
   par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
   par->slice_right=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));

@@ -96,9 +96,7 @@ void get_sources(ParamCoLoRe *par)
 	  double x0=(ix+0.5)*dx-par->pos_obs[1];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double redshift=z_of_r(par,r);
-	  double vg=vgrowth_of_r(par,r);
 	  double dg=dgrowth_of_r(par,r);
-	  par->grid_rvel[index]=vg*par->grid_rvel[index];
 	  for(ipop=0;ipop<par->n_pop;ipop++) {
 	    int npp=0;
 	    double ndens=ndens_of_z(par,redshift,ipop);
@@ -108,7 +106,6 @@ void get_sources(ParamCoLoRe *par)
 	      double lambda=ndens*cell_vol*exp(gfb*(par->grid_dens[index]-0.5*gfb*par->sigma2_gauss));
 	      npp=rng_poisson(lambda,rng_thr);
 	    }
-	    par->nsources[par->n_pop*index+ipop]=npp;
 	    np_tot_thr[ithr]+=npp;
 	  }
 	}
@@ -132,7 +129,8 @@ void get_sources(ParamCoLoRe *par)
 
   print_info("  There will be %ld particles in total\n",(long)(par->nsources_total));
   //#ifdef _DEBUG
-  //  printf("Node %d has %ld particles\n",NodeThis,(long)(par->nsources_this));
+  //  for(ii=0;ii<nthr;ii++)
+  //    printf("Node %d, thread %d, %ld particles\n",NodeThis,ii,np_tot_thr[ii]);
   //#endif //_DEBUG
 
   for(ii=nthr-1;ii>0;ii--) {
@@ -145,19 +143,12 @@ void get_sources(ParamCoLoRe *par)
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
 
-#ifdef _SPREC
-  fftwf_free(par->grid_dens_f);
-#else //_SPREC
-  fftw_free(par->grid_dens_f);
-#endif //_SPREC
-  par->grid_dens_f=NULL;
   par->gals=my_malloc(par->nsources_this*sizeof(Gal));
-
   if(NodeThis==0) timer(0);
-  print_info("Assigning coordinates\n");
+  print_info("Getting positions\n");
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none)		\
-  shared(par,IThread0,np_tot_thr)
+  shared(par,np_tot_thr,IThread0)
 #endif //_HAVE_OMP
   {
     lint iz;
@@ -167,9 +158,12 @@ void get_sources(ParamCoLoRe *par)
     int ithr=0;
 #endif //_HAVE_OMP
     double dx=par->l_box/par->n_grid;
+    double cell_vol=dx*dx*dx;
     int ngx=2*(par->n_grid/2+1);
     unsigned int seed_thr=par->seed_rng+IThread0+ithr;
     gsl_rng *rng_thr=init_rng(seed_thr);
+    //IMPORTANT: we need to make sure that we get exactly the same random numbers
+    //           as in the previous loop, so that npp below is the same.
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static)
@@ -177,30 +171,33 @@ void get_sources(ParamCoLoRe *par)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       lint indexz=iz*((lint)(ngx*par->n_grid));
-      double z0=(iz+par->iz0_here)*dx-par->pos_obs[2];
+      double z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	lint indexy=iy*ngx;
-	double y0=iy*dx-par->pos_obs[1];
+	double y0=(iy+0.5)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int ipop;
-	  double x0=ix*dx-par->pos_obs[1];
 	  lint index=ix+indexy+indexz;
-	  double dz_rsd=par->grid_rvel[index];
+	  double x0=(ix+0.5)*dx-par->pos_obs[1];
+	  double r=sqrt(x0*x0+y0*y0+z0*z0);
+	  double redshift=z_of_r(par,r);
+	  double dg=dgrowth_of_r(par,r);
+	  double dz_rsd=vgrowth_of_r(par,r)*par->grid_rvel[index];
 	  for(ipop=0;ipop<par->n_pop;ipop++) {
-	    int npp=par->nsources[par->n_pop*index+ipop];
-	    if(npp>0) {
+	    int npp=0;
+	    double ndens=ndens_of_z(par,redshift,ipop);
+	    if(ndens>0) {
 	      int ip;
+	      double bias=bias_of_z(par,redshift,ipop);
+	      double gfb=dg*bias;
+	      double lambda=ndens*cell_vol*exp(gfb*(par->grid_dens[index]-0.5*gfb*par->sigma2_gauss));
+	      npp=rng_poisson(lambda,rng_thr);
 	      for(ip=0;ip<npp;ip++) {
-		double cth,phi,r;
 		lint pid=np_tot_thr[ithr];
-		double x=x0+dx*rng_01(rng_thr);
-		double y=y0+dx*rng_01(rng_thr);
-		double z=z0+dx*rng_01(rng_thr);
-		cart2sph(x,y,z,&r,&cth,&phi);
-		par->gals[pid].ra=RTOD*phi;
-		par->gals[pid].dec=90-RTOD*acos(cth);
-		par->gals[pid].z0=z_of_r(par,r);
+		par->gals[pid].ra=x0;
+		par->gals[pid].dec=y0;
+		par->gals[pid].z0=z0;
 		par->gals[pid].dz_rsd=dz_rsd;
 		par->gals[pid].type=ipop;
 		np_tot_thr[ithr]++;
@@ -213,7 +210,45 @@ void get_sources(ParamCoLoRe *par)
     end_rng(rng_thr);
   }//end omp parallel
   if(NodeThis==0) timer(2);
-
+  //#ifdef _DEBUG
+  //  for(ii=0;ii<nthr;ii++)
+  //    printf("Node %d, thread %d, %ld particles\n",NodeThis,ii,np_tot_thr[ii]);
+  //#endif //_DEBUG
   free(np_tot_thr);
+
+  if(NodeThis==0) timer(0);
+  print_info("Assigning angular coordinates\n");
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) \
+  shared(par,IThread0)
+#endif //_HAVE_OMP
+  {
+    lint ip;
+#ifdef _HAVE_OMP
+    int ithr=omp_get_thread_num();
+#else //_HAVE_OMP
+    int ithr=0;
+#endif //_HAVE_OMP
+    double dx=par->l_box/par->n_grid;
+    unsigned int seed_thr=par->seed_rng+IThread0+ithr;
+    gsl_rng *rng_thr=init_rng(seed_thr);
+
+#ifdef _HAVE_OMP
+#pragma omp for schedule(static)
+#endif //_HAVE_OMP
+    for(ip=0;ip<par->nsources_this;ip++) {
+      double cth,phi,r;
+      double x=par->gals[ip].ra+dx*rng_01(rng_thr);
+      double y=par->gals[ip].dec+dx*rng_01(rng_thr);
+      double z=par->gals[ip].z0+dx*rng_01(rng_thr);
+      cart2sph(x,y,z,&r,&cth,&phi);
+      par->gals[ip].ra=RTOD*phi;
+      par->gals[ip].dec=90-RTOD*acos(cth);
+      par->gals[ip].z0=z_of_r(par,r);
+    }//end omp for
+    end_rng(rng_thr);
+  }//end omp parallel
+  if(NodeThis==0) timer(2);
+
   print_info("\n");
 }

@@ -84,7 +84,6 @@ static ParamCoLoRe *param_colore_new(void)
   par->gals=NULL;
   par->nsources_this=-1;
   par->nsources_total=-1;
-  par->nsources=NULL;
 
   return par;
 }
@@ -105,7 +104,7 @@ ParamCoLoRe *read_run_params(char *fname)
   rewind(fi);
   for(ii=0;ii<n_lin;ii++) {
     int istr,nstr;
-    char s0[512];
+    char s0[2048];
     char *s1,*pch;
     char *s2[NPOP_MAX];
       //,s1[64],s2[NPOP_MAX][256];
@@ -400,7 +399,6 @@ void param_colore_free(ParamCoLoRe *par)
     gsl_interp_accel_free(par->intacc_bz[ii]);
     gsl_interp_accel_free(par->intacc_nz[ii]);
   }
-  free(par->nsources);
   if(par->gals!=NULL)
     free(par->gals);
   end_fftw();

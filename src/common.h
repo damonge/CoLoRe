@@ -165,7 +165,6 @@ typedef struct {
 
   lint nsources_this;
   lint nsources_total;
-  int *nsources;
   Gal *gals;
 } ParamCoLoRe;
 void mpi_init(int* p_argc,char*** p_argv);
