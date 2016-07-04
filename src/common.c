@@ -271,3 +271,131 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
 
   return nmemb;
 }
+
+#ifndef _OLD_IM
+void alloc_onion_info(ParamCoLoRe *par,OnionInfo *oi,
+		      int nside,int nz,
+		      flouble *z0_arr,flouble *zf_arr,
+		      int add_rsd,int add_next)
+{
+  int izz;
+  long npix_ang=nside2npix(nside);
+  double dx=par->l_box/par->n_grid;
+  double dz_additional,z0_here,zf_here;
+  double dr_perp_max=0,dr_par_max=0;
+
+  oi->r0_arr=my_malloc(nz*sizeof(flouble));
+  oi->rf_arr=my_malloc(nz*sizeof(flouble));
+
+  for(izz=0;izz<nz;izz++) {
+    double r0=r_of_z(par,z0_arr[izz]);
+    double rf=r_of_z(par,zf_arr[izz]);
+    double dr_par=(rf-r0);
+    double dr_perp=(rf+r0)/2*sqrt(4*M_PI/npix_ang);
+    oi->r0_arr[izz]=r0;
+    oi->rf_arr[izz]=rf;
+    if(dr_par>dr_par_max)
+      dr_par_max=dr_par;
+    if(dr_perp>dr_perp_max)
+      dr_perp_max=dr_perp;
+#ifdef _DEBUG
+    print_info("%d z [%lf,%lf], r=%lf, dr_par=%lf, dr_perp=%lf\n",
+	       izz,z0_arr[izz],zf_arr[izz],(r0+rf)/2,dr_par,dr_perp);
+#endif //_DEBUG
+  }
+  dz_additional=dr_perp_max*dr_perp_max;
+  if(add_rsd)
+    dz_additional+=DR_RSD_ADDITIONAL*DR_RSD_ADDITIONAL;
+  dz_additional=sqrt(dz_additional);
+  if(add_next)
+    dz_additional+=dx;
+
+#ifdef _DEBUG
+  print_info("Will use a buffer of %lf Mpc/h\n",dz_additional);
+#endif //_DEBUG
+  z0_here=dx*par->iz0_here-par->pos_obs[2]-dz_additional;
+  zf_here=dx*(par->nz_here+par->iz0_here)-par->pos_obs[2]+dz_additional;
+  oi->list_ipix=my_malloc(nz*sizeof(long *));
+  oi->num_pix=my_malloc(nz*sizeof(int));
+  oi->maps=my_malloc(nz*sizeof(flouble *));
+  oi->nz=nz;
+
+  //TODO: omp this
+#pragma omp parallel default(none)			\
+  shared(par,z0_arr,zf_arr,oi,npix_ang,nz,nside)	\
+  shared(z0_here,zf_here)
+  {
+    int iz;
+    
+#pragma omp for
+    for(iz=0;iz<nz;iz++) {
+      long ipx;
+      double r0=oi->r0_arr[iz];
+      double rf=oi->rf_arr[iz];
+      oi->num_pix[iz]=0;
+      for(ipx=0;ipx<npix_ang;ipx++) {
+	double pos[3];
+	double zpix0,zpixf;
+	//TODO: is this better than pix2ang?
+	pix2vec_ring(nside,ipx,pos);
+	zpix0=r0*pos[2];
+	zpixf=rf*pos[2];
+	if(((zpix0>=z0_here) && (zpix0<=zf_here)) ||
+	   ((zpixf>=z0_here) && (zpixf<=zf_here))) {
+	  oi->num_pix[iz]++;
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+  for(izz=0;izz<nz;izz++) {
+    if(oi->num_pix[izz]>0) {
+      oi->list_ipix[izz]=my_malloc(oi->num_pix[izz]*sizeof(long));
+      oi->maps[izz]=my_calloc(oi->num_pix[izz],sizeof(flouble));
+    }
+  }
+
+#pragma omp parallel default(none)			\
+  shared(par,z0_arr,zf_arr,oi,npix_ang,nz,nside)	\
+  shared(z0_here,zf_here)
+  {
+    int iz;
+    
+#pragma omp for
+    for(iz=0;iz<nz;iz++) {
+      long ipx;
+      double r0=oi->r0_arr[iz];
+      double rf=oi->rf_arr[iz];
+      oi->num_pix[iz]=0;
+      for(ipx=0;ipx<npix_ang;ipx++) {
+	double pos[3];
+	double zpix0,zpixf;
+	pix2vec_ring(nside,ipx,pos);
+	zpix0=r0*pos[2];
+	zpixf=rf*pos[2];
+	if(((zpix0>=z0_here) && (zpix0<=zf_here)) ||
+	   ((zpixf>=z0_here) && (zpixf<=zf_here))) {
+	  oi->list_ipix[iz][oi->num_pix[iz]]=ipx;
+	  oi->num_pix[iz]++;
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+}
+
+void free_onion_info(OnionInfo *oi)
+{
+  int iz;
+  for(iz=0;iz<oi->nz;iz++) {
+    if(oi->num_pix[iz]>0) {
+      free(oi->maps[iz]);
+      free(oi->list_ipix[iz]);
+    }
+  }
+  free(oi->r0_arr);
+  free(oi->rf_arr);
+  free(oi->maps);
+  free(oi->list_ipix);
+  free(oi->num_pix);
+}
+#endif //_OLD_IM

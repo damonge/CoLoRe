@@ -40,6 +40,27 @@
 #include <mpi.h>
 #include <fftw3-mpi.h>
 #endif //_HAVE_MPI
+#include <libconfig.h>
+#ifdef _HAVE_FITS
+#include <fitsio.h>
+#endif //_HAVE_FITS
+#ifdef _HAVE_HDF5
+#include <hdf5.h>
+#include <hdf5_hl.h>
+#endif //_HAVE_HDF5
+#include <chealpix.h>
+#ifdef _WITH_SHT
+#include <sharp_almhelpers.h>
+#include <sharp_geomhelpers.h>
+#include <sharp.h>
+#ifdef _WITH_NEEDLET
+#include <gsl/gsl_integration.h>
+#endif //_WITH_NEEDLET
+#endif //_WITH_SHT
+
+#ifndef DR_RSD_ADDITIONAL
+#define DR_RSD_ADDITIONAL 10.
+#endif //_DZ_ADDITIONAL
 
 #define DYNAMIC_SIZE 1
 #define RTOD 57.2957795
@@ -97,8 +118,18 @@ typedef struct {
   float dec;    //Declination
   float z0;     //Cosmological redshift
   float dz_rsd; //RSD contribution
-  int type;     //Population type
 } Gal;
+
+#ifndef _OLD_IM
+typedef struct {
+  int nz;
+  flouble *r0_arr;
+  flouble *rf_arr;
+  long **list_ipix;
+  int *num_pix;
+  flouble **maps;
+} OnionInfo;
+#endif //_OLD_IM
 
 typedef struct {
   char fnamePk[256];
@@ -132,6 +163,7 @@ typedef struct {
   double r_arr_r2z[NZ];
   double growth_d_arr[NZ];
   double growth_v_arr[NZ];
+  double ihub_arr[NZ];
   double glob_idr;
 
   unsigned int seed_rng;
@@ -155,17 +187,35 @@ typedef struct {
   flouble *grid_rvel;
   double sigma2_gauss;
 
-  int n_pop;
-  char fnameBz[NPOP_MAX][256];
-  char fnameNz[NPOP_MAX][256];
-  gsl_spline *spline_bz[NPOP_MAX];
-  gsl_spline *spline_nz[NPOP_MAX];
-  gsl_interp_accel *intacc_bz[NPOP_MAX];
-  gsl_interp_accel *intacc_nz[NPOP_MAX];
+  int do_gals;
+  int n_gals;
+  char fnameBzGals[NPOP_MAX][256];
+  char fnameNzGals[NPOP_MAX][256];
+  gsl_spline *spline_gals_bz[NPOP_MAX];
+  gsl_spline *spline_gals_nz[NPOP_MAX];
+  gsl_interp_accel *intacc_gals[NPOP_MAX];
+  lint *nsources_this;
+  Gal **gals;
 
-  lint nsources_this;
-  lint nsources_total;
-  Gal *gals;
+  int do_im;
+  int n_im;
+  int nside_im[NPOP_MAX]; //
+  char fnameNuTableIM[NPOP_MAX][256]; //
+  double *nu0_arr[NPOP_MAX]; //
+  double *nuf_arr[NPOP_MAX]; //
+  int n_nu[NPOP_MAX]; //
+  double nu_rest[NPOP_MAX]; //
+  char fnameBzIM[NPOP_MAX][256];
+  char fnameTzIM[NPOP_MAX][256];
+  gsl_spline *spline_im_bz[NPOP_MAX];
+  gsl_spline *spline_im_tz[NPOP_MAX];
+  gsl_interp_accel *intacc_im[NPOP_MAX];
+#ifdef _OLD_IM
+  flouble **maps_IM;
+#else //_OLD_IM
+  OnionInfo *oi_IM;
+#endif //_OLD_IM
+
 } ParamCoLoRe;
 void mpi_init(int* p_argc,char*** p_argv);
 void *my_malloc(size_t size);
@@ -183,6 +233,12 @@ int rng_poisson(double lambda,gsl_rng *rng);
 void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
 void end_rng(gsl_rng *rng);
+#ifndef _OLD_IM
+void alloc_onion_info(ParamCoLoRe *par,OnionInfo *oi,int nside,
+		      int nz,flouble *z0_arr,flouble *zf_arr,
+		      int add_rsd,int add_next);
+void free_onion_info(OnionInfo *oi);
+#endif //_OLD_IM
 
 
 //////
@@ -193,8 +249,11 @@ double r_of_z(ParamCoLoRe *par,double z);
 double z_of_r(ParamCoLoRe *par,double r);
 double dgrowth_of_r(ParamCoLoRe *par,double r);
 double vgrowth_of_r(ParamCoLoRe *par,double r);
-double ndens_of_z(ParamCoLoRe *par,double z,int ipop);
-double bias_of_z(ParamCoLoRe *par,double z,int ipop);
+double ihub_of_r(ParamCoLoRe *par,double r);
+double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop);
+double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop);
+double temp_of_z_im(ParamCoLoRe *par,double z,int ipop);
+double bias_of_z_im(ParamCoLoRe *par,double z,int ipop);
 
 
 //////
@@ -202,6 +261,7 @@ double bias_of_z(ParamCoLoRe *par,double z,int ipop);
 ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
 void write_grid(ParamCoLoRe *par);
+void write_imaps(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
 
@@ -215,6 +275,61 @@ void end_fftw(void);
 //////
 // Functions defined in grid_tools.c
 void get_sources(ParamCoLoRe *par);
+void get_IM(ParamCoLoRe *par);
+
+//////
+// Defined in healpix_extra.c
+void he_write_healpix_map(flouble **tmap,int nfields,long nside,char *fname);
+flouble *he_read_healpix_map(char *fname,long *nside,int nfield);
+int he_ring_num(long nside,double z);
+long *he_query_strip(long nside,double theta1,double theta2,long *npix_strip);
+void he_ring2nest_inplace(flouble *map_in,long nside);
+void he_nest2ring_inplace(flouble *map_in,long nside);
+void he_udgrade(flouble *map_in,long nside_in,flouble *map_out,long nside_out,int nest);
+#ifdef _WITH_SHT
+#define HE_MAX_SHT 32
+#define HE_FWHM2SIGMA 0.00012352884853326381 //Transforms FWHM in arcmin to sigma_G in rad:
+long he_nalms(int lmax);
+long he_indexlm(int l,int m,int lmax);
+void he_alm2map(int nside,int lmax,int ntrans,flouble **maps,fcomplex **alms);
+void he_map2alm(int nside,int lmax,int ntrans,flouble **maps,fcomplex **alms);
+void he_alm2cl(fcomplex **alms_1,fcomplex **alms_2,
+	       int nmaps_1,int nmaps_2,int pol_1,int pol_2,flouble **cls,int lmax);
+void he_anafast(flouble **maps_1,flouble **maps_2,
+		int nmaps_1,int nmaps_2,int pol_1,int pol_2,
+		flouble **cls,int nside,int lmax);
+flouble *he_generate_beam_window(int lmax,flouble fwhm_amin);
+void he_alter_alm(int lmax,flouble fwhm_amin,fcomplex *alm_in,
+		  fcomplex *alm_out,flouble *window);
+flouble *he_synfast(flouble *cl,int nside,int lmax,unsigned int seed);
+//HE_NT
+#ifdef _WITH_NEEDLET
+#define HE_NBAND_NX 512
+#define HE_NORM_FT 2.2522836206907617
+#define HE_NL_INTPREC 1E-6
+#define HE_NT_NSIDE_MIN 32
+typedef struct {
+  double b;
+  double inv_b;
+  gsl_spline *b_spline;
+  gsl_interp_accel *b_intacc;
+  int nside0;
+  int nj;
+  int *nside_arr;
+  int *lmax_arr;
+  flouble **b_arr;
+} HE_nt_param;
+void he_nt_end(HE_nt_param *par);
+HE_nt_param *he_nt_init(flouble b_nt,int nside0);
+flouble ***he_alloc_needlet(HE_nt_param *par,int pol);
+void he_free_needlet(HE_nt_param *par,int pol,flouble ***nt);
+void he_nt_get_window(HE_nt_param *par,int j,flouble *b);
+fcomplex **he_map2needlet(HE_nt_param *par,flouble **map,flouble ***nt,
+			  int return_alm,int pol,int qu_in,int qu_out);
+fcomplex **he_needlet2map(HE_nt_param *par,flouble **map,flouble ***nt,
+			  int return_alm,int pol,int qu_in,int qu_out);
+#endif //_WITH_NEEDLET
+#endif //_WITH_SHT
 
 
 //////

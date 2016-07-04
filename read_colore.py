@@ -10,14 +10,15 @@ def read_ascii(fname) :
 
     return ra_arr,dec_arr,z0_arr+rsd_arr,type_arr
 
-def read_hdf5(fname) :
+def read_hdf5(fname,ipop) :
     ff=h5.File(fname,"r")
-    
-    ra_arr=ff['/sources']['RA']
-    dec_arr=ff['/sources']['DEC']
-    z0_arr=ff['/sources']['Z_COSMO']
-    rsd_arr=ff['/sources']['DZ_RSD']
-    type_arr=ff['/sources']['TYPE']
+    tabname='/sources%d'%ipop
+
+    ra_arr=ff[tabname]['RA']
+    dec_arr=ff[tabname]['DEC']
+    z0_arr=ff[tabname]['Z_COSMO']
+    rsd_arr=ff[tabname]['DZ_RSD']
+    type_arr=ipop*np.ones(len(ra_arr))
 
     return ra_arr,dec_arr,z0_arr+rsd_arr,type_arr
 
@@ -43,7 +44,7 @@ if fmt=='ASCII' :
 elif fmt=='FITS' :
     ra_arr,dec_arr,z_arr,type_arr=read_fits(fname)
 elif fmt=='HDF5' :
-    ra_arr,dec_arr,z_arr,type_arr=read_hdf5(fname)
+    ra_arr,dec_arr,z_arr,type_arr=read_hdf5(fname,0)
 
 nside=64
 npix=hp.nside2npix(nside)

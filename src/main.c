@@ -46,35 +46,22 @@ int main(int argc,char **argv)
   print_info("Seed : %u\n",par->seed_rng);
 
 
-  //Arrays for point sources
-
   //Create Gaussian density and radial velocity fields
   create_d_and_vr_fields(par);
 
   //Poisson-sample the galaxies
-  get_sources(par);
+  if(par->do_gals)
+    get_sources(par);
+
+  //Create intensity mapping
+  if(par->do_im)
+    get_IM(par);
 
   //Write output
-  write_catalog(par);
-
-  //Poisson-sample for point sources, transform to HI mass and to Dz_RSD
-  /*
-  if(par->do_psources) {
-    setup_psources(par);
-    get_point_sources(par);
-  }
-  get_HI(par);
-
-  //Pixelize maps
-  mk_T_maps(par);
-  if(par->do_psources)
-    mk_psources_maps(par);
-
-  //Write temperature maps
-  if(NodeThis==0)
-    write_maps(par);
-  if(NodeThis==0) timer(5);
-  */
+  if(par->do_gals)
+    write_catalog(par);
+  if(par->do_im)
+    write_imaps(par);
 
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
