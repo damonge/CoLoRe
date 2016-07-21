@@ -363,6 +363,13 @@ static void pk_linear_set(ParamCoLoRe *par)
 	     sqrt(sigL2(par,8,8,"TopHat","TopHat")));
   for(ii=0;ii<par->numk;ii++)
     par->pkarr[ii]*=norm_pk;
+
+#ifdef _DEBUG
+  double r_effective=sqrt(par->r2_smooth+pow(0.22*par->l_box/par->n_grid,2));
+  print_info("  Sigma_Gauss should be %lf\n",
+	     sqrt(sigL2(par,r_effective,r_effective,"Gauss","Gauss")));
+#endif //_DEBUG
+
 }
 
 void cosmo_set(ParamCoLoRe *par)
