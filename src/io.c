@@ -63,6 +63,8 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_dens=NULL;
   par->grid_vpot_f=NULL;
   par->grid_vpot=NULL;
+  par->grid_npot=NULL;
+  par->grid_npot_f=NULL;
   par->grid_rvel=NULL;
   par->sigma2_gauss=-1;
 
@@ -144,6 +146,7 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_double(conf,"global","z_max",&(par->z_max));
   conf_read_int(conf,"global","n_grid",&(par->n_grid));
   conf_read_bool(conf,"global","output_density",&(par->output_density));
+  conf_read_bool(conf,"global","output_potential",&(par->output_potential));
   conf_read_int(conf,"global","seed",&i_dum);
   par->seed_rng=i_dum;
   conf_read_string(conf,"global","output_format",c_dum);
@@ -165,7 +168,7 @@ ParamCoLoRe *read_run_params(char *fname)
     par->output_format=0;
   else
     report_error(1,"Unrecognized format %s\n",c_dum);
-  
+
   conf_read_double(conf,"cosmo_par","omega_M",&(par->OmegaM));
   conf_read_double(conf,"cosmo_par","omega_L",&(par->OmegaL));
   conf_read_double(conf,"cosmo_par","omega_B",&(par->OmegaB));
@@ -231,7 +234,7 @@ ParamCoLoRe *read_run_params(char *fname)
   if(par->do_gals)
     print_info("  %d galaxy population\n",par->n_gals);
   print_info("\n");
-  
+
   return par;
 }
 
@@ -266,11 +269,43 @@ void write_grid(ParamCoLoRe *par)
   print_info("\n");
 }
 
+void write_pot(ParamCoLoRe *par)
+{
+  FILE *fo;
+  char fname[256];
+  int iz;
+  int ngx=2*(par->n_grid/2+1);
+  int size_flouble=sizeof(flouble);
+
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing newtonian potential field (native format)\n");
+  sprintf(fname,"%s_pot_%d.dat",par->prefixOut,NodeThis);
+  fo=fopen(fname,"wb");
+  if(fo==NULL) error_open_file(fname);
+  my_fwrite(&NNodes,sizeof(int),1,fo);
+  my_fwrite(&size_flouble,sizeof(int),1,fo);
+  my_fwrite(&(par->l_box),sizeof(double),1,fo);
+  my_fwrite(&(par->n_grid),sizeof(int),1,fo);
+  my_fwrite(&(par->nz_here),sizeof(int),1,fo);
+  my_fwrite(&(par->iz0_here),sizeof(int),1,fo);
+  for(iz=0;iz<par->nz_here;iz++) {
+    int iy;
+    for(iy=0;iy<par->n_grid;iy++) {
+      lint index0=ngx*((lint)(iy+iz*par->n_grid));
+      my_fwrite(&(par->grid_npot[index0]),sizeof(flouble),par->n_grid,fo);
+    }
+  }
+  fclose(fo);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+
 void write_catalog(ParamCoLoRe *par)
 {
   int i_pop;
   char fname[256];
-  
+
   if(par->do_gals) {
     if(NodeThis==0) timer(0);
     if(par->output_format==2) { //HDF5
@@ -284,10 +319,10 @@ void write_catalog(ParamCoLoRe *par)
       gal_types[1]=H5T_NATIVE_FLOAT;
       gal_types[2]=H5T_NATIVE_FLOAT;
       gal_types[3]=H5T_NATIVE_FLOAT;
-      
+
       print_info("*** Writing catalog (HDF5)\n");
       sprintf(fname,"%s_%d.h5",par->prefixOut,NodeThis);
-      
+
       //Create file
       file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
       //Write table for each galaxy type
@@ -302,7 +337,7 @@ void write_catalog(ParamCoLoRe *par)
 	H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_3_UNITS",tunit[3]);
       }
-      
+
       //End file
       H5Fclose(file_id);
 #else //_HAVE_HDF5
@@ -319,20 +354,20 @@ void write_catalog(ParamCoLoRe *par)
       char *ttype[]={"RA" ,"DEC","Z_COSMO","DZ_RSD","TYPE"};
       char *tform[]={"1E" ,"1E" ,"1E"     ,"1E"    ,"1J"  };
       char *tunit[]={"DEG","DEG","NA"     ,"NA"    ,"NA"  };
-      
+
       print_info("*** Writing catalog (FITS)\n");
       sprintf(fname,"!%s_%d.fits",par->prefixOut,NodeThis);
-      
+
       fits_create_file(&fptr,fname,&status);
       fits_create_tbl(fptr,BINARY_TBL,0,5,ttype,tform,tunit,NULL,&status);
-      
+
       fits_get_rowsize(fptr,&nrw,&status);
       ra_arr=my_malloc(nrw*sizeof(float));
       dec_arr=my_malloc(nrw*sizeof(float));
       z0_arr=my_malloc(nrw*sizeof(float));
       rsd_arr=my_malloc(nrw*sizeof(float));
       type_arr=my_malloc(nrw*sizeof(int));
-      
+
       long offset=0;
       for(i_pop=0;i_pop<par->n_gals;i_pop++) {
 	long row_here=0;
@@ -342,7 +377,7 @@ void write_catalog(ParamCoLoRe *par)
 	    nrw_here=par->nsources_this[i_pop]-row_here;
 	  else
 	    nrw_here=nrw;
-	  
+
 	  for(ii=0;ii<nrw_here;ii++) {
 	    ra_arr[ii]=par->gals[i_pop][row_here+ii].ra;
 	    dec_arr[ii]=par->gals[i_pop][row_here+ii].dec;
@@ -355,7 +390,7 @@ void write_catalog(ParamCoLoRe *par)
 	  fits_write_col(fptr,TFLOAT,3,offset+row_here+1,1,nrw_here,z0_arr,&status);
 	  fits_write_col(fptr,TFLOAT,4,offset+row_here+1,1,nrw_here,rsd_arr,&status);
 	  fits_write_col(fptr,TINT  ,5,offset+row_here+1,1,nrw_here,type_arr,&status);
-	  
+
 	  row_here+=nrw_here;
 	}
 	offset+=par->nsources_this[i_pop];
@@ -373,7 +408,7 @@ void write_catalog(ParamCoLoRe *par)
     else   {
       print_info("*** Writing catalog (ASCII)\n");
       sprintf(fname,"%s_%d.txt",par->prefixOut,NodeThis);
-      
+
       lint jj;
       FILE *fil=fopen(fname,"w");
       if(fil==NULL) error_open_file(fname);
@@ -403,10 +438,12 @@ void param_colore_free(ParamCoLoRe *par)
   if(par->grid_dens_f!=NULL)
     fftwf_free(par->grid_dens_f);
   fftwf_free(par->grid_vpot_f);
+  fftwf_free(par->grid_npot_f);
 #else //_SPREC
   if(par->grid_dens_f!=NULL)
     fftw_free(par->grid_dens_f);
   fftw_free(par->grid_vpot_f);
+  fftw_free(par->grid_npot_f);
 #endif //_SPREC
 #ifdef _HAVE_MPI
   free(par->slice_left);
