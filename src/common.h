@@ -197,25 +197,6 @@ typedef struct {
   lint *nsources_this;
   Gal **gals;
 
-  int do_im;
-  int n_im;
-  int nside_im[NPOP_MAX]; //
-  char fnameNuTableIM[NPOP_MAX][256]; //
-  double *nu0_arr[NPOP_MAX]; //
-  double *nuf_arr[NPOP_MAX]; //
-  int n_nu[NPOP_MAX]; //
-  double nu_rest[NPOP_MAX]; //
-  char fnameBzIM[NPOP_MAX][256];
-  char fnameTzIM[NPOP_MAX][256];
-  gsl_spline *spline_im_bz[NPOP_MAX];
-  gsl_spline *spline_im_tz[NPOP_MAX];
-  gsl_interp_accel *intacc_im[NPOP_MAX];
-#ifdef _OLD_IM
-  flouble **maps_IM;
-#else //_OLD_IM
-  OnionInfo *oi_IM;
-#endif //_OLD_IM
-
 } ParamCoLoRe;
 void mpi_init(int* p_argc,char*** p_argv);
 void *my_malloc(size_t size);
@@ -233,12 +214,10 @@ int rng_poisson(double lambda,gsl_rng *rng);
 void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
 void end_rng(gsl_rng *rng);
-#ifndef _OLD_IM
 void alloc_onion_info(ParamCoLoRe *par,OnionInfo *oi,int nside,
 		      int nz,flouble *z0_arr,flouble *zf_arr,
 		      int add_rsd,int add_next);
 void free_onion_info(OnionInfo *oi);
-#endif //_OLD_IM
 
 
 //////
@@ -252,8 +231,6 @@ double vgrowth_of_r(ParamCoLoRe *par,double r);
 double ihub_of_r(ParamCoLoRe *par,double r);
 double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop);
 double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop);
-double temp_of_z_im(ParamCoLoRe *par,double z,int ipop);
-double bias_of_z_im(ParamCoLoRe *par,double z,int ipop);
 
 
 //////
@@ -261,7 +238,6 @@ double bias_of_z_im(ParamCoLoRe *par,double z,int ipop);
 ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
 void write_grid(ParamCoLoRe *par);
-void write_imaps(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
 
@@ -275,7 +251,6 @@ void end_fftw(void);
 //////
 // Functions defined in grid_tools.c
 void get_sources(ParamCoLoRe *par);
-void get_IM(ParamCoLoRe *par);
 
 //////
 // Defined in healpix_extra.c
@@ -330,25 +305,5 @@ fcomplex **he_needlet2map(HE_nt_param *par,flouble **map,flouble ***nt,
 			  int return_alm,int pol,int qu_in,int qu_out);
 #endif //_WITH_NEEDLET
 #endif //_WITH_SHT
-
-
-//////
-// Functions defined in healpix_extra.c
-/*
-long he_nalms(int lmax);
-long he_indexlm(int l,int m,int lmax);
-void he_alm2map(int nside,int lmax,int ntrans,flouble **maps,fcomplex **alms);
-void he_map2alm(int nside,int lmax,int ntrans,flouble **maps,fcomplex **alms);
-void he_write_healpix_map(float **tmap,int nfields,long nside,char *fname);
-flouble *he_read_healpix_map(char *fname,long *nside,int nfield);
-int he_ring_num(long nside,double z);
-long *he_query_strip(long nside,double theta1,double theta2,
-		     long *npix_strip);
-void he_udgrade(flouble *map_in,long nside_in,
-		flouble *map_out,long nside_out,
-		int nest);
-double *he_generate_beam_window(int lmax,double fwhm_amin);
-void he_alter_alm(int lmax,double fwhm_amin,fcomplex *alms,double *window);
-*/
 
 #endif //_COMMON_

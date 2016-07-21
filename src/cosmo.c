@@ -113,21 +113,6 @@ double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop)
     return gsl_spline_eval(par->spline_gals_nz[ipop],z,par->intacc_gals[ipop]);
 }
 
-double bias_of_z_im(ParamCoLoRe *par,double z,int ipop)
-{
-  if((z<par->z_min) || (z>par->z_max))
-    return 0;
-  else
-    return gsl_spline_eval(par->spline_im_bz[ipop],z,par->intacc_im[ipop]);
-}
-
-double temp_of_z_im(ParamCoLoRe *par,double z,int ipop)
-{
-  if((z<par->z_min) || (z>par->z_max))
-    return 0;
-  else
-    return gsl_spline_eval(par->spline_im_tz[ipop],z,par->intacc_im[ipop]);
-}
 
 static void int_error_handle(int status,double result,
                              double error)
@@ -458,50 +443,6 @@ void cosmo_set(ParamCoLoRe *par)
     gsl_spline_init(par->spline_gals_nz[ipop],zarr,fzarr,nz);
 
     par->intacc_gals[ipop]=gsl_interp_accel_alloc();
-    free(zarr); free(fzarr);
-    fclose(fi);
-  }
-
-  for(ipop=0;ipop<par->n_im;ipop++) {
-    fi=fopen(par->fnameBzIM[ipop],"r");
-    if(fi==NULL) error_open_file(par->fnameBzIM[ipop]);
-    nz=linecount(fi); rewind(fi);
-    zarr=my_malloc(nz*sizeof(double));
-    fzarr=my_malloc(nz*sizeof(double));
-    for(ii=0;ii<nz;ii++) {
-      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-      if(stat!=2) error_read_line(par->fnameBzIM[ipop],ii+1);
-    }
-    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
-      report_error(1,"Bias z-range is too small\n");
-    par->spline_im_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_im_bz[ipop],zarr,fzarr,nz);
-    free(zarr); free(fzarr);
-    fclose(fi);
-
-    fi=fopen(par->fnameTzIM[ipop],"r");
-    if(fi==NULL) error_open_file(par->fnameTzIM[ipop]);
-    nz=linecount(fi); rewind(fi);
-    zarr=my_malloc(nz*sizeof(double));
-    fzarr=my_malloc(nz*sizeof(double));
-    for(ii=0;ii<nz;ii++) {
-      double rz,hz,a;
-      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-      if(stat!=2) error_read_line(par->fnameTzIM[ipop],ii+1);
-      a=1./(1+zarr[ii]);
-      hz=csm_hubble(pars,a);
-      rz=csm_radial_comoving_distance(pars,a);
-      fzarr[ii]*=RTOD*RTOD*hz/(rz*rz);
-    }
-    //Correct for z[0]=0
-    if(zarr[0]==0)
-      fzarr[0]=fzarr[1];
-    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
-      report_error(1,"N(z) z-range is too small\n");
-    par->spline_im_tz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_im_tz[ipop],zarr,fzarr,nz);
-
-    par->intacc_im[ipop]=gsl_interp_accel_alloc();
     free(zarr); free(fzarr);
     fclose(fi);
   }

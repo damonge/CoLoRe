@@ -53,15 +53,9 @@ int main(int argc,char **argv)
   if(par->do_gals)
     get_sources(par);
 
-  //Create intensity mapping
-  if(par->do_im)
-    get_IM(par);
-
   //Write output
   if(par->do_gals)
     write_catalog(par);
-  if(par->do_im)
-    write_imaps(par);
 
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");

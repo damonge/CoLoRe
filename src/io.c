@@ -21,13 +21,6 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-double *nu0_arr[NPOP_MAX]; //                                                                                  
-double *nuf_arr[NPOP_MAX]; //                                                                                  
-int n_nu[NPOP_MAX]; //                                                                                         
-int nside_im[NPOP_MAX];
-char fnameNuTableIM[NPOP_MAX][256];
-double nu_rest[NPOP_MAX];
-
 static ParamCoLoRe *param_colore_new(void)
 {
   int ii;
@@ -85,27 +78,6 @@ static ParamCoLoRe *param_colore_new(void)
   par->gals=NULL;
   par->nsources_this=NULL;
 
-  par->do_im=0;
-  par->n_im=-1;
-  for(ii=0;ii<NPOP_MAX;ii++) {
-    par->nside_im[ii]=64;
-    sprintf(par->fnameNuTableIM[ii],"default");
-    par->n_nu[ii]=-1;
-    par->nu0_arr[ii]=NULL;
-    par->nuf_arr[ii]=NULL;
-    par->nu_rest[ii]=1420.;
-    sprintf(par->fnameBzIM[ii],"default");
-    sprintf(par->fnameTzIM[ii],"default");
-    par->spline_im_bz[ii]=NULL;
-    par->spline_im_tz[ii]=NULL;
-    par->intacc_im[ii]=NULL;
-  }
-#ifdef _OLD_IM
-  par->maps_IM=NULL;
-#else //_OLD_IM
-  par->oi_IM=NULL;
-#endif //_OLD_IM
-
   return par;
 }
 
@@ -149,36 +121,6 @@ static void conf_read_bool(config_t *conf,char *secname,char *varname,int *out)
   stat=config_lookup_bool(conf,fullpath,out);
   if(stat==CONFIG_FALSE)
     report_error(1,"Couldn't read variable %s\n",fullpath);
-}
-
-static void read_nutable(ParamCoLoRe *par,int ipop)
-{
-  int inu;
-  FILE *fi=fopen(par->fnameNuTableIM[ipop],"r");
-  if(fi==NULL) error_open_file(par->fnameNuTableIM[ipop]);
-  par->n_nu[ipop]=linecount(fi)-1; rewind(fi);
-  par->nu0_arr[ipop]=my_malloc(par->n_nu[ipop]*sizeof(double));
-  par->nuf_arr[ipop]=my_malloc(par->n_nu[ipop]*sizeof(double));
-  for(inu=0;inu<=par->n_nu[ipop];inu++) {
-    int stat;
-    double nu;
-    stat=fscanf(fi,"%lf ",&nu);
-    if(stat!=1)
-      report_error(1,"Error reading file %s, line %d\n",par->fnameNuTableIM[ipop],inu+1);
-    if(inu!=par->n_nu[ipop])
-      par->nu0_arr[ipop][inu]=nu;
-    if(inu!=0)
-      par->nuf_arr[ipop][inu-1]=nu;
-  }
-  for(inu=0;inu<par->n_nu[ipop];inu++) {
-    if(par->nuf_arr[ipop][inu]<=par->nu0_arr[ipop][inu])
-      report_error(1,"Frequency bins don't make sense\n");
-  }
-  fclose(fi);
-  
-  double zmax_here=par->nu_rest[ipop]/par->nu0_arr[ipop][0]-1;
-  if(zmax_here>par->z_max)
-    report_error(1,"IM tracer required at to high a redshift %lf>%lf\n",zmax_here,par->z_max);
 }
 
 ParamCoLoRe *read_run_params(char *fname)
@@ -258,39 +200,6 @@ ParamCoLoRe *read_run_params(char *fname)
     par->nsources_this=my_malloc(par->n_gals*sizeof(lint));
   }
 
-  //Get number of IM populations
-  par->n_im=0;
-  found=1;
-  while(found) {
-    sprintf(c_dum,"imap%d",par->n_im+1);
-    cset=config_lookup(conf,c_dum);
-    if(cset==NULL)
-      found=0;
-    else
-      par->n_im++;
-  }
-  if(par->n_im>NPOP_MAX)
-    report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_im);
-  for(ii=0;ii<par->n_im;ii++) {
-    sprintf(c_dum,"imap%d",ii+1);
-    conf_read_string(conf,c_dum,"tz_filename",par->fnameTzIM[ii]);
-    conf_read_string(conf,c_dum,"bias_filename",par->fnameBzIM[ii]);
-    conf_read_string(conf,c_dum,"nutable_filename",par->fnameNuTableIM[ii]);
-    read_nutable(par,ii);
-    conf_read_int(conf,c_dum,"nside",&(par->nside_im[ii]));
-    conf_read_double(conf,c_dum,"nu_rest",&(par->nu_rest[ii]));
-  }
-  if(par->n_im>0)
-    par->do_im=1;
-
-  if(par->do_im) {
-#ifdef _OLD_IM
-    par->maps_IM=my_malloc(par->n_im*sizeof(flouble *));
-#else //_OLD_IM
-    par->oi_IM=my_malloc(par->n_im*sizeof(OnionInfo));
-#endif //_OLD_IM
-  }
-
 #ifdef _DEBUG
   sprintf(c_dum,"%s_params.cfg",par->prefixOut);
   config_write_file(conf,c_dum);
@@ -321,8 +230,6 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  No extra smoothing\n");
   if(par->do_gals)
     print_info("  %d galaxy population\n",par->n_gals);
-  if(par->do_im)
-    print_info("  %d intensity mapping species\n",par->n_im);
   print_info("\n");
   
   return par;
@@ -357,28 +264,6 @@ void write_grid(ParamCoLoRe *par)
   fclose(fo);
   if(NodeThis==0) timer(2);
   print_info("\n");
-}
-
-void write_imaps(ParamCoLoRe *par)
-{
-  if(NodeThis==0) {
-    int ipop;
-    char fname[256];
-    
-    timer(0);
-    print_info("*** Writing intensity maps\n");
-    for(ipop=0;ipop<par->n_im;ipop++) {
-      int inu;
-      //      long npix_ang=nside2npix(par->nside_im[ipop]);
-      for(inu=0;inu<par->n_nu[ipop];inu++) {
-	//	flouble *map=&(par->maps_IM[ipop][inu*npix_ang]);
-	sprintf(fname,"!%s_imap_pop%d_nu%03d.fits",par->prefixOut,ipop,inu+1);
-	//	he_write_healpix_map(&map,1,par->nside_im[ipop],fname);
-      }
-    }
-    timer(2);
-    print_info("\n");
-  }
 }
 
 void write_catalog(ParamCoLoRe *par)
@@ -542,24 +427,5 @@ void param_colore_free(ParamCoLoRe *par)
     free(par->nsources_this);
   }
 
-  if(par->do_im) {
-    for(ii=0;ii<par->n_im;ii++) {
-      gsl_spline_free(par->spline_im_bz[ii]);
-      gsl_spline_free(par->spline_im_tz[ii]);
-      gsl_interp_accel_free(par->intacc_im[ii]);
-      free(par->nu0_arr[ii]);
-      free(par->nuf_arr[ii]);
-#ifdef _OLD_IM
-      free(par->maps_IM[ii]);
-#else //_OLD_IM
-      free_onion_info(&(par->oi_IM[ii]));
-#endif //_OLD_IM
-    }
-#ifdef _OLD_IM
-    free(par->maps_IM);
-#else //_OLD_IM
-    free(par->oi_IM);
-#endif //_OLD_IM
-  }
   end_fftw();
 }
