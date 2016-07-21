@@ -10,6 +10,8 @@ OPTIONS = -Wall -O3
 DEFINEFLAGS += -D_LONGIDS
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
+#DEFINEFLAGS += -D_OLD_IM
+#DEFINEFLAGS += -D_IM_3D22D
 #Use double precision floating point? Set to "yes" or "no"
 USE_SINGLE_PRECISION = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
@@ -25,8 +27,10 @@ USE_MPI = yes
 ###If two or more of the dependencies reside in the same paths, only
 ###one instance is necessary.
 #GSL
-GSL_INC = -I/add/path
-GSL_LIB = -L/add/path
+GSL_INC = -I/home/damonge/include
+GSL_LIB = -L/home/damonge/lib
+#GSL_INC = -I/add/path
+#GSL_LIB = -L/add/path
 #FFTW
 FFTW_INC =
 FFTW_LIB =
@@ -36,6 +40,9 @@ FITS_LIB =
 #cfitsio
 HDF5_INC =
 HDF5_LIB =
+#libconfig
+CONF_INC =
+CONF_LIB =
 #
 ########## End of user-definable ##########
 
@@ -77,8 +84,8 @@ endif #SINGLE_PRECISION
 
 OPTIONS += $(DEFINEFLAGS)
 
-INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC)
-LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) -lgsl -lgslcblas $(LIB_FFTW)
+INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC)
+LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW)
 ifeq ($(strip $(USE_HDF5)),yes)
 DEFINEFLAGS += -D_HAVE_HDF5
 LIB_ALL += -lhdf5 -lhdf5_hl -lz

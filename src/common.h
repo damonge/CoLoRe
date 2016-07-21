@@ -40,6 +40,27 @@
 #include <mpi.h>
 #include <fftw3-mpi.h>
 #endif //_HAVE_MPI
+#include <libconfig.h>
+#ifdef _HAVE_FITS
+#include <fitsio.h>
+#endif //_HAVE_FITS
+#ifdef _HAVE_HDF5
+#include <hdf5.h>
+#include <hdf5_hl.h>
+#endif //_HAVE_HDF5
+#include <chealpix.h>
+#ifdef _WITH_SHT
+#include <sharp_almhelpers.h>
+#include <sharp_geomhelpers.h>
+#include <sharp.h>
+#ifdef _WITH_NEEDLET
+#include <gsl/gsl_integration.h>
+#endif //_WITH_NEEDLET
+#endif //_WITH_SHT
+
+#ifndef DR_RSD_ADDITIONAL
+#define DR_RSD_ADDITIONAL 10.
+#endif //_DZ_ADDITIONAL
 
 #define DYNAMIC_SIZE 1
 #define RTOD 57.2957795
@@ -97,7 +118,6 @@ typedef struct {
   float dec;    //Declination
   float z0;     //Cosmological redshift
   float dz_rsd; //RSD contribution
-  int type;     //Population type
 } Gal;
 
 typedef struct {
@@ -132,6 +152,7 @@ typedef struct {
   double r_arr_r2z[NZ];
   double growth_d_arr[NZ];
   double growth_v_arr[NZ];
+  double ihub_arr[NZ];
   double glob_idr;
 
   unsigned int seed_rng;
@@ -155,17 +176,16 @@ typedef struct {
   flouble *grid_rvel;
   double sigma2_gauss;
 
-  int n_pop;
-  char fnameBz[NPOP_MAX][256];
-  char fnameNz[NPOP_MAX][256];
-  gsl_spline *spline_bz[NPOP_MAX];
-  gsl_spline *spline_nz[NPOP_MAX];
-  gsl_interp_accel *intacc_bz[NPOP_MAX];
-  gsl_interp_accel *intacc_nz[NPOP_MAX];
+  int do_gals;
+  int n_gals;
+  char fnameBzGals[NPOP_MAX][256];
+  char fnameNzGals[NPOP_MAX][256];
+  gsl_spline *spline_gals_bz[NPOP_MAX];
+  gsl_spline *spline_gals_nz[NPOP_MAX];
+  gsl_interp_accel *intacc_gals[NPOP_MAX];
+  lint *nsources_this;
+  Gal **gals;
 
-  lint nsources_this;
-  lint nsources_total;
-  Gal *gals;
 } ParamCoLoRe;
 void mpi_init(int* p_argc,char*** p_argv);
 void *my_malloc(size_t size);
@@ -193,8 +213,9 @@ double r_of_z(ParamCoLoRe *par,double z);
 double z_of_r(ParamCoLoRe *par,double r);
 double dgrowth_of_r(ParamCoLoRe *par,double r);
 double vgrowth_of_r(ParamCoLoRe *par,double r);
-double ndens_of_z(ParamCoLoRe *par,double z,int ipop);
-double bias_of_z(ParamCoLoRe *par,double z,int ipop);
+double ihub_of_r(ParamCoLoRe *par,double r);
+double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop);
+double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop);
 
 
 //////
@@ -215,25 +236,5 @@ void end_fftw(void);
 //////
 // Functions defined in grid_tools.c
 void get_sources(ParamCoLoRe *par);
-
-
-//////
-// Functions defined in healpix_extra.c
-/*
-long he_nalms(int lmax);
-long he_indexlm(int l,int m,int lmax);
-void he_alm2map(int nside,int lmax,int ntrans,flouble **maps,fcomplex **alms);
-void he_map2alm(int nside,int lmax,int ntrans,flouble **maps,fcomplex **alms);
-void he_write_healpix_map(float **tmap,int nfields,long nside,char *fname);
-flouble *he_read_healpix_map(char *fname,long *nside,int nfield);
-int he_ring_num(long nside,double z);
-long *he_query_strip(long nside,double theta1,double theta2,
-		     long *npix_strip);
-void he_udgrade(flouble *map_in,long nside_in,
-		flouble *map_out,long nside_out,
-		int nest);
-double *he_generate_beam_window(int lmax,double fwhm_amin);
-void he_alter_alm(int lmax,double fwhm_amin,fcomplex *alms,double *window);
-*/
 
 #endif //_COMMON_
