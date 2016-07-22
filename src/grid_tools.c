@@ -204,6 +204,27 @@ static void get_sources_single(ParamCoLoRe *par,int ipop,int *nsources)
   free(np_tot_thr);
 }
 
+static void interpolate_potential(ParamCoLoRe *par)
+{
+  int ir;
+  OnionInfo *oi=par->oi_lens;
+
+  for(ir=0;ir<oi->nr;ir++) {
+    long ipix;
+    double r=(oi->rf_arr[ir]+oi->r0_arr[ir])*0.5;
+
+    for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+      int ax;
+      double pos[3];
+
+      pix2vec_ring(oi->nside_arr[ir],oi->list_ipix[ir][ipix],pos);
+      
+      for(ax=0;ax<3;ax++)
+	pos[ax]=r*pos[ax]+par->pos_obs[ax];
+    }
+  }
+
+}
 void get_sources(ParamCoLoRe *par)
 {
   int ipop;
