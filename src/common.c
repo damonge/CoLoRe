@@ -206,10 +206,7 @@ void mpi_init(int* p_argc,char*** p_argv)
 #endif //_HAVE_OMP
   MPI_Allgather(&nthreads_this,1,MPI_INT,nthreads_all,1,MPI_INT,MPI_COMM_WORLD);
 #ifdef _DEBUG
-  if(NodeThis==0) {
-    for(ii=0;ii<NNodes;ii++)
-      printf("Node %d has %d threads\n",ii,nthreads_all[ii]);
-  }
+  printf("Node %d has %d threads\n",NodeThis,nthreads_all[NodeThis]);
 #endif //_DEBUG
   IThread0=0;
   for(ii=0;ii<NodeThis;ii++)
@@ -270,4 +267,139 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
     report_error(1,"Error fwriting\n");
 
   return nmemb;
+}
+
+OnionInfo *alloc_onion_info(ParamCoLoRe *par,int nside_base,flouble dr)
+{
+  int irr;
+  double dx=par->l_box/par->n_grid;
+  double z0_node=dx*par->iz0_here-par->pos_obs[2];
+  double zf_node=dx*(par->iz0_here+par->nz_here)-par->pos_obs[2];
+  OnionInfo *oi=my_malloc(sizeof(OnionInfo));
+
+  oi->nr=(int)(par->r_max/dr)+1;
+  oi->r0_arr=my_malloc(oi->nr*sizeof(flouble));
+  oi->rf_arr=my_malloc(oi->nr*sizeof(flouble));
+  oi->nside_arr=my_malloc(oi->nr*sizeof(int));
+  oi->num_pix=my_malloc(oi->nr*sizeof(int));
+  oi->list_ipix=my_malloc(oi->nr*sizeof(long *));
+  oi->maps=my_malloc(oi->nr*sizeof(flouble *));
+
+  for(irr=0;irr<oi->nr;irr++) {
+    int nside_here=nside_base;
+    flouble rm=(irr+0.5)*dr;
+    flouble dr_trans=rm*sqrt(4*M_PI/(12*nside_here*nside_here));
+    oi->r0_arr[irr]=irr*dr;
+    oi->rf_arr[irr]=(irr+1)*dr;
+
+    while(dr_trans>1.333*dr) {
+      nside_here*=2;
+      dr_trans=rm*sqrt(4*M_PI/(12*nside_here*nside_here));
+    }
+    oi->nside_arr[irr]=nside_here;
+  }
+
+#pragma omp parallel default(none)			\
+  shared(oi,z0_node,zf_node,dx)
+  {
+    int ir;
+
+#pragma omp for schedule(dynamic,DYNAMIC_SIZE)
+    for(ir=0;ir<oi->nr;ir++) {
+      double r0=oi->r0_arr[ir];
+      double rf=oi->rf_arr[ir];
+      double rm=0.5*(r0+rf);
+      long ipx,npix=12*oi->nside_arr[ir]*oi->nside_arr[ir];
+      flouble dr_trans=rm*sqrt(4*M_PI/npix);
+      double dz_additional=dr_trans+dx;
+      double z0_here=z0_node-dz_additional;
+      double zf_here=zf_node+dz_additional;
+      oi->num_pix[ir]=0;
+
+      for(ipx=0;ipx<npix;ipx++) {
+	double zpix0,zpixf,pos[3];
+	//TODO: is this better than pix2ang?
+	pix2vec_ring(oi->nside_arr[ir],ipx,pos);
+	zpix0=r0*pos[2];
+	zpixf=rf*pos[2];
+	if(((zpix0>=z0_here) && (zpix0<=zf_here)) ||
+	   ((zpixf>=z0_here) && (zpixf<=zf_here))) {
+	  oi->num_pix[ir]++;
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+  for(irr=0;irr<oi->nr;irr++) {
+    if(oi->num_pix[irr]>0) {
+      oi->list_ipix[irr]=my_malloc(oi->num_pix[irr]*sizeof(long));
+      oi->maps[irr]=my_calloc(oi->num_pix[irr],sizeof(flouble));
+    }
+  }
+
+#pragma omp parallel default(none)			\
+  shared(oi,z0_node,zf_node,dx)
+  {
+    int ir;
+
+#pragma omp for schedule(dynamic,DYNAMIC_SIZE)
+    for(ir=0;ir<oi->nr;ir++) {
+      double r0=oi->r0_arr[ir];
+      double rf=oi->rf_arr[ir];
+      double rm=0.5*(r0+rf);
+      long ipx,npix=12*oi->nside_arr[ir]*oi->nside_arr[ir];
+      flouble dr_trans=rm*sqrt(4*M_PI/npix);
+      double dz_additional=dr_trans+dx;
+      double z0_here=z0_node-dz_additional;
+      double zf_here=zf_node+dz_additional;
+
+      oi->num_pix[ir]=0;
+      for(ipx=0;ipx<npix;ipx++) {
+	double zpix0,zpixf,pos[3];
+	//TODO: is this better than pix2ang?
+	pix2vec_ring(oi->nside_arr[ir],ipx,pos);
+	zpix0=r0*pos[2];
+	zpixf=rf*pos[2];
+	if(((zpix0>=z0_here) && (zpix0<=zf_here)) ||
+	   ((zpixf>=z0_here) && (zpixf<=zf_here))) {
+	  oi->list_ipix[ir][oi->num_pix[ir]]=ipx;
+	  oi->num_pix[ir]++;
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+#ifdef _DEBUG
+  for(irr=0;irr<oi->nr;irr++) {
+    double r0=oi->r0_arr[irr];
+    double rf=oi->rf_arr[irr];
+    double rm=0.5*(r0+rf);
+    int nside_here=oi->nside_arr[irr];
+    fprintf(par->f_dbg,
+	    "  Shell %d, r=%lf, nside=%d, angular resolution %lf Mpc/h, cell size %lf, %d pixels\n",
+	    irr,rm,nside_here,rm*sqrt(4*M_PI/(12*nside_here*nside_here)),dr,oi->num_pix[irr]);
+  }
+#endif //_DEBUG
+
+  return oi;
+}
+
+void free_onion_info(OnionInfo *oi)
+{
+  if(oi->nr>0) {
+    int ir;
+    free(oi->r0_arr);
+    free(oi->rf_arr);
+    free(oi->nside_arr);
+    free(oi->num_pix);
+    for(ir=0;ir<oi->nr;ir++) {
+      if(oi->num_pix[ir]>0) {
+	free(oi->list_ipix[ir]);
+	free(oi->maps[ir]);
+      }
+    }
+    free(oi->list_ipix);
+    free(oi->maps);
+  }
+  free(oi);
 }

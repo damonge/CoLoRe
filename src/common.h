@@ -58,9 +58,9 @@
 #endif //_WITH_NEEDLET
 #endif //_WITH_SHT
 
-#ifndef DR_RSD_ADDITIONAL
-#define DR_RSD_ADDITIONAL 10.
-#endif //_DZ_ADDITIONAL
+#ifndef NSIDE_ONION_BASE
+#define NSIDE_ONION_BASE 2
+#endif //NSIDE_ONION_BASE
 
 #define DYNAMIC_SIZE 1
 #define RTOD 57.2957795
@@ -121,6 +121,16 @@ typedef struct {
 } Gal;
 
 typedef struct {
+  int nr;
+  flouble *r0_arr;
+  flouble *rf_arr;
+  int *nside_arr;
+  int *num_pix;
+  long **list_ipix;
+  flouble **maps;
+} OnionInfo;
+
+typedef struct {
   char fnamePk[256];
   double OmegaM;
   double OmegaL;
@@ -138,6 +148,10 @@ typedef struct {
   double r_min;
   double r2_smooth;
   int do_smoothing;
+
+#ifdef _DEBUG
+  FILE *f_dbg;
+#endif //_DEBUG
 
   //Only used in common.c
   int numk;
@@ -176,6 +190,9 @@ typedef struct {
   flouble *grid_rvel;
   double sigma2_gauss;
 
+  int do_lensing;
+  OnionInfo *oi_lens;
+
   int do_gals;
   int n_gals;
   char fnameBzGals[NPOP_MAX][256];
@@ -183,6 +200,7 @@ typedef struct {
   gsl_spline *spline_gals_bz[NPOP_MAX];
   gsl_spline *spline_gals_nz[NPOP_MAX];
   gsl_interp_accel *intacc_gals[NPOP_MAX];
+  int shear_gals[NPOP_MAX];
   lint *nsources_this;
   Gal **gals;
 
@@ -203,6 +221,8 @@ int rng_poisson(double lambda,gsl_rng *rng);
 void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
 void end_rng(gsl_rng *rng);
+OnionInfo *alloc_onion_info(ParamCoLoRe *par,int nside_base,flouble dr);
+void free_onion_info(OnionInfo *oi);
 
 
 //////

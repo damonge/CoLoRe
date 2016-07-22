@@ -26,6 +26,9 @@ static ParamCoLoRe *param_colore_new(void)
   int ii;
   ParamCoLoRe *par=my_malloc(sizeof(ParamCoLoRe));
 
+#ifdef _DEBUG
+  par->f_dbg=NULL;
+#endif //_DEBUG
   sprintf(par->fnamePk,"default");
   par->output_density=0;
   par->OmegaM=0.3;
@@ -66,6 +69,9 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_rvel=NULL;
   par->sigma2_gauss=-1;
 
+  par->do_lensing=0;
+  par->oi_lens=NULL;
+  
   par->do_gals=0;
   par->n_gals=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
@@ -74,6 +80,7 @@ static ParamCoLoRe *param_colore_new(void)
     par->spline_gals_bz[ii]=NULL;
     par->spline_gals_nz[ii]=NULL;
     par->intacc_gals[ii]=NULL;
+    par->shear_gals[ii]=0;
   }
   par->gals=NULL;
   par->nsources_this=NULL;
@@ -165,7 +172,7 @@ ParamCoLoRe *read_run_params(char *fname)
     par->output_format=0;
   else
     report_error(1,"Unrecognized format %s\n",c_dum);
-  
+
   conf_read_double(conf,"cosmo_par","omega_M",&(par->OmegaM));
   conf_read_double(conf,"cosmo_par","omega_L",&(par->OmegaL));
   conf_read_double(conf,"cosmo_par","omega_B",&(par->OmegaB));
@@ -191,6 +198,9 @@ ParamCoLoRe *read_run_params(char *fname)
     sprintf(c_dum,"gals%d",ii+1);
     conf_read_string(conf,c_dum,"nz_filename",par->fnameNzGals[ii]);
     conf_read_string(conf,c_dum,"bias_filename",par->fnameBzGals[ii]);
+    conf_read_bool(conf,c_dum,"include_shear",&(par->shear_gals[ii]));
+    if(par->shear_gals[ii])
+      par->do_lensing=1;
   }
   if(par->n_gals>0)
     par->do_gals=1;
@@ -201,8 +211,13 @@ ParamCoLoRe *read_run_params(char *fname)
   }
 
 #ifdef _DEBUG
-  sprintf(c_dum,"%s_params.cfg",par->prefixOut);
-  config_write_file(conf,c_dum);
+  sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
+  par->f_dbg=fopen(c_dum,"w");
+  if(par->f_dbg==NULL) error_open_file(c_dum);
+  if(NodeThis==0) {
+    sprintf(c_dum,"%s_params.cfg",par->prefixOut);
+    config_write_file(conf,c_dum);
+  }
 #endif //_DEBUG
 
   config_destroy(conf);
@@ -215,6 +230,8 @@ ParamCoLoRe *read_run_params(char *fname)
     par->do_smoothing=0;
   cosmo_set(par);
   init_fftw(par);
+  if(par->do_lensing)
+    par->oi_lens=alloc_onion_info(par,NSIDE_ONION_BASE,par->l_box/par->n_grid);
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");
@@ -229,7 +246,9 @@ ParamCoLoRe *read_run_params(char *fname)
   else
     print_info("  No extra smoothing\n");
   if(par->do_gals)
-    print_info("  %d galaxy population\n",par->n_gals);
+    print_info("  %d galaxy populations\n",par->n_gals);
+  if(par->do_lensing)
+    print_info("  Will include lensing shear\n");
   print_info("\n");
   
   return par;
@@ -413,6 +432,8 @@ void param_colore_free(ParamCoLoRe *par)
   free(par->slice_right);
 #endif //_HAVE_MPI
   free(par->grid_rvel);
+  if(par->do_lensing)
+    free_onion_info(par->oi_lens);
 
   if(par->do_gals) {
     for(ii=0;ii<par->n_gals;ii++) {
@@ -426,6 +447,10 @@ void param_colore_free(ParamCoLoRe *par)
       free(par->gals);
     free(par->nsources_this);
   }
+
+#ifdef _DEBUG
+  fclose(par->f_dbg);
+#endif //_DEBUG
 
   end_fftw();
 }

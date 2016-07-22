@@ -127,9 +127,9 @@ static void get_sources_single(ParamCoLoRe *par,int ipop,int *nsources)
 #endif //_HAVE_MPI
 
   print_info("   There will be %ld objects in total \n",(long)nsources_total);
-  //#ifdef _DEBUG
-  //  printf("Node %d has %ld particles\n",NodeThis,(long)(par->nsources_this));
-  //#endif //_DEBUG
+#ifdef _DEBUG
+  fprintf(par->f_dbg,"Node %d has %ld particles\n",NodeThis,(long)(par->nsources_this));
+#endif //_DEBUG
 
   for(ii=nthr-1;ii>0;ii--) {
     int jj;
