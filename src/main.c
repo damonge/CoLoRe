@@ -47,8 +47,11 @@ int main(int argc,char **argv)
 
 
   //Create Gaussian density and radial velocity fields
-  //create_d_and_vr_fields(par);
-  create_d_phi_and_vr_fields(par);
+
+  if(par->output_potential)
+    create_d_phi_and_vr_fields(par);
+  else
+    create_d_and_vr_fields(par);
   //Poisson-sample the galaxies
   if(par->do_gals)
     get_sources(par);
