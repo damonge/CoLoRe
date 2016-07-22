@@ -185,6 +185,8 @@ typedef struct {
   flouble *grid_dens;
   dftw_complex *grid_vpot_f;
   flouble *grid_vpot;
+  dftw_complex *grid_npot_f;
+  flouble *grid_npot;
   flouble *slice_left;
   flouble *slice_right;
   flouble *grid_rvel;
@@ -242,14 +244,14 @@ double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop);
 // Functions defined in io_gh.c
 ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
-void write_grid(ParamCoLoRe *par);
+void write_grids(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
 
 //////
 // Functions defined in fourier.c
 void init_fftw(ParamCoLoRe *par);
-void create_d_and_vr_fields(ParamCoLoRe *par);
+void create_cartesian_fields(ParamCoLoRe *par);
 void end_fftw(void);
 
 

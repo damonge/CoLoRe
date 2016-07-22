@@ -66,6 +66,8 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_dens=NULL;
   par->grid_vpot_f=NULL;
   par->grid_vpot=NULL;
+  par->grid_npot_f=NULL;
+  par->grid_npot=NULL;
   par->grid_rvel=NULL;
   par->sigma2_gauss=-1;
 
@@ -254,7 +256,7 @@ ParamCoLoRe *read_run_params(char *fname)
   return par;
 }
 
-void write_grid(ParamCoLoRe *par)
+void write_grids(ParamCoLoRe *par)
 {
   FILE *fo;
   char fname[256];
@@ -422,10 +424,14 @@ void param_colore_free(ParamCoLoRe *par)
   if(par->grid_dens_f!=NULL)
     fftwf_free(par->grid_dens_f);
   fftwf_free(par->grid_vpot_f);
+  if(par->do_lensing)
+    fftwf_free(par->grid_npot_f);
 #else //_SPREC
   if(par->grid_dens_f!=NULL)
     fftw_free(par->grid_dens_f);
   fftw_free(par->grid_vpot_f);
+  if(par->do_lensing)
+    fftw_free(par->grid_npot_f);
 #endif //_SPREC
 #ifdef _HAVE_MPI
   free(par->slice_left);

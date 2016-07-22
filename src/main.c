@@ -46,7 +46,7 @@ int main(int argc,char **argv)
   print_info("Seed : %u\n",par->seed_rng);
 
   //Create Gaussian density and radial velocity fields
-  create_d_and_vr_fields(par);
+  create_cartesian_fields(par);
 
   //Poisson-sample the galaxies
   if(par->do_gals)

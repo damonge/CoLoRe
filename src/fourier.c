@@ -189,6 +189,17 @@ void init_fftw(ParamCoLoRe *par)
     report_error(1,"Ran out of memory\n");
   par->grid_vpot=(flouble *)(par->grid_vpot_f);
 
+  if(par->do_lensing) {
+#ifdef _SPREC
+    par->grid_npot_f=fftwf_alloc_complex(dsize);
+#else //_SPREC
+    par->grid_npot_f=fftw_alloc_complex(dsize);
+#endif //_SPREC
+    if(par->grid_npot_f==NULL)
+      report_error(1,"Ran out of memory\n");
+    par->grid_npot=(flouble *)(par->grid_npot_f);
+  }
+
   par->grid_rvel=my_malloc(2*dsize*sizeof(flouble));
 #ifdef _HAVE_MPI
   par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
@@ -229,7 +240,7 @@ void end_fftw(void)
 #endif //_HAVE_MPI
 }
 
-static void create_density_and_velpot_fourier(ParamCoLoRe *par)
+static void create_grids_fourier(ParamCoLoRe *par)
 {
   //////
   // Generates a random realization of the delta_k
@@ -250,7 +261,8 @@ static void create_density_and_velpot_fourier(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     unsigned int seed_thr=par->seed_rng+IThread0+ithr;
     gsl_rng *rng_thr=init_rng(seed_thr);
-    double factor=par->fgrowth_0*par->hubble_0;
+    double factor_v=par->fgrowth_0*par->hubble_0;
+    double factor_p=par->hubble_0*par->hubble_0*par->OmegaM;
     
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -293,7 +305,9 @@ static void create_density_and_velpot_fourier(ParamCoLoRe *par)
 	      sigma2*=exp(-par->r2_smooth*k_mod2);
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
-	    par->grid_vpot_f[index]=par->grid_dens_f[index]*factor/k_mod2;
+	    par->grid_vpot_f[index]=par->grid_dens_f[index]*factor_v/k_mod2;
+	    if(par->do_lensing)
+	      par->grid_npot_f[index]=-1.5*par->grid_dens_f[index]*factor_p/k_mod2;
 	  }
 	}
       }
@@ -370,7 +384,7 @@ static void radial_velocity_from_potential(ParamCoLoRe *par)
   } // end omp parallel
 }
 
-void create_d_and_vr_fields(ParamCoLoRe *par)
+void create_cartesian_fields(ParamCoLoRe *par)
 {
   //////
   // Creates a realization of the gaussian density
@@ -381,13 +395,15 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
 
   print_info("Creating Fourier-space density and velocity potential \n");
   if(NodeThis==0) timer(0);
-  create_density_and_velpot_fourier(par);
+  create_grids_fourier(par);
   if(NodeThis==0) timer(2);
 
   print_info("Transforming density and velocity potential\n");
   if(NodeThis==0) timer(0);
   fftw_wrap(par->n_grid,par->grid_dens_f,par->grid_dens);
   fftw_wrap(par->n_grid,par->grid_vpot_f,par->grid_vpot);
+  if(par->do_lensing)
+    fftw_wrap(par->n_grid,par->grid_npot_f,par->grid_npot);
   if(NodeThis==0) timer(2);
 
   print_info("Normalizing density and velocity potential \n");
@@ -406,6 +422,8 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
     for(ii=0;ii<n_grid_tot;ii++) {
       par->grid_dens[ii]*=norm;
       par->grid_vpot[ii]*=norm;
+      if(par->do_lensing)
+	par->grid_npot[ii]*=norm;
     }
   }//end omp parallel
   if(NodeThis==0) timer(2);
@@ -436,5 +454,5 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
 
   //Output density field if necessary
   if(par->output_density)
-    write_grid(par);
+    write_grids(par);
 }
