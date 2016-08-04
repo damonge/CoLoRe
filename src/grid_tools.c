@@ -208,6 +208,7 @@ void get_psi_potential(ParamCoLoRe *par)
 {
   int ix, iy, iz;
   int iplane;
+  int iplane1;
   long ipix;
   int ngx=2*(par->n_grid/2+1);
   int npix = 12*(par->nside)*(par->nside);
@@ -226,16 +227,10 @@ void get_psi_potential(ParamCoLoRe *par)
   #endif //_HAVE_OMP
     {
   #ifdef _HAVE_OMP
-  #pragma omp for schedule(static)
+  #pragma omp for schedule(static) collapse(3)
   #endif //_HAVE_OMP
   for(ix=0; ix<par->n_grid; ix++){
-    #ifdef _HAVE_OMP
-    #pragma omp for schedule(static)
-    #endif //_HAVE_OMP
     for(iy=0; iy<par->n_grid; iy++){
-      #ifdef _HAVE_OMP
-      #pragma omp for schedule(static)
-      #endif //_HAVE_OMP
       for(iz=0; iz<par->n_grid; iz++){
         iplane = (int) sqrt(ix*ix+iy*iy+iz*iz)/sqrt(3.*par->n_grid*par->n_grid)*nplanes;
         double myvec[3];
@@ -255,7 +250,6 @@ void get_psi_potential(ParamCoLoRe *par)
     }
   }
   par->psi_potential = my_calloc(nplanes,npix*sizeof(flouble));
-  int iplane1;
   #ifdef _HAVE_OMP
   #pragma omp for schedule(static)
   #endif //_HAVE_OMP
