@@ -63,11 +63,15 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_dens=NULL;
   par->grid_vpot_f=NULL;
   par->grid_vpot=NULL;
+  par->psi_potential=NULL;
   par->grid_rvel=NULL;
   par->sigma2_gauss=-1;
-
+  par->n_lens_planes=0;
+  par->nside=0;
   par->do_gals=0;
   par->n_gals=-1;
+  par->do_potential=0;
+  par->output_potential=0;
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzGals[ii],"default");
     sprintf(par->fnameNzGals[ii],"default");
@@ -144,7 +148,11 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_double(conf,"global","z_max",&(par->z_max));
   conf_read_int(conf,"global","n_grid",&(par->n_grid));
   conf_read_bool(conf,"global","output_density",&(par->output_density));
+  conf_read_bool(conf,"global","output_potential",&(par->output_potential));
+  conf_read_bool(conf,"global","do_potential",&(par->do_potential));
   conf_read_int(conf,"global","seed",&i_dum);
+  conf_read_int(conf,"global","nside",&par->nside);
+  conf_read_int(conf,"global","n_lens_planes",&par->n_lens_planes);
   par->seed_rng=i_dum;
   conf_read_string(conf,"global","output_format",c_dum);
   if(!strcmp(c_dum,"HDF5")) {
@@ -165,7 +173,7 @@ ParamCoLoRe *read_run_params(char *fname)
     par->output_format=0;
   else
     report_error(1,"Unrecognized format %s\n",c_dum);
-  
+
   conf_read_double(conf,"cosmo_par","omega_M",&(par->OmegaM));
   conf_read_double(conf,"cosmo_par","omega_L",&(par->OmegaL));
   conf_read_double(conf,"cosmo_par","omega_B",&(par->OmegaB));
@@ -231,7 +239,7 @@ ParamCoLoRe *read_run_params(char *fname)
   if(par->do_gals)
     print_info("  %d galaxy population\n",par->n_gals);
   print_info("\n");
-  
+
   return par;
 }
 
@@ -266,11 +274,35 @@ void write_grid(ParamCoLoRe *par)
   print_info("\n");
 }
 
+void write_pot(ParamCoLoRe *par)
+{
+  FILE *fo;
+  char fname[256];
+  int iplane;
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing psi potential field (native format)\n");
+  sprintf(fname,"%s_psi_pot_%d.dat",par->prefixOut,NodeThis);
+  fo=fopen(fname,"wb");
+  if(fo==NULL) error_open_file(fname);
+  for(iplane=0;iplane<par->n_lens_planes;iplane++) {
+    int ipix;
+    for(ipix=0;ipix<12*par->nside*par->nside;ipix++) {
+      int index = ipix+iplane*12*par->nside*par->nside;
+      my_fwrite(&(par->psi_potential[index]),sizeof(flouble),1,fo);
+    }
+  }
+  fclose(fo);
+  free(par->psi_potential);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+
 void write_catalog(ParamCoLoRe *par)
 {
   int i_pop;
   char fname[256];
-  
+
   if(par->do_gals) {
     if(NodeThis==0) timer(0);
     if(par->output_format==2) { //HDF5
@@ -284,10 +316,10 @@ void write_catalog(ParamCoLoRe *par)
       gal_types[1]=H5T_NATIVE_FLOAT;
       gal_types[2]=H5T_NATIVE_FLOAT;
       gal_types[3]=H5T_NATIVE_FLOAT;
-      
+
       print_info("*** Writing catalog (HDF5)\n");
       sprintf(fname,"%s_%d.h5",par->prefixOut,NodeThis);
-      
+
       //Create file
       file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
       //Write table for each galaxy type
@@ -302,7 +334,7 @@ void write_catalog(ParamCoLoRe *par)
 	H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_3_UNITS",tunit[3]);
       }
-      
+
       //End file
       H5Fclose(file_id);
 #else //_HAVE_HDF5
@@ -319,20 +351,20 @@ void write_catalog(ParamCoLoRe *par)
       char *ttype[]={"RA" ,"DEC","Z_COSMO","DZ_RSD","TYPE"};
       char *tform[]={"1E" ,"1E" ,"1E"     ,"1E"    ,"1J"  };
       char *tunit[]={"DEG","DEG","NA"     ,"NA"    ,"NA"  };
-      
+
       print_info("*** Writing catalog (FITS)\n");
       sprintf(fname,"!%s_%d.fits",par->prefixOut,NodeThis);
-      
+
       fits_create_file(&fptr,fname,&status);
       fits_create_tbl(fptr,BINARY_TBL,0,5,ttype,tform,tunit,NULL,&status);
-      
+
       fits_get_rowsize(fptr,&nrw,&status);
       ra_arr=my_malloc(nrw*sizeof(float));
       dec_arr=my_malloc(nrw*sizeof(float));
       z0_arr=my_malloc(nrw*sizeof(float));
       rsd_arr=my_malloc(nrw*sizeof(float));
       type_arr=my_malloc(nrw*sizeof(int));
-      
+
       long offset=0;
       for(i_pop=0;i_pop<par->n_gals;i_pop++) {
 	long row_here=0;
@@ -342,7 +374,7 @@ void write_catalog(ParamCoLoRe *par)
 	    nrw_here=par->nsources_this[i_pop]-row_here;
 	  else
 	    nrw_here=nrw;
-	  
+
 	  for(ii=0;ii<nrw_here;ii++) {
 	    ra_arr[ii]=par->gals[i_pop][row_here+ii].ra;
 	    dec_arr[ii]=par->gals[i_pop][row_here+ii].dec;
@@ -355,7 +387,7 @@ void write_catalog(ParamCoLoRe *par)
 	  fits_write_col(fptr,TFLOAT,3,offset+row_here+1,1,nrw_here,z0_arr,&status);
 	  fits_write_col(fptr,TFLOAT,4,offset+row_here+1,1,nrw_here,rsd_arr,&status);
 	  fits_write_col(fptr,TINT  ,5,offset+row_here+1,1,nrw_here,type_arr,&status);
-	  
+
 	  row_here+=nrw_here;
 	}
 	offset+=par->nsources_this[i_pop];
@@ -373,7 +405,7 @@ void write_catalog(ParamCoLoRe *par)
     else   {
       print_info("*** Writing catalog (ASCII)\n");
       sprintf(fname,"%s_%d.txt",par->prefixOut,NodeThis);
-      
+
       lint jj;
       FILE *fil=fopen(fname,"w");
       if(fil==NULL) error_open_file(fname);

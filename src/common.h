@@ -66,6 +66,7 @@
 #define RTOD 57.2957795
 #define DTOR 0.01745329251
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b))
+#define KMTOMPC 3.24078e-20 //1 km in Mpc
 
 #define TWOPIPIINVLOGTEN  0.1166503235296796 //ln(10)/(2*pi^2)
 #define TWOPIPIINV  0.05066059182116889 //1/(2*pi^2)
@@ -165,6 +166,7 @@ typedef struct {
   char prefixOut[256];
   int output_format; //0-> ASCII, 1-> FITS, 2-> HDF5
   int output_density;
+  int output_potential;
   double pos_obs[3];
 
   dftw_complex *grid_dens_f;
@@ -174,10 +176,13 @@ typedef struct {
   flouble *slice_left;
   flouble *slice_right;
   flouble *grid_rvel;
+  flouble *psi_potential;
   double sigma2_gauss;
-
+  int n_lens_planes;
+  int nside;
   int do_gals;
   int n_gals;
+  int do_potential;
   char fnameBzGals[NPOP_MAX][256];
   char fnameNzGals[NPOP_MAX][256];
   gsl_spline *spline_gals_bz[NPOP_MAX];
@@ -223,6 +228,7 @@ double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop);
 ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
 void write_grid(ParamCoLoRe *par);
+void write_pot(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
 
@@ -236,5 +242,5 @@ void end_fftw(void);
 //////
 // Functions defined in grid_tools.c
 void get_sources(ParamCoLoRe *par);
-
+void get_psi_potential(ParamCoLoRe *par);
 #endif //_COMMON_

@@ -251,7 +251,7 @@ static void create_density_and_velpot_fourier(ParamCoLoRe *par)
     unsigned int seed_thr=par->seed_rng+IThread0+ithr;
     gsl_rng *rng_thr=init_rng(seed_thr);
     double factor=par->fgrowth_0*par->hubble_0;
-    
+
 #ifdef _HAVE_OMP
 #pragma omp for
 #endif //_HAVE_OMP
@@ -279,9 +279,9 @@ static void create_density_and_velpot_fourier(ParamCoLoRe *par)
 	    kx=kk*dk;
 	  else
 	    kx=-(par->n_grid-kk)*dk; //This should never happen
-	  
+
 	  k_mod2=kx*kx+ky*ky+kz*kz;
-	  
+
 	  if(k_mod2<=0) {
 	    par->grid_dens_f[index]=0;
 	    par->grid_vpot_f[index]=0;
@@ -294,7 +294,7 @@ static void create_density_and_velpot_fourier(ParamCoLoRe *par)
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
 	    par->grid_vpot_f[index]=par->grid_dens_f[index]*factor/k_mod2;
-	  }
+  	  }
 	}
       }
     }
@@ -313,7 +313,7 @@ static void radial_velocity_from_potential(ParamCoLoRe *par)
     double idx=1./dx;
     int iz;
     int ngx=2*(par->n_grid/2+1);
-    
+
 #ifdef _HAVE_OMP
 #pragma omp for
 #endif //_HAVE_OMP
@@ -349,11 +349,11 @@ static void radial_velocity_from_potential(ParamCoLoRe *par)
 	  double irr=1./sqrt(x*x+y*y+z*z);
 	  if(ix==0) ix_lo=par->n_grid-1;
 	  if(ix==par->n_grid-1) ix_hi=0;
-	  
+
 	  ur[0]=x*irr;
 	  ur[1]=y*irr;
 	  ur[2]=z*irr;
-	  
+
 	  vel[0]=0.5*idx*(par->grid_vpot[ix_hi+iy_0+iz_0]-par->grid_vpot[ix_lo+iy_0+iz_0]);
 	  vel[1]=0.5*idx*(par->grid_vpot[ix_0+iy_hi+iz_0]-par->grid_vpot[ix_0+iy_lo+iz_0]);
 	  if(iz==0)
@@ -375,7 +375,7 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
   //////
   // Creates a realization of the gaussian density
   // contrast field from the linear P_k
-  
+
   lint n_grid_tot=2*(par->n_grid/2+1)*((lint)(par->n_grid*par->nz_here));
   print_info("*** Creating Gaussian density field \n");
 
@@ -399,7 +399,7 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
   {
     lint ii;
     double norm=pow(sqrt(2*M_PI)/par->l_box,3);
-    
+
 #ifdef _HAVE_OMP
 #pragma omp for
 #endif //_HAVE_OMP

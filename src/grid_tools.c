@@ -140,7 +140,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop,int *nsources)
   }
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
-  
+
   par->gals[ipop]=my_malloc(par->nsources_this[ipop]*sizeof(Gal));
 
   if(NodeThis==0) timer(0);
@@ -203,6 +203,70 @@ static void get_sources_single(ParamCoLoRe *par,int ipop,int *nsources)
 
   free(np_tot_thr);
 }
+
+void get_psi_potential(ParamCoLoRe *par)
+{
+  int ix, iy, iz;
+  int iplane;
+  int iplane1;
+  long ipix;
+  int ngx=2*(par->n_grid/2+1);
+  int npix = 12*(par->nside)*(par->nside);
+  int nplanes = par->n_lens_planes;
+  double dx=par->l_box/par->n_grid;
+  int imem;
+  flouble **phi_potential = (flouble**)malloc(nplanes*sizeof(flouble*));
+  for (imem=0; imem<nplanes; imem++){
+    phi_potential[imem]=my_malloc(npix*sizeof(flouble));
+  }
+  if(NodeThis==0) timer(0);
+  print_info("   Computing lensing potential\n");
+    #ifdef _HAVE_OMP
+  #pragma omp parallel default(none)			\
+    shared(par, ix, iy, iz, iplane, iplane1, ipix, phi_potential, dx, nplanes, ngx, npix)
+  #endif //_HAVE_OMP
+    {
+  #ifdef _HAVE_OMP
+  #pragma omp for schedule(static) collapse(3)
+  #endif //_HAVE_OMP
+  for(ix=0; ix<par->n_grid; ix++){
+    for(iy=0; iy<par->n_grid; iy++){
+      for(iz=0; iz<par->n_grid; iz++){
+        iplane = (int) sqrt(ix*ix+iy*iy+iz*iz)/sqrt(3.*par->n_grid*par->n_grid)*nplanes;
+        double myvec[3];
+        myvec[0]=ix-par->n_grid/2;
+        myvec[1]=iy-par->n_grid/2;
+        myvec[2]=iz-par->n_grid/2;
+        vec2pix_ring(par->nside,myvec,&ipix);
+        double x0=(ix+0.5)*dx-par->pos_obs[1];
+        double y0=iy*dx-par->pos_obs[1];
+        double z0=(iz+par->iz0_here)*dx-par->pos_obs[2];
+        double r=sqrt(x0*x0+y0*y0+z0*z0);
+        lint indexz=iz*((lint)(ngx*par->n_grid));
+        lint indexy=iy*ngx;
+        lint index=ix+indexy+indexz;
+        phi_potential[iplane][ipix]=-3/2*par->hubble_0*par->OmegaM/par->fgrowth_0*dgrowth_of_r(par,r)*par->grid_vpot[index]*KMTOMPC;
+      }
+    }
+  }
+  par->psi_potential = my_calloc(nplanes,npix*sizeof(flouble));
+  #ifdef _HAVE_OMP
+  #pragma omp for schedule(static) collapse(3)
+  #endif //_HAVE_OMP
+  for(ipix=0; ipix<npix; ipix++){
+    for(iplane=0; iplane<nplanes; iplane++){
+      for(iplane1=0; iplane1<iplane; iplane1++){
+        lint index = iplane*npix+ipix;
+        //Only implemented for Flat FRWL
+        par->psi_potential[index]+=-2*par->l_box*(iplane-iplane1)/nplanes*phi_potential[iplane1][ipix];
+      }
+    }
+  }
+}
+  if(NodeThis==0) timer(2);
+  free(phi_potential);
+}
+
 
 void get_sources(ParamCoLoRe *par)
 {
