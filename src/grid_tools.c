@@ -251,16 +251,10 @@ void get_psi_potential(ParamCoLoRe *par)
   }
   par->psi_potential = my_calloc(nplanes,npix*sizeof(flouble));
   #ifdef _HAVE_OMP
-  #pragma omp for schedule(static)
+  #pragma omp for schedule(static) collapse(3)
   #endif //_HAVE_OMP
   for(ipix=0; ipix<npix; ipix++){
-    #ifdef _HAVE_OMP
-    #pragma omp for schedule(static)
-    #endif //_HAVE_OMP
     for(iplane=0; iplane<nplanes; iplane++){
-      #ifdef _HAVE_OMP
-      #pragma omp for schedule(static)
-      #endif //_HAVE_OMP
       for(iplane1=0; iplane1<iplane; iplane1++){
         lint index = iplane*npix+ipix;
         //Only implemented for Flat FRWL
