@@ -223,7 +223,7 @@ void get_psi_potential(ParamCoLoRe *par)
   print_info("   Computing lensing potential\n");
     #ifdef _HAVE_OMP
   #pragma omp parallel default(none)			\
-    shared(par, ix, iy, iz, iplane, iplane1, ipix, phi_potential, dx)
+    shared(par, ix, iy, iz, iplane, iplane1, ipix, phi_potential, dx, nplanes, ngx, npix)
   #endif //_HAVE_OMP
     {
   #ifdef _HAVE_OMP
