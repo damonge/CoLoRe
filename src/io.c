@@ -63,13 +63,15 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_dens=NULL;
   par->grid_vpot_f=NULL;
   par->grid_vpot=NULL;
-  par->grid_npot=NULL;
-  par->grid_npot_f=NULL;
+  par->psi_potential=NULL;
   par->grid_rvel=NULL;
   par->sigma2_gauss=-1;
-
+  par->n_lens_planes=0;
+  par->nside=0;
   par->do_gals=0;
   par->n_gals=-1;
+  par->do_potential=0;
+  par->output_potential=0;
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzGals[ii],"default");
     sprintf(par->fnameNzGals[ii],"default");
@@ -147,7 +149,10 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_int(conf,"global","n_grid",&(par->n_grid));
   conf_read_bool(conf,"global","output_density",&(par->output_density));
   conf_read_bool(conf,"global","output_potential",&(par->output_potential));
+  conf_read_bool(conf,"global","do_potential",&(par->do_potential));
   conf_read_int(conf,"global","seed",&i_dum);
+  conf_read_int(conf,"global","nside",&par->nside);
+  conf_read_int(conf,"global","n_lens_planes",&par->n_lens_planes);
   par->seed_rng=i_dum;
   conf_read_string(conf,"global","output_format",c_dum);
   if(!strcmp(c_dum,"HDF5")) {
@@ -273,29 +278,21 @@ void write_pot(ParamCoLoRe *par)
 {
   FILE *fo;
   char fname[256];
-  int iz;
-  int ngx=2*(par->n_grid/2+1);
-  int size_flouble=sizeof(flouble);
-
+  int iplane;
   if(NodeThis==0) timer(0);
-  print_info("*** Writing newtonian potential field (native format)\n");
-  sprintf(fname,"%s_pot_%d.dat",par->prefixOut,NodeThis);
+  print_info("*** Writing psi potential field (native format)\n");
+  sprintf(fname,"%s_psi_pot_%d.dat",par->prefixOut,NodeThis);
   fo=fopen(fname,"wb");
   if(fo==NULL) error_open_file(fname);
-  my_fwrite(&NNodes,sizeof(int),1,fo);
-  my_fwrite(&size_flouble,sizeof(int),1,fo);
-  my_fwrite(&(par->l_box),sizeof(double),1,fo);
-  my_fwrite(&(par->n_grid),sizeof(int),1,fo);
-  my_fwrite(&(par->nz_here),sizeof(int),1,fo);
-  my_fwrite(&(par->iz0_here),sizeof(int),1,fo);
-  for(iz=0;iz<par->nz_here;iz++) {
-    int iy;
-    for(iy=0;iy<par->n_grid;iy++) {
-      lint index0=ngx*((lint)(iy+iz*par->n_grid));
-      my_fwrite(&(par->grid_npot[index0]),sizeof(flouble),par->n_grid,fo);
+  for(iplane=0;iplane<par->n_lens_planes;iplane++) {
+    int ipix;
+    for(ipix=0;ipix<12*par->nside*par->nside;ipix++) {
+      int index = ipix+iplane*12*par->nside*par->nside;
+      my_fwrite(&(par->psi_potential[index]),sizeof(flouble),1,fo);
     }
   }
   fclose(fo);
+  free(par->psi_potential);
   if(NodeThis==0) timer(2);
   print_info("\n");
 }
@@ -438,12 +435,10 @@ void param_colore_free(ParamCoLoRe *par)
   if(par->grid_dens_f!=NULL)
     fftwf_free(par->grid_dens_f);
   fftwf_free(par->grid_vpot_f);
-  fftwf_free(par->grid_npot_f);
 #else //_SPREC
   if(par->grid_dens_f!=NULL)
     fftw_free(par->grid_dens_f);
   fftw_free(par->grid_vpot_f);
-  fftw_free(par->grid_npot_f);
 #endif //_SPREC
 #ifdef _HAVE_MPI
   free(par->slice_left);

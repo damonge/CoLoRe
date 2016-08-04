@@ -66,6 +66,7 @@
 #define RTOD 57.2957795
 #define DTOR 0.01745329251
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b))
+#define KMTOMPC 3.24078e-20 //1 km in Mpc
 
 #define TWOPIPIINVLOGTEN  0.1166503235296796 //ln(10)/(2*pi^2)
 #define TWOPIPIINV  0.05066059182116889 //1/(2*pi^2)
@@ -172,15 +173,16 @@ typedef struct {
   flouble *grid_dens;
   dftw_complex *grid_vpot_f;
   flouble *grid_vpot;
-  dftw_complex *grid_npot_f;
-  flouble *grid_npot;
   flouble *slice_left;
   flouble *slice_right;
   flouble *grid_rvel;
+  flouble *psi_potential;
   double sigma2_gauss;
-
+  int n_lens_planes;
+  int nside;
   int do_gals;
   int n_gals;
+  int do_potential;
   char fnameBzGals[NPOP_MAX][256];
   char fnameNzGals[NPOP_MAX][256];
   gsl_spline *spline_gals_bz[NPOP_MAX];
@@ -234,12 +236,11 @@ void param_colore_free(ParamCoLoRe *par);
 // Functions defined in fourier.c
 void init_fftw(ParamCoLoRe *par);
 void create_d_and_vr_fields(ParamCoLoRe *par);
-void create_d_phi_and_vr_fields(ParamCoLoRe *par);
 void end_fftw(void);
 
 
 //////
 // Functions defined in grid_tools.c
 void get_sources(ParamCoLoRe *par);
-
+void get_psi_potential(ParamCoLoRe *par);
 #endif //_COMMON_
