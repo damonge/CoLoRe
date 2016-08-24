@@ -148,8 +148,9 @@ void init_fftw(ParamCoLoRe *par)
   par->iz0_here=iz0;
 
 #else //_HAVE_MPI
-  int stat;
+
 #ifdef _HAVE_OMP
+  int stat;
 #ifdef _SPREC
   stat=fftwf_init_threads();
 #else //_SPREC
@@ -181,35 +182,39 @@ void init_fftw(ParamCoLoRe *par)
   par->grid_dens=(flouble *)(par->grid_dens_f);
 
 #ifdef _SPREC
-  par->grid_vpot_f=fftwf_alloc_complex(dsize);
+  par->grid_npot_f=fftwf_alloc_complex(dsize);
 #else //_SPREC
-  par->grid_vpot_f=fftw_alloc_complex(dsize);
+  par->grid_npot_f=fftw_alloc_complex(dsize);
 #endif //_SPREC
-  if(par->grid_vpot_f==NULL)
+  if(par->grid_npot_f==NULL)
     report_error(1,"Ran out of memory\n");
-  par->grid_vpot=(flouble *)(par->grid_vpot_f);
+  par->grid_npot=(flouble *)(par->grid_npot_f);
 
-  if(par->do_lensing) {
-#ifdef _SPREC
-    par->grid_npot_f=fftwf_alloc_complex(dsize);
-#else //_SPREC
-    par->grid_npot_f=fftw_alloc_complex(dsize);
-#endif //_SPREC
-    if(par->grid_npot_f==NULL)
-      report_error(1,"Ran out of memory\n");
-    par->grid_npot=(flouble *)(par->grid_npot_f);
-  }
-
-  par->grid_rvel=my_malloc(2*dsize*sizeof(flouble));
+  par->grid_dumm=my_malloc(2*dsize*sizeof(flouble));
 #ifdef _HAVE_MPI
   par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
   par->slice_right=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
 #endif //_HAVE_MPI
 }
 
-void end_fftw(void)
+void end_fftw(ParamCoLoRe *par)
 {
+#ifdef _SPREC
+  if(par->grid_dens_f!=NULL)
+    fftwf_free(par->grid_dens_f);
+  if(par->grid_npot_f!=NULL)
+    fftwf_free(par->grid_npot_f);
+#else //_SPREC
+  if(par->grid_dens_f!=NULL)
+    fftw_free(par->grid_dens_f);
+  if(par->grid_npot_f!=NULL)
+    fftw_free(par->grid_npot_f);
+#endif //_SPREC
+  free(par->grid_dumm);
+
 #ifdef _HAVE_MPI
+  free(par->slice_left);
+  free(par->slice_right);
 
 #ifdef _HAVE_OMP
   if(MPIThreadsOK) {
@@ -261,7 +266,6 @@ static void create_grids_fourier(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     unsigned int seed_thr=par->seed_rng+IThread0+ithr;
     gsl_rng *rng_thr=init_rng(seed_thr);
-    double factor_v=par->fgrowth_0*par->hubble_0;
     double factor_p=par->hubble_0*par->hubble_0*par->OmegaM;
     
 #ifdef _HAVE_OMP
@@ -296,7 +300,7 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	  
 	  if(k_mod2<=0) {
 	    par->grid_dens_f[index]=0;
-	    par->grid_vpot_f[index]=0;
+	    par->grid_npot_f[index]=0;
 	  }
 	  else {
 	    double lgk=0.5*log10(k_mod2);
@@ -305,9 +309,7 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	      sigma2*=exp(-par->r2_smooth*k_mod2);
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
-	    par->grid_vpot_f[index]=par->grid_dens_f[index]*factor_v/k_mod2;
-	    if(par->do_lensing)
-	      par->grid_npot_f[index]=-1.5*par->grid_dens_f[index]*factor_p/k_mod2;
+	    par->grid_npot_f[index]=-1.5*par->grid_dens_f[index]*factor_p/k_mod2;
 	  }
 	}
       }
@@ -316,6 +318,7 @@ static void create_grids_fourier(ParamCoLoRe *par)
   }
 }
 
+/*
 static void radial_velocity_from_potential(ParamCoLoRe *par)
 {
 #ifdef _HAVE_OMP
@@ -383,6 +386,7 @@ static void radial_velocity_from_potential(ParamCoLoRe *par)
     } // end omp for
   } // end omp parallel
 }
+*/
 
 void create_cartesian_fields(ParamCoLoRe *par)
 {
@@ -393,20 +397,18 @@ void create_cartesian_fields(ParamCoLoRe *par)
   lint n_grid_tot=2*(par->n_grid/2+1)*((lint)(par->n_grid*par->nz_here));
   print_info("*** Creating Gaussian density field \n");
 
-  print_info("Creating Fourier-space density and velocity potential \n");
+  print_info("Creating Fourier-space density and Newtonian potential \n");
   if(NodeThis==0) timer(0);
   create_grids_fourier(par);
   if(NodeThis==0) timer(2);
 
-  print_info("Transforming density and velocity potential\n");
+  print_info("Transforming density and Newtonian potential\n");
   if(NodeThis==0) timer(0);
   fftw_wrap(par->n_grid,par->grid_dens_f,par->grid_dens);
-  fftw_wrap(par->n_grid,par->grid_vpot_f,par->grid_vpot);
-  if(par->do_lensing)
-    fftw_wrap(par->n_grid,par->grid_npot_f,par->grid_npot);
+  fftw_wrap(par->n_grid,par->grid_npot_f,par->grid_npot);
   if(NodeThis==0) timer(2);
 
-  print_info("Normalizing density and velocity potential \n");
+  print_info("Normalizing density and Newtonian potential \n");
   if(NodeThis==0) timer(0);
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none)				\
@@ -421,9 +423,7 @@ void create_cartesian_fields(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(ii=0;ii<n_grid_tot;ii++) {
       par->grid_dens[ii]*=norm;
-      par->grid_vpot[ii]*=norm;
-      if(par->do_lensing)
-	par->grid_npot[ii]*=norm;
+      par->grid_npot[ii]*=norm;
     }
   }//end omp parallel
   if(NodeThis==0) timer(2);
@@ -433,20 +433,20 @@ void create_cartesian_fields(ParamCoLoRe *par)
   MPI_Status stat;
 
   //Pass rightmost slice to right node and receive left slice from left node
-  MPI_Sendrecv(&(par->grid_vpot[(par->nz_here-1)*slice_size]),slice_size,FLOUBLE_MPI,NodeRight,1,
+  MPI_Sendrecv(&(par->grid_npot[(par->nz_here-1)*slice_size]),slice_size,FLOUBLE_MPI,NodeRight,1,
 	       par->slice_left,slice_size,FLOUBLE_MPI,NodeLeft,1,MPI_COMM_WORLD,&stat);
   //Pass leftmost slice to left node and receive right slice from right node
-  MPI_Sendrecv(par->grid_vpot,slice_size,FLOUBLE_MPI,NodeLeft,2,
+  MPI_Sendrecv(par->grid_npot,slice_size,FLOUBLE_MPI,NodeLeft,2,
 	       par->slice_right,slice_size,FLOUBLE_MPI,NodeRight,2,MPI_COMM_WORLD,&stat);
 #else //_HAVE_MPI
-  par->slice_left=&(par->grid_vpot[(par->n_grid-1)*slice_size]);
-  par->slice_right=par->grid_vpot;
+  par->slice_left=&(par->grid_npot[(par->n_grid-1)*slice_size]);
+  par->slice_right=par->grid_npot;
 #endif //_HAVE_MPI
 
-  print_info("Calculating radial velocity \n");
-  if(NodeThis==0) timer(0);
-  radial_velocity_from_potential(par);
-  if(NodeThis==0) timer(2);
+  //  print_info("Calculating radial velocity \n");
+  //  if(NodeThis==0) timer(0);
+  //  radial_velocity_from_potential(par);
+  //  if(NodeThis==0) timer(2);
 
   compute_sigma_dens(par);
 

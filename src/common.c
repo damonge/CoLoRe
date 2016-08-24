@@ -269,115 +269,154 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
   return nmemb;
 }
 
-OnionInfo *alloc_onion_info(ParamCoLoRe *par,int nside_base,flouble dr)
+OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
 {
-  int irr;
-  double dx=par->l_box/par->n_grid;
-  double z0_node=dx*par->iz0_here-par->pos_obs[2];
-  double zf_node=dx*(par->iz0_here+par->nz_here)-par->pos_obs[2];
+  int ir;
   OnionInfo *oi=my_malloc(sizeof(OnionInfo));
+  double dx=par->l_box/par->n_grid;
+  double dr=dx;
 
   oi->nr=(int)(par->r_max/dr)+1;
   oi->r0_arr=my_malloc(oi->nr*sizeof(flouble));
   oi->rf_arr=my_malloc(oi->nr*sizeof(flouble));
   oi->nside_arr=my_malloc(oi->nr*sizeof(int));
+  oi->iphi0_arr=my_malloc(oi->nr*sizeof(int));
+  oi->iphif_arr=my_malloc(oi->nr*sizeof(int));
+  oi->icth0_arr=my_malloc(oi->nr*sizeof(int));
+  oi->icthf_arr=my_malloc(oi->nr*sizeof(int));
   oi->num_pix=my_malloc(oi->nr*sizeof(int));
-  oi->list_ipix=my_malloc(oi->nr*sizeof(long *));
-  oi->maps=my_malloc(oi->nr*sizeof(flouble *));
 
-  for(irr=0;irr<oi->nr;irr++) {
+  for(ir=0;ir<oi->nr;ir++) {
     int nside_here=nside_base;
-    flouble rm=(irr+0.5)*dr;
-    flouble dr_trans=rm*sqrt(4*M_PI/(12*nside_here*nside_here));
-    oi->r0_arr[irr]=irr*dr;
-    oi->rf_arr[irr]=(irr+1)*dr;
+    flouble rm=(ir+0.5)*dr;
+    flouble dr_trans=rm*sqrt(4*M_PI/(2*nside_here*nside_here));
+    oi->r0_arr[ir]=ir*dr;
+    oi->rf_arr[ir]=(ir+1)*dr;
 
-    while(dr_trans>1.333*dr) {
+    while(dr_trans>1.333*dr) { //TODO: should we use 1 instead of 1.333?
       nside_here*=2;
-      dr_trans=rm*sqrt(4*M_PI/(12*nside_here*nside_here));
+      dr_trans=rm*sqrt(4*M_PI/(2*nside_here*nside_here));
     }
-    oi->nside_arr[irr]=nside_here;
+    oi->nside_arr[ir]=nside_here;
   }
 
-#pragma omp parallel default(none)			\
-  shared(oi,z0_node,zf_node,dx)
-  {
-    int ir;
+  return oi;
+}
 
-#pragma omp for schedule(dynamic,DYNAMIC_SIZE)
-    for(ir=0;ir<oi->nr;ir++) {
-      double r0=oi->r0_arr[ir];
-      double rf=oi->rf_arr[ir];
-      double rm=0.5*(r0+rf);
-      long ipx,npix=12*oi->nside_arr[ir]*oi->nside_arr[ir];
-      flouble dr_trans=rm*sqrt(4*M_PI/npix);
-      double dz_additional=dr_trans+dx;
-      double z0_here=z0_node-dz_additional;
-      double zf_here=zf_node+dz_additional;
-      oi->num_pix[ir]=0;
+OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par)
+{
+  int ir;
+  double dx=par->l_box/par->n_grid;
+  double z0_node=dx*par->iz0_here-par->pos_obs[2];
+  double zf_node=dx*(par->iz0_here+par->nz_here)-par->pos_obs[2];
+  OnionInfo *oi=alloc_onion_empty(par,par->nside_base);
 
-      for(ipx=0;ipx<npix;ipx++) {
-	double zpix0,zpixf,pos[3];
-	//TODO: is this better than pix2ang?
-	pix2vec_ring(oi->nside_arr[ir],ipx,pos);
-	zpix0=r0*pos[2];
-	zpixf=rf*pos[2];
-	if(((zpix0>=z0_here) && (zpix0<=zf_here)) ||
-	   ((zpixf>=z0_here) && (zpixf<=zf_here))) {
-	  oi->num_pix[ir]++;
-	}
-      }
-    } //end omp for
-  } //end omp parallel
-
-  for(irr=0;irr<oi->nr;irr++) {
-    if(oi->num_pix[irr]>0) {
-      oi->list_ipix[irr]=my_malloc(oi->num_pix[irr]*sizeof(long));
-      oi->maps[irr]=my_calloc(oi->num_pix[irr],sizeof(flouble));
+  for(ir=0;ir<oi->nr;ir++) {
+    int icth0,icthf;
+    double cth0,cthf;
+    double r0=oi->r0_arr[ir];
+    double rf=oi->rf_arr[ir];
+    double rm=0.5*(r0+rf);
+    long npix=2*oi->nside_arr[ir]*oi->nside_arr[ir];
+    flouble dr_trans=rm*sqrt(4*M_PI/npix);
+    double dz_additional=dr_trans+dx;
+    double z0_here=z0_node-dz_additional;
+    double zf_here=zf_node+dz_additional;
+    
+    //Select phi bounds
+    //Pick the whole ring in this case
+    oi->iphi0_arr[ir]=0;
+    oi->iphif_arr[ir]=2*oi->nside_arr[ir]-1;
+    
+    //Select cth bounds
+    if(r0>0) {
+      cth0=MIN(z0_here/rf,z0_here/r0);
+      cthf=MAX(zf_here/rf,zf_here/r0);
     }
-  }
+    else {
+      cth0=z0_here/rf;
+      cthf=zf_here/rf;
+    }
+    icth0=(int)(0.5*(cth0+1)*oi->nside_arr[ir])-1;
+    icthf=(int)(0.5*(cthf+1)*oi->nside_arr[ir])+1;
+    icth0=CLAMP(icth0,0,oi->nside_arr[ir]-1);
+    icthf=CLAMP(icthf,0,oi->nside_arr[ir]-1);
+    oi->icth0_arr[ir]=icth0;
+    oi->icthf_arr[ir]=icthf;
 
-#pragma omp parallel default(none)			\
-  shared(oi,z0_node,zf_node,dx)
-  {
-    int ir;
-
-#pragma omp for schedule(dynamic,DYNAMIC_SIZE)
-    for(ir=0;ir<oi->nr;ir++) {
-      double r0=oi->r0_arr[ir];
-      double rf=oi->rf_arr[ir];
-      double rm=0.5*(r0+rf);
-      long ipx,npix=12*oi->nside_arr[ir]*oi->nside_arr[ir];
-      flouble dr_trans=rm*sqrt(4*M_PI/npix);
-      double dz_additional=dr_trans+dx;
-      double z0_here=z0_node-dz_additional;
-      double zf_here=zf_node+dz_additional;
-
+    if(((oi->icth0_arr[ir]==oi->nside_arr[ir]-1) && (oi->icthf_arr[ir]==oi->nside_arr[ir]-1) && (z0_here>rf)) ||
+       ((oi->icth0_arr[ir]==0) && (oi->icthf_arr[ir]==0) && (zf_here<-rf)))
       oi->num_pix[ir]=0;
-      for(ipx=0;ipx<npix;ipx++) {
-	double zpix0,zpixf,pos[3];
-	//TODO: is this better than pix2ang?
-	pix2vec_ring(oi->nside_arr[ir],ipx,pos);
-	zpix0=r0*pos[2];
-	zpixf=rf*pos[2];
-	if(((zpix0>=z0_here) && (zpix0<=zf_here)) ||
-	   ((zpixf>=z0_here) && (zpixf<=zf_here))) {
-	  oi->list_ipix[ir][oi->num_pix[ir]]=ipx;
-	  oi->num_pix[ir]++;
-	}
-      }
-    } //end omp for
-  } //end omp parallel
+    else
+      oi->num_pix[ir]=2*oi->nside_arr[ir]*(icthf-icth0+1);
 
 #ifdef _DEBUG
-  for(irr=0;irr<oi->nr;irr++) {
-    double r0=oi->r0_arr[irr];
-    double rf=oi->rf_arr[irr];
-    double rm=0.5*(r0+rf);
-    int nside_here=oi->nside_arr[irr];
+    int nside_here=oi->nside_arr[ir];
     fprintf(par->f_dbg,
 	    "  Shell %d, r=%lf, nside=%d, angular resolution %lf Mpc/h, cell size %lf, %d pixels\n",
-	    irr,rm,nside_here,rm*sqrt(4*M_PI/(12*nside_here*nside_here)),dr,oi->num_pix[irr]);
+	    ir,rm,nside_here,rm*sqrt(4*M_PI/(2*nside_here*nside_here)),dx,oi->num_pix[ir]);
+#endif //_DEBUG
+  }
+
+  return oi;
+}
+
+OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
+{
+  int i_base,ir,i_base_here,icth;
+  OnionInfo **oi;
+  OnionInfo *oi_dum=alloc_onion_empty(par,par->nside_base);
+  int nside_base=oi_dum->nside_arr[0];
+  int npix_base=2*nside_base*nside_base;
+  int nbase_per_node=npix_base/NNodes;
+  int nbase_extra=npix_base%NNodes;
+  int nbase_here=nbase_per_node;
+  if(NodeThis<nbase_extra)
+    nbase_here++;
+  free_onion_info(oi_dum);
+
+  par->n_beams_here=nbase_here;
+
+  oi=my_malloc(nbase_here*sizeof(OnionInfo *));
+  for(i_base=0;i_base<nbase_here;i_base++)
+    oi[i_base]=alloc_onion_empty(par,nside_base);
+
+  i_base=0;
+  i_base_here=0;
+  for(icth=0;icth<nside_base;icth++) {
+    int iphi;
+    for(iphi=0;iphi<2*nside_base;iphi++) {
+      if(i_base%NNodes==NodeThis) {
+	for(ir=0;ir<oi[i_base_here]->nr;ir++) {
+	  int nside_ratio=oi[i_base_here]->nside_arr[ir]/nside_base;
+	  oi[i_base_here]->iphi0_arr[ir]=iphi*nside_ratio;
+	  oi[i_base_here]->iphif_arr[ir]=(iphi+1)*nside_ratio-1;
+	  oi[i_base_here]->icth0_arr[ir]=icth*nside_ratio;
+	  oi[i_base_here]->icthf_arr[ir]=(icth+1)*nside_ratio-1;
+	  oi[i_base_here]->num_pix[ir]=nside_ratio*nside_ratio;
+	}
+	i_base_here++;
+      }
+      i_base++;
+    }
+  }
+
+#ifdef _DEBUG
+  double dx=par->l_box/par->n_grid;
+  fprintf(par->f_dbg,"Beams: %d\n",par->n_beams_here);
+  for(ir=0;ir<oi[0]->nr;ir++) {
+    int ib;
+    double r0=oi[0]->r0_arr[ir];
+    double rf=oi[0]->rf_arr[ir];
+    double rm=0.5*(r0+rf);
+    int nside_here=oi[0]->nside_arr[ir];
+    fprintf(par->f_dbg,
+	    "  Shell %d, r=%lf, nside=%d, angular resolution %lf Mpc/h, cell size %lf",
+	    ir,rm,nside_here,rm*sqrt(4*M_PI/(2*nside_here*nside_here)),dx);
+    fprintf(par->f_dbg,"[ ");
+    for(ib=0;ib<par->n_beams_here;ib++)
+      fprintf(par->f_dbg,"%d ",oi[ib]->num_pix[ir]);
+    fprintf(par->f_dbg,"]\n");
   }
 #endif //_DEBUG
 
@@ -387,19 +426,127 @@ OnionInfo *alloc_onion_info(ParamCoLoRe *par,int nside_base,flouble dr)
 void free_onion_info(OnionInfo *oi)
 {
   if(oi->nr>0) {
-    int ir;
     free(oi->r0_arr);
     free(oi->rf_arr);
     free(oi->nside_arr);
+    free(oi->iphi0_arr);
+    free(oi->iphif_arr);
+    free(oi->icth0_arr);
+    free(oi->icthf_arr);
     free(oi->num_pix);
-    for(ir=0;ir<oi->nr;ir++) {
-      if(oi->num_pix[ir]>0) {
-	free(oi->list_ipix[ir]);
-	free(oi->maps[ir]);
-      }
-    }
-    free(oi->list_ipix);
-    free(oi->maps);
   }
   free(oi);
+}
+
+void free_slices(ParamCoLoRe *par)
+{
+  int ii;
+  for(ii=0;ii<par->oi_slices->nr;ii++) {
+    free(par->dens_slices[ii]);
+    free(par->vrad_slices[ii]);
+    if(par->do_lensing) {
+      free(par->p_xx_slices[ii]);
+      free(par->p_xy_slices[ii]);
+      free(par->p_yy_slices[ii]);
+    }
+  }
+  free(par->dens_slices);
+  free(par->vrad_slices);
+  if(par->do_lensing) {
+    free(par->p_xx_slices);
+    free(par->p_xy_slices);
+    free(par->p_yy_slices);
+  }
+}
+
+void alloc_slices(ParamCoLoRe *par)
+{
+  int ii;
+
+  par->dens_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *)); 
+  par->vrad_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *));
+  if(par->do_lensing) {
+    par->p_xx_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *));
+    par->p_xy_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *));
+    par->p_yy_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *));
+  }
+  for(ii=0;ii<par->oi_slices->nr;ii++) {
+    par->dens_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
+    par->vrad_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
+    if(par->do_lensing) {
+      par->p_xx_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
+      par->p_xy_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
+      par->p_yy_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
+    }
+  }
+}
+
+void free_beams(ParamCoLoRe *par)
+{
+  int ib;
+
+  for(ib=0;ib<par->n_beams_here;ib++) {
+    int ii;
+    for(ii=0;ii<par->oi_slices->nr;ii++) {
+      free(par->dens_beams[ib][ii]);
+      free(par->vrad_beams[ib][ii]);
+      if(par->do_lensing) {
+	free(par->p_xx_beams[ib][ii]);
+	free(par->p_xy_beams[ib][ii]);
+	free(par->p_yy_beams[ib][ii]);
+      }
+      free(par->nsrc_beams[ib][ii]);
+    }
+    free(par->dens_beams[ib]);
+    free(par->vrad_beams[ib]);
+    if(par->do_lensing) {
+      free(par->p_xx_beams[ib]);
+      free(par->p_xy_beams[ib]);
+      free(par->p_yy_beams[ib]);
+    }
+    free(par->nsrc_beams[ib]);
+  }
+  free(par->dens_beams);
+  free(par->vrad_beams);
+  if(par->do_lensing) {
+    free(par->p_xx_beams);
+    free(par->p_xy_beams);
+    free(par->p_yy_beams);
+  }
+  free(par->nsrc_beams);
+}
+
+void alloc_beams(ParamCoLoRe *par)
+{
+  int ib;
+
+  par->dens_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+  par->vrad_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+  if(par->do_lensing) {
+    par->p_xx_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+    par->p_xy_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+    par->p_yy_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+  }
+  par->nsrc_beams=my_malloc(par->n_beams_here*sizeof(int **));
+  for(ib=0;ib<par->n_beams_here;ib++) {
+    int ii;
+    par->dens_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+    par->vrad_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+    if(par->do_lensing) {
+      par->p_xx_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+      par->p_xy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+      par->p_yy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+    }
+    par->nsrc_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(int *));
+    for(ii=0;ii<par->oi_slices->nr;ii++) {
+      par->dens_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+      par->vrad_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+      if(par->do_lensing) {
+	par->p_xx_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+	par->p_xy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+	par->p_yy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+      }
+      par->nsrc_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(int));
+    }
+  }
 }

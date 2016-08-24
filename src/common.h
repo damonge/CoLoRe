@@ -35,6 +35,8 @@
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_spline.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_blas.h>
 #include "fftw3.h"
 #ifdef _HAVE_MPI
 #include <mpi.h>
@@ -48,15 +50,16 @@
 #include <hdf5.h>
 #include <hdf5_hl.h>
 #endif //_HAVE_HDF5
-#include <chealpix.h>
-#ifdef _WITH_SHT
-#include <sharp_almhelpers.h>
-#include <sharp_geomhelpers.h>
-#include <sharp.h>
-#ifdef _WITH_NEEDLET
-#include <gsl/gsl_integration.h>
-#endif //_WITH_NEEDLET
-#endif //_WITH_SHT
+
+//#include <chealpix.h>
+//#ifdef _WITH_SHT
+//#include <sharp_almhelpers.h>
+//#include <sharp_geomhelpers.h>
+//#include <sharp.h>
+//#ifdef _WITH_NEEDLET
+//#include <gsl/gsl_integration.h>
+//#endif //_WITH_NEEDLET
+//#endif //_WITH_SHT
 
 #ifndef NSIDE_ONION_BASE
 #define NSIDE_ONION_BASE 2
@@ -66,6 +69,8 @@
 #define RTOD 57.2957795
 #define DTOR 0.01745329251
 #define MIN(a, b)  (((a) < (b)) ? (a) : (b))
+#define MAX(a, b)  (((a) > (b)) ? (a) : (b))
+#define CLAMP(x, low, high)  (((x) > (high)) ? (high) : (((x) < (low)) ? (low) : (x)))
 
 #define TWOPIPIINVLOGTEN  0.1166503235296796 //ln(10)/(2*pi^2)
 #define TWOPIPIINV  0.05066059182116889 //1/(2*pi^2)
@@ -118,6 +123,8 @@ typedef struct {
   float dec;    //Declination
   float z0;     //Cosmological redshift
   float dz_rsd; //RSD contribution
+  float e1;
+  float e2;
 } Gal;
 
 typedef struct {
@@ -125,9 +132,11 @@ typedef struct {
   flouble *r0_arr;
   flouble *rf_arr;
   int *nside_arr;
+  int *iphi0_arr;
+  int *iphif_arr;
+  int *icth0_arr;
+  int *icthf_arr;
   int *num_pix;
-  long **list_ipix;
-  flouble **maps;
 } OnionInfo;
 
 typedef struct {
@@ -183,17 +192,30 @@ typedef struct {
 
   dftw_complex *grid_dens_f;
   flouble *grid_dens;
-  dftw_complex *grid_vpot_f;
-  flouble *grid_vpot;
   dftw_complex *grid_npot_f;
   flouble *grid_npot;
+  flouble *grid_dumm;
   flouble *slice_left;
   flouble *slice_right;
-  flouble *grid_rvel;
   double sigma2_gauss;
 
   int do_lensing;
-  OnionInfo *oi_lens;
+  int nside_base;
+  int n_beams_here;
+  OnionInfo *oi_slices;
+  OnionInfo *oi_sl_dum;
+  OnionInfo **oi_beams;
+  flouble **dens_slices;
+  flouble ***dens_beams;
+  flouble **vrad_slices;
+  flouble ***vrad_beams;
+  flouble **p_xx_slices;
+  flouble ***p_xx_beams;
+  flouble **p_xy_slices;
+  flouble ***p_xy_beams;
+  flouble **p_yy_slices;
+  flouble ***p_yy_beams;
+  int ***nsrc_beams;
 
   int do_gals;
   int n_gals;
@@ -223,8 +245,13 @@ int rng_poisson(double lambda,gsl_rng *rng);
 void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
 void end_rng(gsl_rng *rng);
-OnionInfo *alloc_onion_info(ParamCoLoRe *par,int nside_base,flouble dr);
+OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par);
+OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
 void free_onion_info(OnionInfo *oi);
+void alloc_slices(ParamCoLoRe *par);
+void free_slices(ParamCoLoRe *par);
+void alloc_beams(ParamCoLoRe *par);
+void free_beams(ParamCoLoRe *par);
 
 
 //////
@@ -252,8 +279,12 @@ void param_colore_free(ParamCoLoRe *par);
 // Functions defined in fourier.c
 void init_fftw(ParamCoLoRe *par);
 void create_cartesian_fields(ParamCoLoRe *par);
-void end_fftw(void);
+void end_fftw(ParamCoLoRe *par);
 
+
+//////
+// Functions defined in pixelization.c
+void pixelize(ParamCoLoRe *par);
 
 //////
 // Functions defined in grid_tools.c

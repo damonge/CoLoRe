@@ -43,11 +43,10 @@ HDF5_LIB =
 #libconfig
 CONF_INC =
 CONF_LIB =
-#HEALPix
-HPIX_INC=
-HPIX_LIB=
 #
 ########## End of user-definable ##########
+
+DEFINEFLAGS += -DHAVE_INLINE -DGSL_RANGE_CHECK_OFF
 
 ifeq ($(strip $(USE_OMP)),yes)
 OPTIONS += -fopenmp
@@ -87,8 +86,8 @@ endif #SINGLE_PRECISION
 
 OPTIONS += $(DEFINEFLAGS)
 
-INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC) $(HPIX_INC)
-LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) $(HPIX_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW) -lchealpix
+INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC)
+LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW)
 ifeq ($(strip $(USE_HDF5)),yes)
 DEFINEFLAGS += -D_HAVE_HDF5
 LIB_ALL += -lhdf5 -lhdf5_hl -lz
@@ -103,11 +102,11 @@ COMMONO = src/common.o
 COSMOMADO = src/cosmo_mad.o
 COSMOO = src/cosmo.o
 FOURIERO = src/fourier.o
-GRIDO = src/grid_tools.o
+LCO = src/lightcone.o
 IOO = src/io.o
-HPIXO = src/healpix_extra.o
+PIXO = src/pixelization.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(GRIDO) $(IOO) $(HPIXO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(LCO) $(IOO) $(PIXO)
 
 EXEC = CoLoRe
 

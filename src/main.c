@@ -48,6 +48,9 @@ int main(int argc,char **argv)
   //Create Gaussian density and radial velocity fields
   create_cartesian_fields(par);
 
+  //Interpolate into beams
+  pixelize(par);
+
   //Poisson-sample the galaxies
   if(par->do_gals)
     get_sources(par);

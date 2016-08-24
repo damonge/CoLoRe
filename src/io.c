@@ -64,16 +64,29 @@ static ParamCoLoRe *param_colore_new(void)
   par->output_format=0;
   par->grid_dens_f=NULL;
   par->grid_dens=NULL;
-  par->grid_vpot_f=NULL;
-  par->grid_vpot=NULL;
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
-  par->grid_rvel=NULL;
+  par->grid_dumm=NULL;
   par->sigma2_gauss=-1;
 
   par->do_lensing=0;
-  par->oi_lens=NULL;
-  
+  par->nside_base=-1;
+  par->n_beams_here=-1;
+  par->oi_slices=NULL;
+  par->oi_beams=NULL;
+  par->oi_sl_dum=NULL;
+  par->dens_slices=NULL;
+  par->vrad_slices=NULL;
+  par->p_xx_slices=NULL;
+  par->p_xy_slices=NULL;
+  par->p_yy_slices=NULL;
+  par->dens_beams=NULL;
+  par->vrad_beams=NULL;
+  par->p_xx_beams=NULL;
+  par->p_xy_beams=NULL;
+  par->p_yy_beams=NULL;
+  par->nsrc_beams=NULL;
+
   par->do_gals=0;
   par->n_gals=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
@@ -231,9 +244,18 @@ ParamCoLoRe *read_run_params(char *fname)
   else
     par->do_smoothing=0;
   cosmo_set(par);
+
   init_fftw(par);
-  if(par->do_lensing)
-    par->oi_lens=alloc_onion_info(par,NSIDE_ONION_BASE,par->l_box/par->n_grid);
+
+  par->nside_base=1;
+  while(2*par->nside_base*par->nside_base<NNodes)
+    par->nside_base*=2;
+
+  par->oi_slices=alloc_onion_info_slices(par);
+  par->oi_sl_dum=alloc_onion_info_slices(par);
+  par->oi_beams=alloc_onion_info_beams(par);
+  par->nside_base=par->oi_slices->nside_arr[0];
+  alloc_slices(par);
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");
@@ -291,24 +313,26 @@ void write_catalog(ParamCoLoRe *par)
 {
   int i_pop;
   char fname[256];
-  
+
   if(par->do_gals) {
     if(NodeThis==0) timer(0);
     if(par->output_format==2) { //HDF5
 #ifdef _HAVE_HDF5
-      hid_t file_id,gal_types[5];
+      hid_t file_id,gal_types[6];
       hsize_t chunk_size=128;
-      size_t dst_offset[4]={HOFFSET(Gal,ra),HOFFSET(Gal,dec),HOFFSET(Gal,z0),HOFFSET(Gal,dz_rsd)};
-      const char *names[4]={"RA" ,"DEC","Z_COSMO","DZ_RSD"};
-      char *tunit[4]=      {"DEG","DEG","NA"     ,"NA"    };
+      size_t dst_offset[6]={HOFFSET(Gal,ra),HOFFSET(Gal,dec),HOFFSET(Gal,z0),HOFFSET(Gal,dz_rsd),HOFFSET(Gal,e1),HOFFSET(Gal,e2)};
+      const char *names[6]={"RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
+      char *tunit[6]=      {"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
       gal_types[0]=H5T_NATIVE_FLOAT;
       gal_types[1]=H5T_NATIVE_FLOAT;
       gal_types[2]=H5T_NATIVE_FLOAT;
       gal_types[3]=H5T_NATIVE_FLOAT;
-      
+      gal_types[4]=H5T_NATIVE_FLOAT;
+      gal_types[5]=H5T_NATIVE_FLOAT;
+
       print_info("*** Writing catalog (HDF5)\n");
       sprintf(fname,"%s_%d.h5",par->prefixOut,NodeThis);
-      
+
       //Create file
       file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
       //Write table for each galaxy type
@@ -316,14 +340,16 @@ void write_catalog(ParamCoLoRe *par)
 	char table_title[256],table_name[256];
 	sprintf(table_title,"sources%d_data",i_pop);
 	sprintf(table_name,"/sources%d",i_pop);
-	H5TBmake_table(table_title,file_id,table_name,4,par->nsources_this[i_pop],sizeof(Gal),
+	H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Gal),
 		       names,dst_offset,gal_types,chunk_size,NULL,0,par->gals[i_pop]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_1_UNITS",tunit[1]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_3_UNITS",tunit[3]);
+	H5LTset_attribute_string(file_id,table_name,"FIELD_4_UNITS",tunit[4]);
+	H5LTset_attribute_string(file_id,table_name,"FIELD_5_UNITS",tunit[5]);
       }
-      
+
       //End file
       H5Fclose(file_id);
 #else //_HAVE_HDF5
@@ -336,24 +362,29 @@ void write_catalog(ParamCoLoRe *par)
       int status=0;
       fitsfile *fptr;
       int *type_arr;
-      float *ra_arr,*dec_arr,*z0_arr,*rsd_arr;
-      char *ttype[]={"RA" ,"DEC","Z_COSMO","DZ_RSD","TYPE"};
-      char *tform[]={"1E" ,"1E" ,"1E"     ,"1E"    ,"1J"  };
-      char *tunit[]={"DEG","DEG","NA"     ,"NA"    ,"NA"  };
-      
+      float *ra_arr,*dec_arr,*z0_arr,*rsd_arr,*e1_arr,*e2_arr;
+      int nfields=5;
+      char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
+      char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    ,"1E","1E"};
+      char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
+      if(par->do_lensing)
+	nfields=7;
+
       print_info("*** Writing catalog (FITS)\n");
       sprintf(fname,"!%s_%d.fits",par->prefixOut,NodeThis);
-      
+
       fits_create_file(&fptr,fname,&status);
-      fits_create_tbl(fptr,BINARY_TBL,0,5,ttype,tform,tunit,NULL,&status);
-      
+      fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
+
       fits_get_rowsize(fptr,&nrw,&status);
+      type_arr=my_malloc(nrw*sizeof(int));
       ra_arr=my_malloc(nrw*sizeof(float));
       dec_arr=my_malloc(nrw*sizeof(float));
       z0_arr=my_malloc(nrw*sizeof(float));
       rsd_arr=my_malloc(nrw*sizeof(float));
-      type_arr=my_malloc(nrw*sizeof(int));
-      
+      e1_arr=my_malloc(nrw*sizeof(float));
+      e2_arr=my_malloc(nrw*sizeof(float));
+
       long offset=0;
       for(i_pop=0;i_pop<par->n_gals;i_pop++) {
 	long row_here=0;
@@ -363,20 +394,28 @@ void write_catalog(ParamCoLoRe *par)
 	    nrw_here=par->nsources_this[i_pop]-row_here;
 	  else
 	    nrw_here=nrw;
-	  
+
 	  for(ii=0;ii<nrw_here;ii++) {
+	    type_arr[ii]=i_pop;
 	    ra_arr[ii]=par->gals[i_pop][row_here+ii].ra;
 	    dec_arr[ii]=par->gals[i_pop][row_here+ii].dec;
 	    z0_arr[ii]=par->gals[i_pop][row_here+ii].z0;
 	    rsd_arr[ii]=par->gals[i_pop][row_here+ii].dz_rsd;
-	    type_arr[ii]=i_pop;
+	    if(par->do_lensing) {
+	      e1_arr[ii]=par->gals[i_pop][row_here+ii].e1;
+	      e2_arr[ii]=par->gals[i_pop][row_here+ii].e2;
+	    }
 	  }
-	  fits_write_col(fptr,TFLOAT,1,offset+row_here+1,1,nrw_here,ra_arr,&status);
-	  fits_write_col(fptr,TFLOAT,2,offset+row_here+1,1,nrw_here,dec_arr,&status);
-	  fits_write_col(fptr,TFLOAT,3,offset+row_here+1,1,nrw_here,z0_arr,&status);
-	  fits_write_col(fptr,TFLOAT,4,offset+row_here+1,1,nrw_here,rsd_arr,&status);
-	  fits_write_col(fptr,TINT  ,5,offset+row_here+1,1,nrw_here,type_arr,&status);
-	  
+	  fits_write_col(fptr,TINT  ,1,offset+row_here+1,1,nrw_here,type_arr,&status);
+	  fits_write_col(fptr,TFLOAT,2,offset+row_here+1,1,nrw_here,ra_arr,&status);
+	  fits_write_col(fptr,TFLOAT,3,offset+row_here+1,1,nrw_here,dec_arr,&status);
+	  fits_write_col(fptr,TFLOAT,4,offset+row_here+1,1,nrw_here,z0_arr,&status);
+	  fits_write_col(fptr,TFLOAT,5,offset+row_here+1,1,nrw_here,rsd_arr,&status);
+	  if(par->do_lensing) {
+	    fits_write_col(fptr,TFLOAT,6,offset+row_here+1,1,nrw_here,e1_arr,&status);
+	    fits_write_col(fptr,TFLOAT,7,offset+row_here+1,1,nrw_here,e2_arr,&status);
+	  }
+
 	  row_here+=nrw_here;
 	}
 	offset+=par->nsources_this[i_pop];
@@ -387,6 +426,8 @@ void write_catalog(ParamCoLoRe *par)
       free(z0_arr);
       free(rsd_arr);
       free(type_arr);
+      free(e1_arr);
+      free(e2_arr);
 #else //_HAVE_FITS
       printf("FITS not supported\n");
 #endif //_HAVE_FITS
@@ -394,17 +435,24 @@ void write_catalog(ParamCoLoRe *par)
     else   {
       print_info("*** Writing catalog (ASCII)\n");
       sprintf(fname,"%s_%d.txt",par->prefixOut,NodeThis);
-      
+
       lint jj;
       FILE *fil=fopen(fname,"w");
       if(fil==NULL) error_open_file(fname);
-      fprintf(fil,"#[1]RA, [2]dec, [3]z0, [4]dz_RSD, [5]type\n");
+      fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");
+      if(par->do_lensing)
+	fprintf(fil,"#[6]e1, [7]e2\n");
+      else
+	fprintf(fil,"\n");
       for(i_pop=0;i_pop<par->n_gals;i_pop++) {
 	for(jj=0;jj<par->nsources_this[i_pop];jj++) {
-	  fprintf(fil,"%E %E %E %E %d\n",
-		  par->gals[i_pop][jj].ra,par->gals[i_pop][jj].dec,
-		  par->gals[i_pop][jj].z0,par->gals[i_pop][jj].dz_rsd,
-		  i_pop);
+	  fprintf(fil,"%d %E %E %E %E ",
+		  i_pop,par->gals[i_pop][jj].ra,par->gals[i_pop][jj].dec,
+		  par->gals[i_pop][jj].z0,par->gals[i_pop][jj].dz_rsd);
+	  if(par->do_lensing)
+	    fprintf(fil,"%E %E \n",par->gals[i_pop][jj].e1,par->gals[i_pop][jj].e2);
+	  else
+	    fprintf(fil,"\n");
 	}
       }
       fclose(fil);
@@ -417,29 +465,15 @@ void write_catalog(ParamCoLoRe *par)
 void param_colore_free(ParamCoLoRe *par)
 {
   int ii;
-
   free(par->logkarr);
   free(par->pkarr);
-#ifdef _SPREC
-  if(par->grid_dens_f!=NULL)
-    fftwf_free(par->grid_dens_f);
-  fftwf_free(par->grid_vpot_f);
-  if(par->do_lensing)
-    fftwf_free(par->grid_npot_f);
-#else //_SPREC
-  if(par->grid_dens_f!=NULL)
-    fftw_free(par->grid_dens_f);
-  fftw_free(par->grid_vpot_f);
-  if(par->do_lensing)
-    fftw_free(par->grid_npot_f);
-#endif //_SPREC
-#ifdef _HAVE_MPI
-  free(par->slice_left);
-  free(par->slice_right);
-#endif //_HAVE_MPI
-  free(par->grid_rvel);
-  if(par->do_lensing)
-    free_onion_info(par->oi_lens);
+
+  free_beams(par);
+  free_onion_info(par->oi_slices);
+  free_onion_info(par->oi_sl_dum);
+  for(ii=0;ii<par->n_beams_here;ii++)
+    free_onion_info(par->oi_beams[ii]);
+  free(par->oi_beams);
 
   if(par->do_gals) {
     for(ii=0;ii<par->n_gals;ii++) {
@@ -447,7 +481,7 @@ void param_colore_free(ParamCoLoRe *par)
       gsl_spline_free(par->spline_gals_nz[ii]);
       gsl_interp_accel_free(par->intacc_gals[ii]);
       if(par->gals[ii]!=NULL)
-	free(par->gals[ii]);
+      	free(par->gals[ii]);
     }
     if(par->gals!=NULL)
       free(par->gals);
@@ -457,6 +491,4 @@ void param_colore_free(ParamCoLoRe *par)
 #ifdef _DEBUG
   fclose(par->f_dbg);
 #endif //_DEBUG
-
-  end_fftw();
 }
