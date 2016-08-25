@@ -178,8 +178,8 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 		double kappa=-(pxx+pyy)*0.5;
 		double g1=-(pxx-pyy)*0.5;
 		double g2=-pxy;
-		double fac=2*(1-kappa)/((1-kappa)*(1-kappa)+g1*g1+g2*g2);
-		e1=fac*g1;
+		double fac=2;//*(1-kappa)/((1-kappa)*(1-kappa)+g1*g1+g2*g2);
+		e1=kappa;//fac*g1;
 		e2=fac*g2;
 	      }
 	      for(ip=0;ip<npp;ip++) {
@@ -207,7 +207,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
   free(np_tot_thr);
 }
 
-void integrate_lensing(ParamCoLoRe *par)
+static void integrate_lensing(ParamCoLoRe *par)
 {
   int ib;
 
@@ -218,7 +218,7 @@ void integrate_lensing(ParamCoLoRe *par)
   for(ib=0;ib<par->n_beams_here;ib++) {
     int ir;
     double nside_old=par->oi_beams[ib]->nside_arr[0];
-    double nphi_old=par->oi_beams[ib]->iphif_arr[0]-par->oi_beams[ib]->iphi0_arr[0];
+    double nphi_old=par->oi_beams[ib]->iphif_arr[0]-par->oi_beams[ib]->iphi0_arr[0]+1;
     double *pxx1_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
     double *pxx1_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
     double *pxx2_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
@@ -233,15 +233,17 @@ void integrate_lensing(ParamCoLoRe *par)
     double *pyy2_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
     for(ir=0;ir<par->oi_beams[ib]->nr;ir++) {
       int icth;
-      int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir];
-      int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir];
+      int nside_new=par->oi_beams[ib]->nside_arr[ir];
+      int nside_ratio=nside_new/nside_old;
+      int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir]+1;
+      int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
       double r0=par->oi_beams[ib]->r0_arr[ir];
       double rf=par->oi_beams[ib]->rf_arr[ir];
       double rm=0.5*(r0+rf);
       double redshift=z_of_r(par,rm);
       double g_phi=dgrowth_of_r(par,rm)*(1+redshift);
-      int nside_new=par->oi_beams[ib]->nside_arr[ir];
-      int nside_ratio=nside_new/nside_old;
+      if(ncth*nphi!=par->oi_beams[ib]->num_pix[ir])
+	report_error(1,"WTF\n");
       for(icth=0;icth<ncth;icth++) {
 	int iphi;
 	int icth_old=icth/nside_ratio;
@@ -251,13 +253,13 @@ void integrate_lensing(ParamCoLoRe *par)
 	  int index_old=iphi_old+nphi_old*icth_old;
 	  pxx1_new[index_new]=pxx1_old[index_old]+g_phi*par->p_xx_beams[ib][ir][index_new]*(rf*rf-r0*r0)/2;
 	  pxx2_new[index_new]=pxx1_old[index_old]+g_phi*par->p_xx_beams[ib][ir][index_new]*(rf*rf*rf-r0*r0*r0)/3;
-	  par->p_xx_beams[ib][ir][index_new]=2*(pxx1_new[index_new]-pxx1_new[index_new]/rf);
+	  par->p_xx_beams[ib][ir][index_new]=2*(pxx1_new[index_new]-pxx2_new[index_new]/rf);
 	  pxy1_new[index_new]=pxy1_old[index_old]+g_phi*par->p_xy_beams[ib][ir][index_new]*(rf*rf-r0*r0)/2;
 	  pxy2_new[index_new]=pxy1_old[index_old]+g_phi*par->p_xy_beams[ib][ir][index_new]*(rf*rf*rf-r0*r0*r0)/3;
-	  par->p_xy_beams[ib][ir][index_new]=2*(pxy1_new[index_new]-pxy1_new[index_new]/rf);
+	  par->p_xy_beams[ib][ir][index_new]=2*(pxy1_new[index_new]-pxy2_new[index_new]/rf);
 	  pyy1_new[index_new]=pyy1_old[index_old]+g_phi*par->p_yy_beams[ib][ir][index_new]*(rf*rf-r0*r0)/2;
 	  pyy2_new[index_new]=pyy1_old[index_old]+g_phi*par->p_yy_beams[ib][ir][index_new]*(rf*rf*rf-r0*r0*r0)/3;
-	  par->p_yy_beams[ib][ir][index_new]=2*(pyy1_new[index_new]-pyy1_new[index_new]/rf);
+	  par->p_yy_beams[ib][ir][index_new]=2*(pyy1_new[index_new]-pyy2_new[index_new]/rf);
 	}
       }
       nphi_old=nphi;

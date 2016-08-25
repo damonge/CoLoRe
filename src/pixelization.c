@@ -132,15 +132,31 @@ static void copy_to_dum(ParamCoLoRe *par,int cpy_task)
 	    gsl_matrix_set(mat_basis,2,2,0);
 
 	    //Set tidal tensor
-	    txx=idx*idx*(par->grid_npot[ix_hi+iy_0+iz_0]+par->grid_npot[ix_lo+iy_0+iz_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
-	    tyy=idx*idx*(par->grid_npot[ix_0+iy_hi+iz_0]+par->grid_npot[ix_0+iy_lo+iz_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
-	    tzz=idx*idx*(par->grid_npot[ix_0+iy_0+iz_hi]+par->grid_npot[ix_0+iy_0+iz_lo]-2*par->grid_npot[ix_0+iy_0+iz_0]);
-	    txy=0.25*idx*idx*(par->grid_npot[ix_hi+iy_hi+iz_0]+par->grid_npot[ix_lo+iy_lo+iz_0]-
+	    txx=(par->grid_npot[ix_hi+iy_0+iz_0]+par->grid_npot[ix_lo+iy_0+iz_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
+	    tyy=(par->grid_npot[ix_0+iy_hi+iz_0]+par->grid_npot[ix_0+iy_lo+iz_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
+	    txy=0.25*(par->grid_npot[ix_hi+iy_hi+iz_0]+par->grid_npot[ix_lo+iy_lo+iz_0]-
 			      par->grid_npot[ix_hi+iy_lo+iz_0]-par->grid_npot[ix_lo+iy_hi+iz_0]);
-	    txz=0.25*idx*idx*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->grid_npot[ix_lo+iy_0+iz_lo]-
-			      par->grid_npot[ix_hi+iy_0+iz_lo]-par->grid_npot[ix_lo+iy_0+iz_hi]);
-	    tyz=0.25*idx*idx*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
-			      par->grid_npot[ix_0+iy_hi+iz_lo]-par->grid_npot[ix_0+iy_lo+iz_hi]);
+	    if(iz==0) {
+	      tzz=(par->grid_npot[ix_0+iy_0+iz_hi]+par->slice_left[ix_0+iy_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
+	      txz=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->slice_left[ix_lo+iy_0]-
+			par->slice_left[ix_hi+iy_0]-par->grid_npot[ix_lo+iy_0+iz_hi]);
+	      tyz=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->slice_left[ix_0+iy_lo]-
+			par->slice_left[ix_0+iy_hi]-par->grid_npot[ix_0+iy_lo+iz_hi]);
+	    }
+	    else if(iz==par->nz_here-1) {
+	      tzz=(par->slice_right[ix_0+iy_0]+par->grid_npot[ix_0+iy_0+iz_lo]-2*par->grid_npot[ix_0+iy_0+iz_0]);
+	      txz=0.25*(par->slice_right[ix_hi+iy_0]+par->grid_npot[ix_lo+iy_0+iz_lo]-
+			par->grid_npot[ix_hi+iy_0+iz_lo]-par->slice_right[ix_lo+iy_0]);
+	      tyz=0.25*(par->slice_right[ix_0+iy_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
+			par->grid_npot[ix_0+iy_hi+iz_lo]-par->slice_right[ix_0+iy_lo]);
+	    }
+	    else {
+	      tzz=(par->grid_npot[ix_0+iy_0+iz_hi]+par->grid_npot[ix_0+iy_0+iz_lo]-2*par->grid_npot[ix_0+iy_0+iz_0]);
+	      txz=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->grid_npot[ix_lo+iy_0+iz_lo]-
+			par->grid_npot[ix_hi+iy_0+iz_lo]-par->grid_npot[ix_lo+iy_0+iz_hi]);
+	      tyz=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
+			par->grid_npot[ix_0+iy_hi+iz_lo]-par->grid_npot[ix_0+iy_lo+iz_hi]);
+	    }
 	    gsl_matrix_set(mat_tij,0,0,txx);
 	    gsl_matrix_set(mat_tij,0,1,txy);
 	    gsl_matrix_set(mat_tij,0,2,txz);
@@ -156,11 +172,11 @@ static void copy_to_dum(ParamCoLoRe *par,int cpy_task)
 	    gsl_blas_dgemm(CblasNoTrans,CblasNoTrans,1.,mat_basis,mat_dum  ,0,mat_tij);
 
 	    if(cpy_task==CPY_TASK_P_XX)
-	      par->grid_dumm[ix_0+iy_0+iz_0]=gsl_matrix_get(mat_tij,1,1);
+	      par->grid_dumm[ix_0+iy_0+iz_0]=idx*idx*gsl_matrix_get(mat_tij,1,1);
 	    if(cpy_task==CPY_TASK_P_XY)
-	      par->grid_dumm[ix_0+iy_0+iz_0]=gsl_matrix_get(mat_tij,1,2);
+	      par->grid_dumm[ix_0+iy_0+iz_0]=idx*idx*gsl_matrix_get(mat_tij,1,2);
 	    if(cpy_task==CPY_TASK_P_YY)
-	      par->grid_dumm[ix_0+iy_0+iz_0]=gsl_matrix_get(mat_tij,2,2);
+	      par->grid_dumm[ix_0+iy_0+iz_0]=idx*idx*gsl_matrix_get(mat_tij,2,2);
 	  }
 	  else
 	    report_error(1,"Wrong task %d\n",cpy_task);
