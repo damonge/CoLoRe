@@ -21,13 +21,14 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-#define N_SUBDIV 1
 #define CPY_TASK_DENS 0
 #define CPY_TASK_VRAD 1
 #define CPY_TASK_P_XX 2
 #define CPY_TASK_P_XY 3
 #define CPY_TASK_P_YY 4
 
+//////
+// Copies new observable quantity into dummy array
 static void copy_to_dum(ParamCoLoRe *par,int cpy_task)
 {
 #ifdef _DEBUG
@@ -111,15 +112,16 @@ static void copy_to_dum(ParamCoLoRe *par,int cpy_task)
 	      cth=1; cph=1; sph=0; sth=0;
 	    }
 	    else {
-	      double phi;
 	      cth=z/r;
 	      sth=sqrt(1-cth*cth);
-	      if((x==0) && (y==0))
-		phi=0;
-	      else
-		phi=atan2(y,x);
-	      cph=cos(phi);
-	      sph=sin(phi);
+	      if(sth==0) {
+		cph=1;
+		sph=0;
+	      }
+	      else {
+		cph=x/(r*sth);
+		sph=y/(r*sth);
+	      }
 	    }
 	    gsl_matrix_set(mat_basis,0,0,sth*cph);
 	    gsl_matrix_set(mat_basis,0,1,sth*sph);
@@ -135,7 +137,7 @@ static void copy_to_dum(ParamCoLoRe *par,int cpy_task)
 	    txx=(par->grid_npot[ix_hi+iy_0+iz_0]+par->grid_npot[ix_lo+iy_0+iz_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
 	    tyy=(par->grid_npot[ix_0+iy_hi+iz_0]+par->grid_npot[ix_0+iy_lo+iz_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
 	    txy=0.25*(par->grid_npot[ix_hi+iy_hi+iz_0]+par->grid_npot[ix_lo+iy_lo+iz_0]-
-			      par->grid_npot[ix_hi+iy_lo+iz_0]-par->grid_npot[ix_lo+iy_hi+iz_0]);
+		      par->grid_npot[ix_hi+iy_lo+iz_0]-par->grid_npot[ix_lo+iy_hi+iz_0]);
 	    if(iz==0) {
 	      tzz=(par->grid_npot[ix_0+iy_0+iz_hi]+par->slice_left[ix_0+iy_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
 	      txz=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->slice_left[ix_lo+iy_0]-
@@ -215,12 +217,11 @@ static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,fl
 #endif //_HAVE_OMP
     for(ir=0;ir<oi->nr;ir++) {
       if(oi->num_pix[ir]>0) {
-	//TODO: omp here
 	int icth;
 	flouble dr=oi->rf_arr[ir]-oi->r0_arr[ir];
 	flouble dcth=2.0/oi->nside_arr[ir];
 	flouble dphi=M_PI/oi->nside_arr[ir];
-	flouble dr_sub=dr/N_SUBDIV,dcth_sub=dcth/N_SUBDIV,dphi_sub=dphi/N_SUBDIV;
+	flouble dr_sub=dr/FAC_CART2SPH_NSUB,dcth_sub=dcth/FAC_CART2SPH_NSUB,dphi_sub=dphi/FAC_CART2SPH_NSUB;
 	int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
 	int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
 	flouble r0=oi->r0_arr[ir];
@@ -236,14 +237,14 @@ static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,fl
 	    flouble arr_add=0;
 
 	    //Make sub-voxels
-	    for(ir2=0;ir2<N_SUBDIV;ir2++) {
+	    for(ir2=0;ir2<FAC_CART2SPH_NSUB;ir2++) {
 	      int icth2;
 	      flouble r=r0+(ir2+0.5)*dr_sub;
-	      for(icth2=0;icth2<N_SUBDIV;icth2++) {
+	      for(icth2=0;icth2<FAC_CART2SPH_NSUB;icth2++) {
 		int iphi2;
 		flouble cth=cth0+(icth2+0.5)*dcth_sub;
 		flouble sth=sqrt(1-cth*cth);
-		for(iphi2=0;iphi2<N_SUBDIV;iphi2++) {
+		for(iphi2=0;iphi2<FAC_CART2SPH_NSUB;iphi2++) {
 		  int ax;
 		  lint ix1[3],ix0[3];
 		  flouble x[3],h0x[3],h1x[3];
@@ -287,7 +288,7 @@ static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,fl
 		}
 	      }
 	    }
-	    slices[ir][index]+=arr_add/(N_SUBDIV*N_SUBDIV*N_SUBDIV);
+	    slices[ir][index]+=arr_add/(FAC_CART2SPH_NSUB*FAC_CART2SPH_NSUB*FAC_CART2SPH_NSUB);
 	  }
 	}
       }

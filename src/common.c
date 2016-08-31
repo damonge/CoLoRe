@@ -274,7 +274,7 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
   int ir;
   OnionInfo *oi=my_malloc(sizeof(OnionInfo));
   double dx=par->l_box/par->n_grid;
-  double dr=dx;
+  double dr=FAC_CART2SPH_VOL*dx;
 
   oi->nr=(int)(par->r_max/dr)+1;
   oi->r0_arr=my_malloc(oi->nr*sizeof(flouble));
@@ -293,7 +293,7 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
     oi->r0_arr[ir]=ir*dr;
     oi->rf_arr[ir]=(ir+1)*dr;
 
-    while(dr_trans>1.333*dr) { //TODO: should we use 1 instead of 1.333?
+    while(dr_trans>FAC_CART2SPH_VOL*dr) {
       nside_here*=2;
       dr_trans=rm*sqrt(4*M_PI/(2*nside_here*nside_here));
     }

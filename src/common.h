@@ -61,9 +61,20 @@
 //#endif //_WITH_NEEDLET
 //#endif //_WITH_SHT
 
+//Resolution parameter for nearest onion shell
 #ifndef NSIDE_ONION_BASE
 #define NSIDE_ONION_BASE 2
 #endif //NSIDE_ONION_BASE
+
+//How much larger than the cartesian cells should the onion voxels be?
+#ifndef FAC_CART2SPH_VOL
+#define FAC_CART2SPH_VOL 1.
+#endif //FAC_CART2SPH_VOL
+
+//When interpolating from cartesian to onion, how many sub-voxels do we integrate over?
+#ifndef FAC_CART2SPH_NSUB
+#define FAC_CART2SPH_NSUB 1
+#endif //FAC_CART2SPH_NSUB
 
 #define DYNAMIC_SIZE 1
 #define RTOD 57.2957795
