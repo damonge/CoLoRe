@@ -550,3 +550,28 @@ void alloc_beams(ParamCoLoRe *par)
     }
   }
 }
+
+void free_hp_shell(HealpixShells *shell)
+{
+  free(shell->listpix);
+  free(shell->r0);
+  free(shell->rf);
+  free(shell->data);
+}
+
+HealpixShells *new_hp_shell(int nside,char *fname_nutable)
+{
+  FILE *fi;
+  HealpixShells *shell=my_malloc(sizeof(HealpixShells));
+  shell->nside=nside;
+
+  //Figure out radial shells
+  fi=fopen(fname_nutable,"r");
+  if(fi==NULL) error_open_file(fname_nutable);
+  shell->nr=linecount(fi); rewind(fi);
+  shell->r0=my_malloc(shell->nr*sizeof(flouble));
+  shell->rf=my_malloc(shell->nr*sizeof(flouble));
+  fclose(fi);
+
+  return shell;
+}

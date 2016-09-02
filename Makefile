@@ -43,6 +43,9 @@ HDF5_LIB =
 #libconfig
 CONF_INC =
 CONF_LIB =
+#healpix
+HPIX_INC =
+HPIX_LIB =
 #
 ########## End of user-definable ##########
 
@@ -87,14 +90,14 @@ endif #SINGLE_PRECISION
 OPTIONS += $(DEFINEFLAGS)
 
 INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC)
-LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW)
+LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW) -lcfitsio -lchealpix
 ifeq ($(strip $(USE_HDF5)),yes)
 DEFINEFLAGS += -D_HAVE_HDF5
 LIB_ALL += -lhdf5 -lhdf5_hl -lz
 endif #HDF5
 ifeq ($(strip $(USE_FITS)),yes)
 DEFINEFLAGS += -D_HAVE_FITS
-LIB_ALL += -lcfitsio
+#LIB_ALL += -lcfitsio
 endif #FITS
 LIB_ALL += -lm
 
@@ -104,9 +107,10 @@ COSMOO = src/cosmo.o
 FOURIERO = src/fourier.o
 LCO = src/lightcone.o
 IOO = src/io.o
+HPIXO = src/healpix_extra.o
 PIXO = src/pixelization.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(LCO) $(IOO) $(PIXO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(LCO) $(IOO) $(HPIXO) $(PIXO)
 
 EXEC = CoLoRe
 

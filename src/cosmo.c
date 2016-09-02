@@ -22,7 +22,6 @@
 #include "common.h"
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_errno.h>
-#include "cosmo_mad.h"
 
 static double z_of_r_provisional(ParamCoLoRe *par,double r)
 {
@@ -105,12 +104,28 @@ double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop)
     return gsl_spline_eval(par->spline_gals_bz[ipop],z,par->intacc_gals[ipop]);
 }
 
+double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop)
+{
+  if((z<par->z_min) || (z>par->z_max))
+    return 0;
+  else
+    return gsl_spline_eval(par->spline_imap_bz[ipop],z,par->intacc_imap[ipop]);
+}
+
 double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
     return 0;
   else
     return gsl_spline_eval(par->spline_gals_nz[ipop],z,par->intacc_gals[ipop]);
+}
+
+double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop)
+{
+  if((z<par->z_min) || (z>par->z_max))
+    return 0;
+  else
+    return gsl_spline_eval(par->spline_imap_tz[ipop],z,par->intacc_imap[ipop]);
 }
 
 
@@ -385,6 +400,25 @@ static void pk_linear_set(ParamCoLoRe *par)
 
 }
 
+static void compute_hp_shell_distances(HealpixShells *shell,flouble nu_rest,char *fname_nutable,Csm_params *pars)
+{
+  int ii;
+  FILE *fi;
+
+  //Figure out radial shells
+  fi=fopen(fname_nutable,"r");
+  if(fi==NULL) error_open_file(fname_nutable);
+  for(ii=0;ii<shell->nr;ii++) {
+    double nu0,nuf;
+    int stat=fscanf(fi,"%lf %lf",&nu0,&nuf);
+    if(stat!=2) error_read_line(fname_nutable,ii+1);
+    shell->r0[ii]=csm_radial_comoving_distance(pars,nuf/nu_rest);
+    shell->rf[ii]=csm_radial_comoving_distance(pars,nu0/nu_rest);
+    printf("%d %lE %lE\n",ii,shell->r0[ii],shell->rf[ii]);
+  }
+  fclose(fi);
+}
+
 void cosmo_set(ParamCoLoRe *par)
 {
   //////
@@ -454,6 +488,44 @@ void cosmo_set(ParamCoLoRe *par)
     fclose(fi);
   }
 
+  for(ipop=0;ipop<par->n_imap;ipop++) {
+    fi=fopen(par->fnameBzImap[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameBzImap[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameBzImap[ipop],ii+1);
+    }
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"Bias z-range is too small\n");
+    par->spline_imap_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_imap_bz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
+
+    fi=fopen(par->fnameTzImap[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameTzImap[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameTzImap[ipop],ii+1);
+    }
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"T(z) z-range is too small\n");
+    par->spline_imap_tz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_imap_tz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
+
+    par->intacc_imap[ipop]=gsl_interp_accel_alloc();
+
+    compute_hp_shell_distances(par->imap[ipop],par->nu0_imap[ipop],par->fnameNuImap[ipop],pars);
+  }
+
   //Set z-dependent functions
   for(ii=0;ii<NZ;ii++) {
     double z=((double)ii)*DZ;
@@ -464,7 +536,7 @@ void cosmo_set(ParamCoLoRe *par)
   }
   if((par->z_arr_z2r[NZ-1]<=par->z_max)||(par->r_arr_z2r[NZ-1]<=par->r_max))
     report_error(1,"OMG!\n");
-  
+
   double growth0=csm_growth_factor(pars,1);
   par->glob_idr=(NZ-1)/(par->r_arr_z2r[NZ-1]-par->r_arr_z2r[0]);
   for(ii=0;ii<NZ;ii++) {

@@ -88,7 +88,9 @@ static ParamCoLoRe *param_colore_new(void)
   par->nsrc_beams=NULL;
 
   par->do_gals=0;
+  par->do_imap=0;
   par->n_gals=-1;
+  par->n_imap=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzGals[ii],"default");
     sprintf(par->fnameNzGals[ii],"default");
@@ -96,8 +98,17 @@ static ParamCoLoRe *param_colore_new(void)
     par->spline_gals_nz[ii]=NULL;
     par->intacc_gals[ii]=NULL;
     par->shear_gals[ii]=0;
+    sprintf(par->fnameBzImap[ii],"default");
+    sprintf(par->fnameTzImap[ii],"default");
+    sprintf(par->fnameNuImap[ii],"default");
+    par->spline_imap_bz[ii]=NULL;
+    par->spline_imap_tz[ii]=NULL;
+    par->intacc_imap[ii]=NULL;
+    par->nside_imap[ii]=-1;
+    par->nu0_imap[ii]=-1;
   }
   par->gals=NULL;
+  par->imap=NULL;
   par->nsources_this=NULL;
 
   return par;
@@ -220,9 +231,39 @@ ParamCoLoRe *read_run_params(char *fname)
   if(par->n_gals>0)
     par->do_gals=1;
 
+  //Get number of intensity mapping species
+  par->n_imap=0;
+  found=1;
+  while(found) {
+    sprintf(c_dum,"imap%d",par->n_imap+1);
+    cset=config_lookup(conf,c_dum);
+    if(cset==NULL)
+      found=0;
+    else
+      par->n_imap++;
+  }
+  if(par->n_imap>NPOP_MAX)
+    report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_imap);
+  for(ii=0;ii<par->n_imap;ii++) {
+    sprintf(c_dum,"imap%d",ii+1);
+    conf_read_string(conf,c_dum,"tbak_filename",par->fnameTzImap[ii]);
+    conf_read_string(conf,c_dum,"bias_filename",par->fnameBzImap[ii]);
+    conf_read_string(conf,c_dum,"freq_list",par->fnameNuImap[ii]);
+    conf_read_double(conf,c_dum,"freq_rest",&(par->nu0_imap[ii]));
+    conf_read_int(conf,c_dum,"nside",&(par->nside_imap[ii]));
+  }
+  if(par->n_imap>0)
+    par->do_imap=1;
+
   if(par->do_gals) {
     par->gals=my_malloc(par->n_gals*sizeof(Gal *));
     par->nsources_this=my_malloc(par->n_gals*sizeof(lint));
+  }
+
+  if(par->do_imap) {
+    par->imap=my_malloc(par->n_imap*sizeof(HealpixShells *));
+    for(ii=0;ii<par->n_imap;ii++)
+      par->imap[ii]=new_hp_shell(par->nside_imap[ii],par->fnameNuImap[ii]);
   }
 
 #ifdef _DEBUG
@@ -271,6 +312,8 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  No extra smoothing\n");
   if(par->do_gals)
     print_info("  %d galaxy populations\n",par->n_gals);
+  if(par->do_imap)
+    print_info("  %d intensity mapping species\n",par->n_imap);
   if(par->do_lensing)
     print_info("  Will include lensing shear\n");
   print_info("\n");
@@ -309,6 +352,48 @@ void write_grids(ParamCoLoRe *par)
   print_info("\n");
 }
 
+void write_imap(ParamCoLoRe *par)
+{
+  int i_pop;
+  char fname[256];
+
+  if(par->do_imap) {
+    if(NodeThis==0) timer(0);
+    print_info("*** Writing intensity maps\n");
+    for(i_pop=0;i_pop<par->n_imap;i_pop++) {
+      int ir;
+      long npx=he_nside2npix(par->imap[i_pop]->nside);
+      flouble *map_write=my_malloc(npx*sizeof(flouble));
+      for(ir=0;ir<par->imap[i_pop]->nr;ir++) {
+	long ip;
+	long ir_t=ir*par->imap[i_pop]->num_pix;
+
+	//Write local pixels to dummy map
+	memset(map_write,0,npx*sizeof(flouble));
+	sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,i_pop,ir);
+	for(ip=0;ip<npx;ip++) {
+	  int id_pix=par->imap[i_pop]->listpix[ip];
+	  if(id_pix>0)
+	    map_write[ip]+=par->imap[i_pop]->data[ir_t+id_pix];
+	}
+
+	//Collect all dummy maps
+	if(NodeThis==0)
+	  MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+	else
+	  MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+
+	//Write dummy map
+	if(NodeThis==0)
+	  he_write_healpix_map(&map_write,1,par->imap[i_pop]->nside,fname);
+      }
+      free(map_write);
+    }
+    if(NodeThis==0) timer(2);
+    print_info("\n");
+  }
+}
+
 void write_catalog(ParamCoLoRe *par)
 {
   int i_pop;
@@ -331,7 +416,7 @@ void write_catalog(ParamCoLoRe *par)
       gal_types[5]=H5T_NATIVE_FLOAT;
 
       print_info("*** Writing catalog (HDF5)\n");
-      sprintf(fname,"%s_%d.h5",par->prefixOut,NodeThis);
+      sprintf(fname,"%s_gals_%d.h5",par->prefixOut,NodeThis);
 
       //Create file
       file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
@@ -371,7 +456,7 @@ void write_catalog(ParamCoLoRe *par)
 	nfields=7;
 
       print_info("*** Writing catalog (FITS)\n");
-      sprintf(fname,"!%s_%d.fits",par->prefixOut,NodeThis);
+      sprintf(fname,"!%s_gals_%d.fits",par->prefixOut,NodeThis);
 
       fits_create_file(&fptr,fname,&status);
       fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
@@ -434,7 +519,7 @@ void write_catalog(ParamCoLoRe *par)
     }
     else   {
       print_info("*** Writing catalog (ASCII)\n");
-      sprintf(fname,"%s_%d.txt",par->prefixOut,NodeThis);
+      sprintf(fname,"%s_gals_%d.txt",par->prefixOut,NodeThis);
 
       lint jj;
       FILE *fil=fopen(fname,"w");
@@ -486,6 +571,17 @@ void param_colore_free(ParamCoLoRe *par)
     if(par->gals!=NULL)
       free(par->gals);
     free(par->nsources_this);
+  }
+
+  if(par->do_imap) {
+    for(ii=0;ii<par->n_imap;ii++) {
+      gsl_spline_free(par->spline_imap_bz[ii]);
+      gsl_spline_free(par->spline_imap_tz[ii]);
+      gsl_interp_accel_free(par->intacc_imap[ii]);
+      free_hp_shell(par->imap[ii]);
+    }
+    if(par->imap!=NULL)
+      free(par->imap);
   }
 
 #ifdef _DEBUG

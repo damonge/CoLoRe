@@ -171,7 +171,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	      double phi0=(ind_phi+iphi0)*dphi;
 	      int npp=nsrc_slice[ind_cth_t+ind_phi];
 	      double dz_rsd=vg*vrad_slice[ind_cth_t+ind_phi];
-	      if(par->do_lensing) {
+	      if(par->shear_gals[ipop]) {
 		double pxx=par->p_xx_beams[ib][ir][ind_cth_t+ind_phi];
 		double pxy=par->p_xy_beams[ib][ir][ind_cth_t+ind_phi];
 		double pyy=par->p_yy_beams[ib][ir][ind_cth_t+ind_phi];
@@ -302,5 +302,201 @@ void get_sources(ParamCoLoRe *par)
   print_info("*** Getting point sources\n");
   for(ipop=0;ipop<par->n_gals;ipop++)
     get_sources_single(par,ipop);
+  print_info("\n");
+}
+
+static int get_r_index(HealpixShells *sh,double r,int ir_start)
+{
+  int gotit=0;
+  int ir0;
+  if(ir_start<0)
+    ir0=0;
+  else if(ir_start>=sh->nr)
+    ir0=sh->nr-1;
+  else
+    ir0=ir_start;
+
+  while(!gotit) {
+    if((ir0==-1) || (ir0==sh->nr))
+      gotit=1;
+    else {
+      if(r<sh->r0[ir0])
+	ir0++;
+      else {
+        if(r>=sh->rf[ir0])
+          ir0--;
+	else
+          gotit=1;
+      }
+    }
+  }
+
+  return ir0;
+}
+
+static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
+{
+  long ip,npx=he_nside2npix(shell->nside);
+  double pixsize=2*sqrt(4*M_PI/npx);
+  shell->num_pix=0;
+  shell->listpix=my_malloc(npx*sizeof(long));
+
+  for(ip=0;ip<npx;ip++) {
+    int ib;
+    int goodpix=0;
+    double phi0,phif,phim;
+    double th0,thf,thm,cth0,cthf;
+    pix2ang_ring(shell->nside,ip,&thm,&phim);
+    phi0=phim-pixsize;
+    phif=phim+pixsize;
+    th0=CLAMP(thm-pixsize,0,M_PI);
+    thf=CLAMP(thm+pixsize,0,M_PI);
+    cthf=cos(th0);
+    cth0=cos(thf);
+    for(ib=0;ib<par->n_beams_here;ib++) {
+      OnionInfo *beam=par->oi_beams[ib];
+      double cth0_b,cthf_b,phi0_b,phif_b;
+      cth0_b=-1+beam->icth0_arr[0]*2./beam->nside_arr[0];
+      cthf_b=-1+(beam->icthf_arr[0]+1)*2./beam->nside_arr[0];
+      phi0_b=beam->iphi0_arr[0]*M_PI/beam->nside_arr[0];
+      phif_b=(beam->iphif_arr[0]+1)*M_PI/beam->nside_arr[0];
+      if(((cth0<=cthf_b)&&(cth0>=cth0_b)) || ((cthf<=cthf_b)&&(cthf>=cth0_b))) { //cth in range
+	if(((phi0<=phif_b)&&(phi0>=phi0_b)) || ((phif<=phif_b)&&(phif>=phi0_b))) //phi in range
+	  goodpix=1;
+      }
+    }
+    if(goodpix) {
+      shell->listpix[ip]=shell->num_pix;
+      shell->num_pix++;
+    }
+    else
+      shell->listpix[ip]=-1;
+  }
+
+  shell->data=my_calloc(shell->nr*shell->num_pix,sizeof(flouble));
+}
+
+#define N_SUBVOL 10
+static void get_imap_single(ParamCoLoRe *par,int ipop)
+{
+  int nthr;
+#ifdef _HAVE_OMP
+  nthr=omp_get_max_threads();
+#else //_HAVE_OMP
+  nthr=1;
+#endif //_HAVE_OMP
+
+  print_info(" %d-th IM species\n",ipop);
+  if(NodeThis==0) timer(0);
+  find_shell_pixels(par,par->imap[ipop]);
+
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none)		\
+  shared(par,IThread0,ipop,nthr)
+#endif //_HAVE_OMP
+  {
+    int ir;
+    double hpix_area=4*M_PI/he_nside2npix(par->imap[ipop]->nside);
+#ifdef _HAVE_OMP
+    int ithr=omp_get_thread_num();
+#else //_HAVE_OMP
+    int ithr=0;
+#endif //_HAVE_OMP
+    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_imap*IThread0);
+    gsl_rng *rng_thr=init_rng(seed_thr);
+    double *disp=my_calloc(3*N_SUBVOL,sizeof(double));
+    for(ir=0;ir<3*N_SUBVOL;ir++)
+      disp[ir]=rng_01(rng_thr);
+    end_rng(rng_thr);
+
+#ifdef _HAVE_OMP
+#pragma omp for schedule(dynamic)
+#endif //_HAVE_OMP 
+    for(ir=0;ir<par->oi_beams[0]->nr;ir++) {
+      double r0=par->oi_beams[0]->r0_arr[ir];
+      double rf=par->oi_beams[0]->rf_arr[ir];
+      double rm=(rf+r0)*0.5;
+      double dr=rf-r0;
+      double redshift=z_of_r(par,rm);
+      double tmean=temp_of_z_imap(par,redshift,ipop);
+      if(tmean>0) {
+	int ib;
+	int irad=0;
+	int nside=par->oi_beams[0]->nside_arr[ir];
+	double dcth=2./nside;
+	double dphi=M_PI/nside;
+	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_SUBVOL;
+	double bias=bias_of_z_imap(par,redshift,ipop);
+	double gfb=dgrowth_of_r(par,rm)*bias;
+	double prefac_rsd=ihub_of_r(par,rm)*vgrowth_of_r(par,rm);
+	for(ib=0;ib<par->n_beams_here;ib++) {
+	  int ind_cth;
+	  int icth0=par->oi_beams[ib]->icth0_arr[ir];
+	  int iphi0=par->oi_beams[ib]->iphi0_arr[ir];
+	  int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir]+1;
+	  int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
+	  flouble *dens_slice=par->dens_beams[ib][ir];
+	  flouble *vrad_slice=par->vrad_beams[ib][ir];
+	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
+	    int ind_phi;
+	    int ind_cth_t=ind_cth*nphi;
+	    double cth0=(ind_cth+icth0)*dcth-1;
+	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
+	      int ip;
+	      double phi0=(ind_phi+iphi0)*dphi;
+	      double temp=tmean*cell_vol*exp(gfb*(dens_slice[ind_cth_t+ind_phi]-0.5*gfb*par->sigma2_gauss));
+	      double dr_rsd=prefac_rsd*vrad_slice[ind_cth_t+ind_phi];
+	      for(ip=0;ip<N_SUBVOL;ip++) {
+		double r=r0+dr_rsd+dr*disp[3*ip+0];
+		irad=get_r_index(par->imap[ipop],r,irad);
+		if((irad>=0) && (irad<par->imap[ipop]->nr)) {
+		  long pix_id;
+		  long irad_t=irad*par->imap[ipop]->num_pix;
+		  double cth=cth0+dcth*disp[3*ip+1];
+		  double phi=phi0+dphi*disp[3*ip+2];
+		  long ipix=he_ang2pix(par->imap[ipop]->nside,cth,phi);
+		  pix_id=par->imap[ipop]->listpix[ipix];
+		  if(pix_id<0)
+		    report_error(1,"NOOOO\n");
+#ifdef _HAVE_OMP
+#pragma omp atomic
+#endif //_HAVE_OMP
+		  par->imap[ipop]->data[irad_t+pix_id]+=temp;
+		}
+	      }
+	    }
+	  }
+	}
+      }
+    } //end omp for
+    free(disp);
+
+#ifdef _HAVE_OMP
+#pragma omp for schedule(dynamic)
+#endif //_HAVE_OMP 
+    for(ir=0;ir<par->imap[ipop]->nr;ir++) {
+      long ipix;
+      double r0=par->imap[ipop]->r0[ir];
+      double rf=par->imap[ipop]->rf[ir];
+      double i_pixel_vol=1./((rf*rf*rf-r0*r0*r0)*hpix_area/3);
+      long ir_t=ir*par->imap[ipop]->num_pix;
+      for(ipix=0;ipix<par->imap[ipop]->num_pix;ipix++) {
+	long index=ir_t+ipix;
+	par->imap[ipop]->data[index]*=i_pixel_vol;
+      }
+    }//end omp for
+  } //end omp parallel
+
+  if(NodeThis==0) timer(2);
+}
+
+void get_imap(ParamCoLoRe *par)
+{
+  int ipop;
+
+  //First, compute lensing Hessian
+  print_info("*** Getting intensity maps\n");
+  for(ipop=0;ipop<par->n_imap;ipop++)
+    get_imap_single(par,ipop);
   print_info("\n");
 }

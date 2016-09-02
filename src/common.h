@@ -50,16 +50,16 @@
 #include <hdf5.h>
 #include <hdf5_hl.h>
 #endif //_HAVE_HDF5
-
-//#include <chealpix.h>
-//#ifdef _WITH_SHT
-//#include <sharp_almhelpers.h>
-//#include <sharp_geomhelpers.h>
-//#include <sharp.h>
-//#ifdef _WITH_NEEDLET
-//#include <gsl/gsl_integration.h>
-//#endif //_WITH_NEEDLET
-//#endif //_WITH_SHT
+#include <chealpix.h>
+#ifdef _WITH_SHT
+#include <sharp_almhelpers.h>
+#include <sharp_geomhelpers.h>
+#include <sharp.h>
+#ifdef _WITH_NEEDLET
+#include <gsl/gsl_integration.h>
+#endif //_WITH_NEEDLET
+#endif //_WITH_SHT
+#include "cosmo_mad.h"
 
 //Resolution parameter for nearest onion shell
 #ifndef NSIDE_ONION_BASE
@@ -151,6 +151,16 @@ typedef struct {
 } OnionInfo;
 
 typedef struct {
+  int nside;
+  long num_pix;
+  long *listpix;
+  int nr;
+  flouble *r0;
+  flouble *rf;
+  flouble *data;
+} HealpixShells;
+
+typedef struct {
   char fnamePk[256];
   double OmegaM;
   double OmegaL;
@@ -239,7 +249,20 @@ typedef struct {
   lint *nsources_this;
   Gal **gals;
 
+  int do_imap;
+  int n_imap;
+  char fnameBzImap[NPOP_MAX][256];
+  char fnameTzImap[NPOP_MAX][256];
+  char fnameNuImap[NPOP_MAX][256];
+  gsl_spline *spline_imap_bz[NPOP_MAX];
+  gsl_spline *spline_imap_tz[NPOP_MAX];
+  gsl_interp_accel *intacc_imap[NPOP_MAX];
+  int nside_imap[NPOP_MAX];
+  double nu0_imap[NPOP_MAX];
+  HealpixShells **imap;
+
 } ParamCoLoRe;
+
 void mpi_init(int* p_argc,char*** p_argv);
 void *my_malloc(size_t size);
 void *my_calloc(size_t nmemb,size_t size);
@@ -276,12 +299,17 @@ double vgrowth_of_r(ParamCoLoRe *par,double r);
 double ihub_of_r(ParamCoLoRe *par,double r);
 double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop);
 double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop);
+double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop);
+double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop);
+void free_hp_shell(HealpixShells *shell);
+HealpixShells *new_hp_shell(int nside,char *fname_nutable);
 
 
 //////
-// Functions defined in io_gh.c
+// Functions defined in io.c
 ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
+void write_imap(ParamCoLoRe *par);
 void write_grids(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
@@ -300,5 +328,63 @@ void pixelize(ParamCoLoRe *par);
 //////
 // Functions defined in grid_tools.c
 void get_sources(ParamCoLoRe *par);
+void get_imap(ParamCoLoRe *par);
+
+//////
+// Defined in healpix_extra.c
+long he_nside2npix(long nside);
+long he_ang2pix(long nside,double cth,double phi);
+void he_write_healpix_map(flouble **tmap,int nfields,long nside,char *fname);
+flouble *he_read_healpix_map(char *fname,long *nside,int nfield);
+int he_ring_num(long nside,double z);
+long *he_query_strip(long nside,double theta1,double theta2,long *npix_strip);
+void he_ring2nest_inplace(flouble *map_in,long nside);
+void he_nest2ring_inplace(flouble *map_in,long nside);
+void he_udgrade(flouble *map_in,long nside_in,flouble *map_out,long nside_out,int nest);
+#ifdef _WITH_SHT
+#define HE_MAX_SHT 32
+#define HE_FWHM2SIGMA 0.00012352884853326381 //Transforms FWHM in arcmin to sigma_G in rad:
+long he_nalms(int lmax);
+long he_indexlm(int l,int m,int lmax);
+void he_alm2map(int nside,int lmax,int ntrans,flouble **maps,fcomplex **alms);
+void he_map2alm(int nside,int lmax,int ntrans,flouble **maps,fcomplex **alms);
+void he_alm2cl(fcomplex **alms_1,fcomplex **alms_2,
+	       int nmaps_1,int nmaps_2,int pol_1,int pol_2,flouble **cls,int lmax);
+void he_anafast(flouble **maps_1,flouble **maps_2,
+		int nmaps_1,int nmaps_2,int pol_1,int pol_2,
+		flouble **cls,int nside,int lmax);
+flouble *he_generate_beam_window(int lmax,flouble fwhm_amin);
+void he_alter_alm(int lmax,flouble fwhm_amin,fcomplex *alm_in,
+		  fcomplex *alm_out,flouble *window);
+flouble *he_synfast(flouble *cl,int nside,int lmax,unsigned int seed);
+//HE_NT
+#ifdef _WITH_NEEDLET
+#define HE_NBAND_NX 512
+#define HE_NORM_FT 2.2522836206907617
+#define HE_NL_INTPREC 1E-6
+#define HE_NT_NSIDE_MIN 32
+typedef struct {
+  double b;
+  double inv_b;
+  gsl_spline *b_spline;
+  gsl_interp_accel *b_intacc;
+  int nside0;
+  int nj;
+  int *nside_arr;
+  int *lmax_arr;
+  flouble **b_arr;
+} HE_nt_param;
+void he_nt_end(HE_nt_param *par);
+HE_nt_param *he_nt_init(flouble b_nt,int nside0);
+flouble ***he_alloc_needlet(HE_nt_param *par,int pol);
+void he_free_needlet(HE_nt_param *par,int pol,flouble ***nt);
+void he_nt_get_window(HE_nt_param *par,int j,flouble *b);
+fcomplex **he_map2needlet(HE_nt_param *par,flouble **map,flouble ***nt,
+			  int return_alm,int pol,int qu_in,int qu_out);
+fcomplex **he_needlet2map(HE_nt_param *par,flouble **map,flouble ***nt,
+			  int return_alm,int pol,int qu_in,int qu_out);
+#endif //_WITH_NEEDLET
+#endif //_WITH_SHT
+
 
 #endif //_COMMON_
