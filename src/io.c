@@ -89,6 +89,7 @@ static ParamCoLoRe *param_colore_new(void)
 
   par->do_gals=0;
   par->do_imap=0;
+  par->do_pred=0;
   par->n_gals=-1;
   par->n_imap=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
@@ -266,6 +267,12 @@ ParamCoLoRe *read_run_params(char *fname)
       par->imap[ii]=new_hp_shell(par->nside_imap[ii],par->fnameNuImap[ii]);
   }
 
+  cset=config_lookup(conf,"predictions");
+  if (cset) {
+    par->do_pred=1;
+    conf_read_double(conf,"predictions","dz",&(par->pred_dz));
+  }
+        
 #ifdef _DEBUG
   sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
   par->f_dbg=fopen(c_dum,"w");

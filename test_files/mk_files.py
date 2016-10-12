@@ -7,9 +7,9 @@ z0=0
 zf=1.0
 zx=0.15
 pow1=1.5
-ngal=1.4E7
+ngal=1.4E6
 zx2=0.60
-ngal2=2e7
+ngal2=2e6
 pow2=4.0
 
 nux=1420.
