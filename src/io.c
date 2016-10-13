@@ -87,18 +87,18 @@ static ParamCoLoRe *param_colore_new(void)
   par->p_yy_beams=NULL;
   par->nsrc_beams=NULL;
 
-  par->do_gals=0;
+  par->do_sources=0;
   par->do_imap=0;
   par->do_pred=0;
-  par->n_gals=-1;
+  par->n_srcs=-1;
   par->n_imap=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
-    sprintf(par->fnameBzGals[ii],"default");
-    sprintf(par->fnameNzGals[ii],"default");
-    par->spline_gals_bz[ii]=NULL;
-    par->spline_gals_nz[ii]=NULL;
-    par->intacc_gals[ii]=NULL;
-    par->shear_gals[ii]=0;
+    sprintf(par->fnameBzSrcs[ii],"default");
+    sprintf(par->fnameNzSrcs[ii],"default");
+    par->spline_srcs_bz[ii]=NULL;
+    par->spline_srcs_nz[ii]=NULL;
+    par->intacc_srcs[ii]=NULL;
+    par->shear_srcs[ii]=0;
     sprintf(par->fnameBzImap[ii],"default");
     sprintf(par->fnameTzImap[ii],"default");
     sprintf(par->fnameNuImap[ii],"default");
@@ -108,7 +108,7 @@ static ParamCoLoRe *param_colore_new(void)
     par->nside_imap[ii]=-1;
     par->nu0_imap[ii]=-1;
   }
-  par->gals=NULL;
+  par->srcs=NULL;
   par->imap=NULL;
   par->nsources_this=NULL;
 
@@ -213,28 +213,28 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_double(conf,"cosmo_par","sigma_8",&(par->sig8));
 
   //Get number of galaxy populations
-  par->n_gals=0;
+  par->n_srcs=0;
   found=1;
   while(found) {
-    sprintf(c_dum,"gals%d",par->n_gals+1);
+    sprintf(c_dum,"srcs%d",par->n_srcs+1);
     cset=config_lookup(conf,c_dum);
     if(cset==NULL)
       found=0;
     else
-      par->n_gals++;
+      par->n_srcs++;
   }
-  if(par->n_gals>NPOP_MAX)
-    report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_gals);
-  for(ii=0;ii<par->n_gals;ii++) {
-    sprintf(c_dum,"gals%d",ii+1);
-    conf_read_string(conf,c_dum,"nz_filename",par->fnameNzGals[ii]);
-    conf_read_string(conf,c_dum,"bias_filename",par->fnameBzGals[ii]);
-    conf_read_bool(conf,c_dum,"include_shear",&(par->shear_gals[ii]));
-    if(par->shear_gals[ii])
+  if(par->n_srcs>NPOP_MAX)
+    report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_srcs);
+  for(ii=0;ii<par->n_srcs;ii++) {
+    sprintf(c_dum,"srcs%d",ii+1);
+    conf_read_string(conf,c_dum,"nz_filename",par->fnameNzSrcs[ii]);
+    conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
+    conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
+    if(par->shear_srcs[ii])
       par->do_lensing=1;
   }
-  if(par->n_gals>0)
-    par->do_gals=1;
+  if(par->n_srcs>0)
+    par->do_sources=1;
 
   //Get number of intensity mapping species
   par->n_imap=0;
@@ -260,9 +260,9 @@ ParamCoLoRe *read_run_params(char *fname)
   if(par->n_imap>0)
     par->do_imap=1;
 
-  if(par->do_gals) {
-    par->gals=my_malloc(par->n_gals*sizeof(Gal *));
-    par->nsources_this=my_malloc(par->n_gals*sizeof(lint));
+  if(par->do_sources) {
+    par->srcs=my_malloc(par->n_srcs*sizeof(Src *));
+    par->nsources_this=my_malloc(par->n_srcs*sizeof(lint));
   }
 
   if(par->do_imap) {
@@ -271,7 +271,6 @@ ParamCoLoRe *read_run_params(char *fname)
       par->imap[ii]=new_hp_shell(par->nside_imap[ii],par->fnameNuImap[ii]);
   }
 
-        
 #ifdef _DEBUG
   sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
   par->f_dbg=fopen(c_dum,"w");
@@ -316,8 +315,8 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  Density field pre-smoothed on scales: x_s = %.3lE Mpc/h\n",sqrt(par->r2_smooth));
   else
     print_info("  No extra smoothing\n");
-  if(par->do_gals)
-    print_info("  %d galaxy populations\n",par->n_gals);
+  if(par->do_sources)
+    print_info("  %d galaxy populations\n",par->n_srcs);
   if(par->do_imap)
     print_info("  %d intensity mapping species\n",par->n_imap);
   if(par->do_lensing)
@@ -405,13 +404,13 @@ void write_catalog(ParamCoLoRe *par)
   int i_pop;
   char fname[256];
 
-  if(par->do_gals) {
+  if(par->do_sources) {
     if(NodeThis==0) timer(0);
     if(par->output_format==2) { //HDF5
 #ifdef _HAVE_HDF5
       hid_t file_id,gal_types[6];
       hsize_t chunk_size=128;
-      size_t dst_offset[6]={HOFFSET(Gal,ra),HOFFSET(Gal,dec),HOFFSET(Gal,z0),HOFFSET(Gal,dz_rsd),HOFFSET(Gal,e1),HOFFSET(Gal,e2)};
+      size_t dst_offset[6]={HOFFSET(Src,ra),HOFFSET(Src,dec),HOFFSET(Src,z0),HOFFSET(Src,dz_rsd),HOFFSET(Src,e1),HOFFSET(Src,e2)};
       const char *names[6]={"RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
       char *tunit[6]=      {"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
       gal_types[0]=H5T_NATIVE_FLOAT;
@@ -422,17 +421,17 @@ void write_catalog(ParamCoLoRe *par)
       gal_types[5]=H5T_NATIVE_FLOAT;
 
       print_info("*** Writing catalog (HDF5)\n");
-      sprintf(fname,"%s_gals_%d.h5",par->prefixOut,NodeThis);
+      sprintf(fname,"%s_srcs_%d.h5",par->prefixOut,NodeThis);
 
       //Create file
       file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
       //Write table for each galaxy type
-      for(i_pop=0;i_pop<par->n_gals;i_pop++) {
+      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
 	char table_title[256],table_name[256];
 	sprintf(table_title,"sources%d_data",i_pop);
 	sprintf(table_name,"/sources%d",i_pop);
-	H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Gal),
-		       names,dst_offset,gal_types,chunk_size,NULL,0,par->gals[i_pop]);
+	H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Src),
+		       names,dst_offset,gal_types,chunk_size,NULL,0,par->srcs[i_pop]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_1_UNITS",tunit[1]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
@@ -462,7 +461,7 @@ void write_catalog(ParamCoLoRe *par)
 	nfields=7;
 
       print_info("*** Writing catalog (FITS)\n");
-      sprintf(fname,"!%s_gals_%d.fits",par->prefixOut,NodeThis);
+      sprintf(fname,"!%s_srcs_%d.fits",par->prefixOut,NodeThis);
 
       fits_create_file(&fptr,fname,&status);
       fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
@@ -477,7 +476,7 @@ void write_catalog(ParamCoLoRe *par)
       e2_arr=my_malloc(nrw*sizeof(float));
 
       long offset=0;
-      for(i_pop=0;i_pop<par->n_gals;i_pop++) {
+      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
 	long row_here=0;
 	while(row_here<par->nsources_this[i_pop]) {
 	  long nrw_here;
@@ -488,13 +487,13 @@ void write_catalog(ParamCoLoRe *par)
 
 	  for(ii=0;ii<nrw_here;ii++) {
 	    type_arr[ii]=i_pop;
-	    ra_arr[ii]=par->gals[i_pop][row_here+ii].ra;
-	    dec_arr[ii]=par->gals[i_pop][row_here+ii].dec;
-	    z0_arr[ii]=par->gals[i_pop][row_here+ii].z0;
-	    rsd_arr[ii]=par->gals[i_pop][row_here+ii].dz_rsd;
+	    ra_arr[ii]=par->srcs[i_pop][row_here+ii].ra;
+	    dec_arr[ii]=par->srcs[i_pop][row_here+ii].dec;
+	    z0_arr[ii]=par->srcs[i_pop][row_here+ii].z0;
+	    rsd_arr[ii]=par->srcs[i_pop][row_here+ii].dz_rsd;
 	    if(par->do_lensing) {
-	      e1_arr[ii]=par->gals[i_pop][row_here+ii].e1;
-	      e2_arr[ii]=par->gals[i_pop][row_here+ii].e2;
+	      e1_arr[ii]=par->srcs[i_pop][row_here+ii].e1;
+	      e2_arr[ii]=par->srcs[i_pop][row_here+ii].e2;
 	    }
 	  }
 	  fits_write_col(fptr,TINT  ,1,offset+row_here+1,1,nrw_here,type_arr,&status);
@@ -525,7 +524,7 @@ void write_catalog(ParamCoLoRe *par)
     }
     else   {
       print_info("*** Writing catalog (ASCII)\n");
-      sprintf(fname,"%s_gals_%d.txt",par->prefixOut,NodeThis);
+      sprintf(fname,"%s_srcs_%d.txt",par->prefixOut,NodeThis);
 
       lint jj;
       FILE *fil=fopen(fname,"w");
@@ -535,13 +534,13 @@ void write_catalog(ParamCoLoRe *par)
 	fprintf(fil,"#[6]e1, [7]e2\n");
       else
 	fprintf(fil,"\n");
-      for(i_pop=0;i_pop<par->n_gals;i_pop++) {
+      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
 	for(jj=0;jj<par->nsources_this[i_pop];jj++) {
 	  fprintf(fil,"%d %E %E %E %E ",
-		  i_pop,par->gals[i_pop][jj].ra,par->gals[i_pop][jj].dec,
-		  par->gals[i_pop][jj].z0,par->gals[i_pop][jj].dz_rsd);
+		  i_pop,par->srcs[i_pop][jj].ra,par->srcs[i_pop][jj].dec,
+		  par->srcs[i_pop][jj].z0,par->srcs[i_pop][jj].dz_rsd);
 	  if(par->do_lensing)
-	    fprintf(fil,"%E %E \n",par->gals[i_pop][jj].e1,par->gals[i_pop][jj].e2);
+	    fprintf(fil,"%E %E \n",par->srcs[i_pop][jj].e1,par->srcs[i_pop][jj].e2);
 	  else
 	    fprintf(fil,"\n");
 	}
@@ -566,16 +565,16 @@ void param_colore_free(ParamCoLoRe *par)
     free_onion_info(par->oi_beams[ii]);
   free(par->oi_beams);
 
-  if(par->do_gals) {
-    for(ii=0;ii<par->n_gals;ii++) {
-      gsl_spline_free(par->spline_gals_bz[ii]);
-      gsl_spline_free(par->spline_gals_nz[ii]);
-      gsl_interp_accel_free(par->intacc_gals[ii]);
-      if(par->gals[ii]!=NULL)
-      	free(par->gals[ii]);
+  if(par->do_sources) {
+    for(ii=0;ii<par->n_srcs;ii++) {
+      gsl_spline_free(par->spline_srcs_bz[ii]);
+      gsl_spline_free(par->spline_srcs_nz[ii]);
+      gsl_interp_accel_free(par->intacc_srcs[ii]);
+      if(par->srcs[ii]!=NULL)
+      	free(par->srcs[ii]);
     }
-    if(par->gals!=NULL)
-      free(par->gals);
+    if(par->srcs!=NULL)
+      free(par->srcs);
     free(par->nsources_this);
   }
 

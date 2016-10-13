@@ -52,7 +52,7 @@ int main(int argc,char **argv)
   pixelize(par);
 
   //Poisson-sample the galaxies
-  if(par->do_gals)
+  if(par->do_sources)
     get_sources(par);
 
   //Generate intensity maps
@@ -60,18 +60,19 @@ int main(int argc,char **argv)
     get_imap(par);
 
   //Write output
-  if(par->do_gals)
+  if(par->do_sources)
     write_catalog(par);
   if(par->do_imap)
     write_imap(par);
   if(par->do_pred)
     write_predictions(par);
-  
+
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
 
   param_colore_free(par);
 
+  if(NodeThis==0) timer(5);
 #ifdef _HAVE_MPI
   MPI_Finalize();
 #endif //_HAVE_MPI

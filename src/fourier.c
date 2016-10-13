@@ -266,7 +266,7 @@ static void create_grids_fourier(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     unsigned int seed_thr=par->seed_rng+IThread0+ithr;
     gsl_rng *rng_thr=init_rng(seed_thr);
-    double factor_p=par->hubble_0*par->hubble_0*par->OmegaM;
+    double factor_p=-1.5*par->hubble_0*par->hubble_0*par->OmegaM;
     
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -307,7 +307,7 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	    double sigma2=pk_linear0(par,lgk)*idk3;
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
-	    par->grid_npot_f[index]=-1.5*par->grid_dens_f[index]*factor_p/k_mod2;
+	    par->grid_npot_f[index]=factor_p*par->grid_dens_f[index]/k_mod2;
 	    if(par->do_smoothing)
 	      par->grid_dens_f[index]*=exp(-0.5*par->r2_smooth*k_mod2);
 	  }

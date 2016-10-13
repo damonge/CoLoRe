@@ -24,7 +24,7 @@
 #include "fftlog.h"
 
 void write_predictions(ParamCoLoRe *par) {
-  if ((!par->do_gals) && (!par->do_imap)) return;
+  if ((!par->do_sources) && (!par->do_imap)) return;
   if (NodeThis!=0) return;
   print_info("*** Writing predictions (ASCII) \n");
   // first generate k array, sufficiently finely spaced
@@ -55,17 +55,17 @@ void write_predictions(ParamCoLoRe *par) {
     // inner loop is over populations, ipop=-1 is the unbiased version
     print_info ("Writing predictions of redshift %g:\n",z);
 
-    if(par->do_gals) {
-      for (int ipop=0; ipop<par->n_gals; ipop++) {
-	double bias=bias_of_z_gals(par,z,ipop);
+    if(par->do_sources) {
+      for (int ipop=0; ipop<par->n_srcs; ipop++) {
+	double bias=bias_of_z_srcs(par,z,ipop);
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
 	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-par->r2_smooth*ka[i]*ka[i]);
 	pk2xi(Nk,ka,pk,ra,xi);
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
 	xi2pk(Nk,ra,xi,ka,pk);
 	// now open the files
-	sprintf(fnamepk,"%s_pk_gals_pop%i_z%g.dat",par->prefixOut,ipop,z);
-	sprintf(fnamexi,"%s_xi_gals_pop%i_z%g.dat",par->prefixOut,ipop,z);
+	sprintf(fnamepk,"%s_pk_srcs_pop%i_z%g.dat",par->prefixOut,ipop,z);
+	sprintf(fnamexi,"%s_xi_srcs_pop%i_z%g.dat",par->prefixOut,ipop,z);
 	fpk=fopen(fnamepk,"w");
 	fprintf (fpk, "# k[h/Mpc] P_tt P_tl P_ll\n");
 	fxi=fopen(fnamexi,"w");

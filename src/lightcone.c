@@ -51,7 +51,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 #else //_HAVE_OMP
     int ithr=0;
 #endif //_HAVE_OMP
-    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_gals*IThread0);
+    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_srcs*IThread0);
     gsl_rng *rng_thr=init_rng(seed_thr);
 
 #ifdef _HAVE_OMP
@@ -62,14 +62,14 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       double rf=par->oi_beams[0]->rf_arr[ir];
       double rm=(rf+r0)*0.5;
       double redshift=z_of_r(par,rm);
-      double ndens=ndens_of_z_gals(par,redshift,ipop);
+      double ndens=ndens_of_z_srcs(par,redshift,ipop);
       if(ndens>0) {
 	int ib;
 	int nside=par->oi_beams[0]->nside_arr[ir];
 	double dcth=2./nside;
 	double dphi=M_PI/nside;
 	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
-	double bias=bias_of_z_gals(par,redshift,ipop);
+	double bias=bias_of_z_srcs(par,redshift,ipop);
 	double gfb=dgrowth_of_r(par,rm)*bias;
 	for(ib=0;ib<par->n_beams_here;ib++) {
 	  int ind_cth;
@@ -119,7 +119,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
   
-  par->gals[ipop]=my_malloc(par->nsources_this[ipop]*sizeof(Gal));
+  par->srcs[ipop]=my_malloc(par->nsources_this[ipop]*sizeof(Src));
 
   if(NodeThis==0) timer(0);
   print_info("   Assigning coordinates\n");
@@ -134,7 +134,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 #else //_HAVE_OMP
     int ithr=0;
 #endif //_HAVE_OMP
-    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_gals*IThread0);
+    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_srcs*IThread0);
     gsl_rng *rng_thr=init_rng(seed_thr);
 
 #ifdef _HAVE_OMP
@@ -146,7 +146,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       double dr=rf-r0;
       double rm=r0+0.5*dr;
       double redshift=z_of_r(par,rm);
-      double ndens=ndens_of_z_gals(par,redshift,ipop);
+      double ndens=ndens_of_z_srcs(par,redshift,ipop);
       if(ndens>0) {
 	int ib;
 	int nside=par->oi_beams[0]->nside_arr[ir];
@@ -171,7 +171,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	      double phi0=(ind_phi+iphi0)*dphi;
 	      int npp=nsrc_slice[ind_cth_t+ind_phi];
 	      double dz_rsd=vg*vrad_slice[ind_cth_t+ind_phi];
-	      if(par->shear_gals[ipop]) {
+	      if(par->shear_srcs[ipop]) {
 		double pxx=par->p_xx_beams[ib][ir][ind_cth_t+ind_phi];
 		double pxy=par->p_xy_beams[ib][ir][ind_cth_t+ind_phi];
 		double pyy=par->p_yy_beams[ib][ir][ind_cth_t+ind_phi];
@@ -191,12 +191,12 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 		double phi=phi0+dphi*rng_01(rng_thr);
 		double r=r0+dr*rng_01(rng_thr); //TODO: this is not completely correct
 		lint pid=np_tot_thr[ithr];
-		par->gals[ipop][pid].ra=RTOD*phi;
-		par->gals[ipop][pid].dec=90-RTOD*acos(cth);
-		par->gals[ipop][pid].z0=z_of_r(par,r);
-		par->gals[ipop][pid].dz_rsd=dz_rsd;
-		par->gals[ipop][pid].e1=e1;
-		par->gals[ipop][pid].e2=e2;
+		par->srcs[ipop][pid].ra=RTOD*phi;
+		par->srcs[ipop][pid].dec=90-RTOD*acos(cth);
+		par->srcs[ipop][pid].z0=z_of_r(par,r);
+		par->srcs[ipop][pid].dz_rsd=dz_rsd;
+		par->srcs[ipop][pid].e1=e1;
+		par->srcs[ipop][pid].e2=e2;
 		np_tot_thr[ithr]++;
 	      }
 	    }
@@ -249,6 +249,8 @@ static void integrate_lensing(ParamCoLoRe *par)
       double rm=0.5*(r0+rf),dr=rf-r0;
       double redshift=z_of_r(par,rm);
       double g_phi=dgrowth_of_r(par,rm)*(1+redshift);
+      //      double integ1=g_phi*0.5*(rf*rf-r0*r0);
+      //      double integ2=g_phi*(rf*rf*rf-r0*r0*r0)/3;
       double integ1=g_phi*rm*dr;
       double integ2=g_phi*rm*rm*dr;
       if(ncth*nphi!=par->oi_beams[ib]->num_pix[ir])
@@ -300,7 +302,7 @@ void get_sources(ParamCoLoRe *par)
     integrate_lensing(par);
 
   print_info("*** Getting point sources\n");
-  for(ipop=0;ipop<par->n_gals;ipop++)
+  for(ipop=0;ipop<par->n_srcs;ipop++)
     get_sources_single(par,ipop);
   print_info("\n");
 }
