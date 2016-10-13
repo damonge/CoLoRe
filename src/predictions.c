@@ -53,11 +53,11 @@ void write_predictions(ParamCoLoRe *par) {
     for (int i=0; i<Nk; i++) pklin[i]=pk_linear0(par,log10(ka[i]))*g*g;
     pk2xi(Nk,ka,pklin,ra,xilin);
     // inner loop is over populations, ipop=-1 is the unbiased version
-    printf ("Writing predictions of redshift %g:\n",z);
+    print_info ("Writing predictions of redshift %g:\n",z);
 
     for (int ipop=0; ipop<par->n_gals; ipop++) {
       double bias=bias_of_z_gals(par,z,ipop);
-      printf ("       Population %i, bias %g. \n",ipop,bias);
+      print_info ("       Population %i, bias %g. \n",ipop,bias);
       for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-par->r2_smooth*ka[i]*ka[i]);
       pk2xi(Nk,ka,pk,ra,xi);
       for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
