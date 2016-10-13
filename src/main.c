@@ -64,7 +64,9 @@ int main(int argc,char **argv)
     write_catalog(par);
   if(par->do_imap)
     write_imap(par);
-
+  if(par->do_pred)
+    write_predictions(par);
+  
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
 

@@ -261,6 +261,8 @@ typedef struct {
   double nu0_imap[NPOP_MAX];
   HealpixShells **imap;
 
+  int do_pred;
+  double pred_dz;
 } ParamCoLoRe;
 
 void mpi_init(int* p_argc,char*** p_argv);
@@ -312,6 +314,10 @@ void write_catalog(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
 void write_grids(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
+
+/////
+// Functions defined in predictions.h
+void write_predictions(ParamCoLoRe *par);
 
 
 //////
