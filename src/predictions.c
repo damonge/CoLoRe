@@ -28,47 +28,58 @@ void write_predictions(ParamCoLoRe *par) {
   if (NodeThis!=0) return;
   print_info("*** Writing predictions (ASCII) \n");
   // first generate k array, sufficiently finely spaced
-  int Nk=1000;
+  // note that we need to sufficiently pad on both ends
+  const int Nk=10000;
+  const double kmin=1e-3;
+  const double kmax=50;;
+
+  const double kminout=0;
+  const double kmaxout=1e10;
+  const double rminout=0; 
+  const double rmaxout=1e10;
+
+  /*const double kminout=1e-2;
+  const double kmaxout=10;
+  const double rminout=0.5;
+  const double rmaxout=300.;*/
   double *ka=my_malloc(Nk*sizeof(double));
   double *pk=my_malloc(Nk*sizeof(double));
+  double *pklin=my_malloc(Nk*sizeof(double));
   double *ra=my_malloc(Nk*sizeof(double));
   double *xi=my_malloc(Nk*sizeof(double));
-  for (int i=0; i<Nk; i++) ka[i]=1e-4*pow((10./1e-4),i*1.0/(Nk-1));
+  double *xilin=my_malloc(Nk*sizeof(double));
+  for (int i=0; i<Nk; i++) ka[i]=kmin*pow((kmax/kmin),i*1.0/(Nk-1));
   FILE *fpk, *fxi;
   char fnamepk[256], fnamexi[256];
 	
   // outter loop is over redshifts
   for (double z=0; z<=par->z_max; z+=par->pred_dz) {
-    // inner loop is over populations, ipop=-1 is the unbiased version
     double r=r_of_z(par,z);
     double g=dgrowth_of_r(par,r);
-    for (int ipop=-1; ipop<par->n_gals; ipop++) {
-      // first get the linear PS at this redshift
-      for (int i=0; i<Nk; i++) pk[i]=pk_linear0(par,log(ka[i]))*g*g;
-      // if ipop==-1, just do linear, otherwise do the lognormal prediction
-      if (ipop>=0) {
-	double bias=bias_of_z_gals(par,z,ipop);
-	for (int i=0; i<Nk; i++) pk[i]*=bias*bias*exp(-par->r2_smooth*ka[i]*ka[i]);
-	pk2xi(Nk,ka,pk,ra,xi);
-	// Fix xi
-	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
-	xi2pk(Nk,ra,xi,ka,pk);
-	// now open the files
-	sprintf(fnamepk,"%s_pk_pop%i_z%g.dat",par->prefixOut,ipop,z);
-	sprintf(fnamexi,"%s_xi_pop%i_z%g.dat",par->prefixOut,ipop,z);
+    for (int i=0; i<Nk; i++) pklin[i]=pk_linear0(par,log10(ka[i]))*g*g;
+    pk2xi(Nk,ka,pklin,ra,xilin);
+    // inner loop is over populations, ipop=-1 is the unbiased version
+    printf ("Writing predictions of redshift %g:\n",z);
 
-      } else {
-	// just calculate xi
-	pk2xi(Nk,ka,pk,ra,xi);
-	sprintf(fnamepk,"%s_pk_lin_z%g.dat",par->prefixOut,z);
-	sprintf(fnamexi,"%s_xi_lin_z%g.dat",par->prefixOut,z);
-      }
-      printf ("Writing: %s and %s.\n",fnamepk, fnamexi);
+    for (int ipop=0; ipop<par->n_gals; ipop++) {
+      double bias=bias_of_z_gals(par,z,ipop);
+      printf ("       Population %i, bias %g. \n",ipop,bias);
+      for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-par->r2_smooth*ka[i]*ka[i]);
+      pk2xi(Nk,ka,pk,ra,xi);
+      for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
+      xi2pk(Nk,ra,xi,ka,pk);
+      // now open the files
+      sprintf(fnamepk,"%s_pk_pop%i_z%g.dat",par->prefixOut,ipop,z);
+      sprintf(fnamexi,"%s_xi_pop%i_z%g.dat",par->prefixOut,ipop,z);
       fpk=fopen(fnamepk,"w");
+      fprintf (fpk, "# k[h/Mpc] P_tt P_tl P_ll\n");
       fxi=fopen(fnamexi,"w");
+      fprintf (fpk, "# k[h/Mpc] xi_tt xi_ll*b^2 xi_ll\n");
       for (int i=0; i<Nk; i++) {
-	fprintf (fpk,"%g %g \n",ka[i],pk[i]);
-	fprintf (fxi,"%g %g \n",ra[i],xi[i]);
+	if ((ka[i]>=kminout) && (ka[i]<=kmaxout))
+	  fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias, pklin[i]);
+	if ((ra[i]>=rminout) && (ra[i]<=rmaxout))
+	  fprintf (fxi,"%g %g %g %g\n",ra[i],xi[i], xilin[i]*bias*bias, xilin[i]);
       }
       fclose(fpk);
       fclose(fxi);
@@ -76,6 +87,8 @@ void write_predictions(ParamCoLoRe *par) {
   }
   free(ka);
   free(pk);
+  free(pklin);
   free(ra);
   free(xi);
+  free(xilin);
 }

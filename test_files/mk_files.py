@@ -26,6 +26,7 @@ zarr=z0+(zf-z0)*np.arange(nz)/(nz-1.)
 nzarr=(zarr/zx)**2*np.exp(-(zarr/zx)**pow1); 
 nzarr2=(zarr/zx2)**2*np.exp(-(zarr/zx2)**pow2); 
 bzarr=np.ones_like(zarr)
+bzarr2=2*np.ones_like(zarr)
 tzarr=5.5919E-2+2.3242E-1*zarr-2.4136E-2*zarr**2.
 norm=ngal/(4*np.pi*(180/np.pi)**2*np.sum(nzarr)*(zf-z0)/nz)
 nzarr*=norm
@@ -36,6 +37,7 @@ np.savetxt("Nz_test.txt",np.transpose([zarr,nzarr]))
 np.savetxt("Nz2_test.txt",np.transpose([zarr,nzarr2]))
 np.savetxt("Tz_test.txt",np.transpose([zarr,tzarr]))
 np.savetxt("Bz_test.txt",np.transpose([zarr,bzarr]))
+np.savetxt("Bz2_test.txt",np.transpose([zarr,bzarr2]))
 np.savetxt("nuTable.txt",np.transpose([nu0_arr,nuf_arr]))
 
 plt.plot(zarr,nzarr); plt.plot(zarr,nzarr2); plt.show()

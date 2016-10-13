@@ -179,6 +179,10 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_int(conf,"global","n_grid",&(par->n_grid));
   conf_read_bool(conf,"global","output_density",&(par->output_density));
   conf_read_int(conf,"global","seed",&i_dum);
+  conf_read_bool(conf,"global","write_pred",&(par->do_pred));
+  if (par->do_pred) 
+    conf_read_double(conf,"global","pred_dz",&(par->pred_dz));
+
   par->seed_rng=i_dum;
   conf_read_string(conf,"global","output_format",c_dum);
   if(!strcmp(c_dum,"HDF5")) {
@@ -267,11 +271,6 @@ ParamCoLoRe *read_run_params(char *fname)
       par->imap[ii]=new_hp_shell(par->nside_imap[ii],par->fnameNuImap[ii]);
   }
 
-  cset=config_lookup(conf,"predictions");
-  if (cset) {
-    par->do_pred=1;
-    conf_read_double(conf,"predictions","dz",&(par->pred_dz));
-  }
         
 #ifdef _DEBUG
   sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
