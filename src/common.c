@@ -181,7 +181,7 @@ void mpi_init(int* p_argc,char*** p_argv)
 #ifdef _HAVE_OMP
   int provided;
   MPI_Init_thread(p_argc,p_argv,MPI_THREAD_FUNNELED,&provided);
-  MPIThreadsOK = provided >= MPI_THREAD_FUNNELED;
+  MPIThreadsOK=provided>=MPI_THREAD_FUNNELED;
 #else //_HAVE_OMP
   MPI_Init(p_argc,p_argv);
   MPIThreadsOK=0;
@@ -276,7 +276,8 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
   double dx=par->l_box/par->n_grid;
   double dr=FAC_CART2SPH_VOL*dx;
 
-  oi->nr=(int)(par->r_max/dr)+1;
+  oi->nr=(int)(par->r_max/dr+1);
+  dr=par->r_max/oi->nr; //Redefine radial interval
   oi->r0_arr=my_malloc(oi->nr*sizeof(flouble));
   oi->rf_arr=my_malloc(oi->nr*sizeof(flouble));
   oi->nside_arr=my_malloc(oi->nr*sizeof(int));
@@ -290,12 +291,14 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
     int nside_here=nside_base;
     flouble rm=(ir+0.5)*dr;
     flouble dr_trans=rm*sqrt(4*M_PI/(2*nside_here*nside_here));
+    //    flouble dr_trans=rm*acos(1-2.0/nside_here);
     oi->r0_arr[ir]=ir*dr;
     oi->rf_arr[ir]=(ir+1)*dr;
 
-    while(dr_trans>FAC_CART2SPH_VOL*dr) {
+    while(dr_trans>FAC_CART2SPH_VOL*dx) {
       nside_here*=2;
       dr_trans=rm*sqrt(4*M_PI/(2*nside_here*nside_here));
+      //      dr_trans=rm*acos(1-2.0/nside_here);
     }
     oi->nside_arr[ir]=nside_here;
   }
@@ -337,14 +340,16 @@ OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par)
       cth0=z0_here/rf;
       cthf=zf_here/rf;
     }
-    icth0=(int)(0.5*(cth0+1)*oi->nside_arr[ir])-1;
-    icthf=(int)(0.5*(cthf+1)*oi->nside_arr[ir])+1;
+    icth0=(int)(0.5*(cth0+1)*oi->nside_arr[ir]-1);
+    icthf=(int)(0.5*(cthf+1)*oi->nside_arr[ir]+1);
     icth0=CLAMP(icth0,0,oi->nside_arr[ir]-1);
     icthf=CLAMP(icthf,0,oi->nside_arr[ir]-1);
     oi->icth0_arr[ir]=icth0;
     oi->icthf_arr[ir]=icthf;
 
-    if(((oi->icth0_arr[ir]==oi->nside_arr[ir]-1) && (oi->icthf_arr[ir]==oi->nside_arr[ir]-1) && (z0_here>rf)) ||
+    if(((oi->icth0_arr[ir]==oi->nside_arr[ir]-1) &&
+	(oi->icthf_arr[ir]==oi->nside_arr[ir]-1) &&
+	(z0_here>rf)) ||
        ((oi->icth0_arr[ir]==0) && (oi->icthf_arr[ir]==0) && (zf_here<-rf)))
       oi->num_pix[ir]=0;
     else
@@ -381,8 +386,7 @@ OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
   for(i_base=0;i_base<nbase_here;i_base++)
     oi[i_base]=alloc_onion_empty(par,nside_base);
 
-  i_base=0;
-  i_base_here=0;
+  i_base=0; i_base_here=0;
   for(icth=0;icth<nside_base;icth++) {
     int iphi;
     for(iphi=0;iphi<2*nside_base;iphi++) {
