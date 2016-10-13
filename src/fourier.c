@@ -305,11 +305,11 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	  else {
 	    double lgk=0.5*log10(k_mod2);
 	    double sigma2=pk_linear0(par,lgk)*idk3;
-	    if(par->do_smoothing)
-	      sigma2*=exp(-par->r2_smooth*k_mod2);
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
 	    par->grid_npot_f[index]=-1.5*par->grid_dens_f[index]*factor_p/k_mod2;
+	    if(par->do_smoothing)
+	      par->grid_dens_f[index]*=exp(-0.5*par->r2_smooth*k_mod2);
 	  }
 	}
       }
