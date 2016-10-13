@@ -32,16 +32,10 @@ void write_predictions(ParamCoLoRe *par) {
   const int Nk=10000;
   const double kmin=1e-3;
   const double kmax=50;;
-
-  const double kminout=0;
-  const double kmaxout=1e10;
-  const double rminout=0; 
-  const double rmaxout=1e10;
-
-  /*const double kminout=1e-2;
-  const double kmaxout=10;
+  const double kminout=kmin;
+  const double kmaxout=kmax;
   const double rminout=0.5;
-  const double rmaxout=300.;*/
+  const double rmaxout=300.;
   double *ka=my_malloc(Nk*sizeof(double));
   double *pk=my_malloc(Nk*sizeof(double));
   double *pklin=my_malloc(Nk*sizeof(double));
