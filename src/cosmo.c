@@ -400,8 +400,8 @@ static void pk_linear_set(ParamCoLoRe *par)
 #endif //_DEBUG
 }
 
-static void compute_hp_shell_distances(HealpixShells *shell,flouble nu_rest,char *fname_nutable,
-				       Csm_params *pars)
+static void compute_hp_shell_distances_imap(HealpixShells *shell,flouble nu_rest,
+					    char *fname_nutable,Csm_params *pars)
 {
   int ii;
   FILE *fi;
@@ -523,7 +523,20 @@ void cosmo_set(ParamCoLoRe *par)
 
     par->intacc_imap[ipop]=gsl_interp_accel_alloc();
 
-    compute_hp_shell_distances(par->imap[ipop],par->nu0_imap[ipop],par->fnameNuImap[ipop],pars);
+    compute_hp_shell_distances_imap(par->imap[ipop],par->nu0_imap[ipop],
+				    par->fnameNuImap[ipop],pars);
+  }
+
+  if(par->do_kappa) {
+    for(ii=0;ii<par->n_kappa;ii++) {
+      double z=par->z_kappa_out[ii];
+#ifdef _DEBUG
+      if((z<par->z_min) || (z>par->z_max))
+	print_info("Source plane %d outside redshift range\n",ii+1);
+#endif //_DEBUG
+      par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+    }
   }
 
   //Set z-dependent functions

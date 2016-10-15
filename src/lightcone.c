@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-static inline double get_cosine(int index,double dx)
+static inline double get_cosine(double index,double dx)
 {
 #if PIXTYPE==PT_CEA
   return index*dx-1;
@@ -94,8 +94,8 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
 #if PIXTYPE==PT_CAR
-	    double dcth=get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+1,dth)-
-	      get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+0,dth);
+	    double dcth=get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+1.0,dth)-
+	      get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+0.0,dth);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
 #endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
@@ -187,10 +187,10 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
 #if PIXTYPE==PT_CEA
-	    double cth0=get_cosine(ind_cth+icth0,dcth);
+	    double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
 #elif PIXTYPE==PT_CAR
-	    double cth0=get_cosine(ind_cth+icth0,dth);
-	    double dcth=get_cosine(ind_cth+icth0+1,dth)-cth0;
+	    double cth0=get_cosine(ind_cth+icth0+0.0,dth);
+	    double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
 #endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      int ip;
@@ -241,12 +241,12 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 //////
 // Integrates the Newtonian potential along the line of sight
 // with the lensing kernel.
-static void integrate_lensing(ParamCoLoRe *par)
+void integrate_lensing(ParamCoLoRe *par)
 {
   int ib;
 
 #ifdef _DEBUG
-  print_info("Integrating lensing\n");
+  print_info("*** Integrating lensing\n");
   if(NodeThis==0) timer(0);
 #endif //_DEBUG
   for(ib=0;ib<par->n_beams_here;ib++) {
@@ -325,9 +325,6 @@ void get_sources(ParamCoLoRe *par)
   int ipop;
 
   //First, compute lensing Hessian
-  if(par->do_lensing)
-    integrate_lensing(par);
-
   print_info("*** Getting point sources\n");
   for(ipop=0;ipop<par->n_srcs;ipop++)
     get_sources_single(par,ipop);
@@ -386,11 +383,11 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
       OnionInfo *beam=par->oi_beams[ib];
       double cth0_b,cthf_b,phi0_b,phif_b;
 #if PIXTYPE==PT_CEA
-      cth0_b=get_cosine(beam->icth0_arr[0]+0,2./beam->nside_arr[0]);
-      cthf_b=get_cosine(beam->icth0_arr[0]+1,2./beam->nside_arr[0]);
+      cth0_b=get_cosine(beam->icth0_arr[0]+0.0,2./beam->nside_arr[0]);
+      cthf_b=get_cosine(beam->icth0_arr[0]+1.0,2./beam->nside_arr[0]);
 #elif PIXTYPE==PT_CAR
-      cth0_b=get_cosine(beam->icth0_arr[0]+0,M_PI/beam->nside_arr[0]);
-      cthf_b=get_cosine(beam->icth0_arr[0]+1,M_PI/beam->nside_arr[0]);
+      cth0_b=get_cosine(beam->icth0_arr[0]+0.0,M_PI/beam->nside_arr[0]);
+      cthf_b=get_cosine(beam->icth0_arr[0]+1.0,M_PI/beam->nside_arr[0]);
 #endif //PIXTYPE
       phi0_b=beam->iphi0_arr[0]*M_PI/beam->nside_arr[0];
       phif_b=(beam->iphif_arr[0]+1)*M_PI/beam->nside_arr[0];
@@ -479,10 +476,10 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
 #if PIXTYPE==PT_CEA
-	    double cth0=get_cosine(ind_cth+icth0,dcth);
+	    double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
 #elif PIXTYPE==PT_CAR
-	    double cth0=get_cosine(ind_cth+icth0,dth);
-	    double dcth=get_cosine(ind_cth+icth0+1,dth)-cth0;
+	    double cth0=get_cosine(ind_cth+icth0+0.0,dth);
+	    double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
 #endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
@@ -543,4 +540,77 @@ void get_imap(ParamCoLoRe *par)
   for(ipop=0;ipop<par->n_imap;ipop++)
     get_imap_single(par,ipop);
   print_info("\n");
+}
+
+void get_kappa(ParamCoLoRe *par)
+{
+
+  print_info("*** Getting kappa maps\n");
+  if(NodeThis==0) timer(0);
+  find_shell_pixels(par,par->kmap);
+
+#pragma omp parallel default(none) \
+  shared(par)
+  {
+    int ir;
+    double inv_hpix_area=he_nside2npix(par->kmap->nside)/4*M_PI;
+
+    //Maybe OMP this
+#pragma omp for
+    for(ir=0;ir<par->n_kappa;ir++) {
+      int ib,irb=0;
+      double r=par->kmap->r0[ir];
+      long irad_t=ir*par->kmap->num_pix;
+      while(irb<par->oi_beams[0]->nr) {
+	if((r>=par->oi_beams[0]->r0_arr[irb]) &&
+	   (r<=par->oi_beams[0]->rf_arr[irb]))
+	  break;
+	else
+	  irb++;
+      }
+      if(irb>=par->oi_beams[0]->nr) {
+	irb=par->oi_beams[0]->nr-1;
+	print_info("Source plane %d is outside range\n",ir+1);
+      }
+
+      for(ib=0;ib<par->n_beams_here;ib++) {
+	int ind_cth;
+	int icth0=par->oi_beams[ib]->icth0_arr[irb];
+	int iphi0=par->oi_beams[ib]->iphi0_arr[irb];
+	int ncth=par->oi_beams[ib]->icthf_arr[irb]-par->oi_beams[ib]->icth0_arr[irb]+1;
+	int nphi=par->oi_beams[ib]->iphif_arr[irb]-par->oi_beams[ib]->iphi0_arr[irb]+1;
+	int nside=par->oi_beams[ib]->nside_arr[irb];
+	double dphi=M_PI/nside;
+#if PIXTYPE==PT_CEA
+	double dcth=2./nside;
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
+	for(ind_cth=0;ind_cth<ncth;ind_cth++) {
+	  int ind_phi;
+	  int ind_cth_t=ind_cth*nphi;
+#if PIXTYPE==PT_CEA
+	  double cth=get_cosine(ind_cth+icth0+0.5,dcth);
+#elif PIXTYPE==PT_CAR
+	  double cth=get_cosine(ind_cth+icth0+0.5,dth);
+	  double dcth=get_cosine(ind_cth+icth0+1.0,dth)-get_cosine(ind_cth+icth0+0.0,dth);
+#endif //PIXTYPE
+	  double area_ratio=dcth*dphi*inv_hpix_area;
+	  for(ind_phi=0;ind_phi<nphi;ind_phi++) {
+	    double phi=(ind_phi+iphi0+0.5)*dphi;
+	    double pxx=par->p_xx_beams[ib][irb][ind_cth_t+ind_phi];
+	    double pyy=par->p_yy_beams[ib][irb][ind_cth_t+ind_phi];
+	    double kappa=pxx+pyy;
+	    long ipix=he_ang2pix(par->kmap->nside,cth,phi);
+	    long pix_id=par->kmap->listpix[ipix];
+	    if(pix_id<0)
+	      report_error(1,"NOOO\n");
+	    par->kmap->data[irad_t+pix_id]+=kappa*area_ratio;
+	  }
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+  printf("\n");
 }

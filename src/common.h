@@ -66,7 +66,7 @@
 
 //Pixelization type
 #ifndef PIXTYPE
-#define PIXTYPE PT_CEA
+#define PIXTYPE PT_CAR
 #endif //PIXTYPE
 
 //Resolution parameter for nearest onion shell
@@ -270,6 +270,12 @@ typedef struct {
   double nu0_imap[NPOP_MAX]; //Rest-frame frequency for each IM species
   HealpixShells **imap; //intensity maps for each IM species
 
+  int do_kappa; //Do you want to output kappa maps?
+  int n_kappa; //How many maps?
+  double z_kappa_out[NPOP_MAX]; //Array of source plane redshifts
+  int nside_kappa;
+  HealpixShells *kmap; //Kappa maps at each redshift
+
   int do_pred;
   double pred_dz;
 } ParamCoLoRe;
@@ -313,7 +319,7 @@ double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop);
 double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop);
 double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop);
 void free_hp_shell(HealpixShells *shell);
-HealpixShells *new_hp_shell(int nside,char *fname_nutable);
+HealpixShells *new_hp_shell(int nside,int nr);
 
 
 //////
@@ -321,8 +327,10 @@ HealpixShells *new_hp_shell(int nside,char *fname_nutable);
 ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
+void write_kappa(ParamCoLoRe *par);
 void write_grids(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
+
 
 /////
 // Functions defined in predictions.h
@@ -340,10 +348,14 @@ void end_fftw(ParamCoLoRe *par);
 // Functions defined in pixelization.c
 void pixelize(ParamCoLoRe *par);
 
+
 //////
 // Functions defined in grid_tools.c
+void integrate_lensing(ParamCoLoRe *par);
 void get_sources(ParamCoLoRe *par);
 void get_imap(ParamCoLoRe *par);
+void get_kappa(ParamCoLoRe *par);
+
 
 //////
 // Defined in healpix_extra.c

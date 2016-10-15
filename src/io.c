@@ -89,9 +89,12 @@ static ParamCoLoRe *param_colore_new(void)
 
   par->do_sources=0;
   par->do_imap=0;
+  par->do_kappa=0;
   par->do_pred=0;
   par->n_srcs=-1;
   par->n_imap=-1;
+  par->n_kappa=-1;
+  par->nside_kappa=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzSrcs[ii],"default");
     sprintf(par->fnameNzSrcs[ii],"default");
@@ -106,10 +109,12 @@ static ParamCoLoRe *param_colore_new(void)
     par->spline_imap_tz[ii]=NULL;
     par->intacc_imap[ii]=NULL;
     par->nside_imap[ii]=-1;
+    par->z_kappa_out[ii]=-1;
     par->nu0_imap[ii]=-1;
   }
   par->srcs=NULL;
   par->imap=NULL;
+  par->kmap=NULL;
   par->nsources_this=NULL;
 
   return par;
@@ -135,6 +140,31 @@ static void conf_read_double(config_t *conf,char *secname,char *varname,double *
   stat=config_lookup_float(conf,fullpath,out);
   if(stat==CONFIG_FALSE)
     report_error(1,"Couldn't read variable %s\n",fullpath);
+}
+
+static void conf_read_double_array(config_t *conf,char *secname,char *varname,
+				   double *out,int *nel,int nmax)
+{
+  int n_elem,index;
+  config_setting_t *arr;
+  char fullpath[256];
+  sprintf(fullpath,"%s.%s",secname,varname);
+  arr=config_lookup(conf,fullpath);
+  if(arr==NULL)
+    report_error(1,"Couldn't read variable %s\n",fullpath);
+  n_elem=config_setting_length(arr);
+  if(n_elem==0)
+    report_error(1,"Couldn't read variable %s\n",fullpath);
+  if(n_elem>nmax)
+    report_error(1,"Too many elements in %s (%d > %d)\n",fullpath,n_elem,nmax);
+
+  *nel=n_elem;
+  //  printf("[ ");
+  for(index=0;index<n_elem;index++) {
+    out[index]=config_setting_get_float_elem(arr,index);
+    //    printf("%lE,",out[index]);
+  }
+  //  printf("]\n");
 }
 
 static void conf_read_int(config_t *conf,char *secname,char *varname,int *out)
@@ -260,6 +290,15 @@ ParamCoLoRe *read_run_params(char *fname)
   if(par->n_imap>0)
     par->do_imap=1;
 
+  //Kappa maps
+  cset=config_lookup(conf,"kappa");
+  if(cset!=NULL) {
+    par->do_kappa=1;
+    par->do_lensing=1;
+    conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPOP_MAX);
+    conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
+  }
+
   if(par->do_sources) {
     par->srcs=my_malloc(par->n_srcs*sizeof(Src *));
     par->nsources_this=my_malloc(par->n_srcs*sizeof(lint));
@@ -267,9 +306,16 @@ ParamCoLoRe *read_run_params(char *fname)
 
   if(par->do_imap) {
     par->imap=my_malloc(par->n_imap*sizeof(HealpixShells *));
-    for(ii=0;ii<par->n_imap;ii++)
-      par->imap[ii]=new_hp_shell(par->nside_imap[ii],par->fnameNuImap[ii]);
+    for(ii=0;ii<par->n_imap;ii++) {
+      FILE *fnu=fopen(par->fnameNuImap[ii],"r");
+      if(fnu==NULL) error_open_file(par->fnameNuImap[ii]);
+      par->imap[ii]=new_hp_shell(par->nside_imap[ii],linecount(fnu));
+      fclose(fnu);
+    }
   }
+
+  if(par->do_kappa)
+    par->kmap=new_hp_shell(par->nside_kappa,par->n_kappa);
 
 #ifdef _DEBUG
   sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
@@ -319,6 +365,8 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  %d galaxy populations\n",par->n_srcs);
   if(par->do_imap)
     print_info("  %d intensity mapping species\n",par->n_imap);
+  if(par->do_kappa)
+    print_info("  %d lensing source planes\n",par->n_kappa);
   if(par->do_lensing)
     print_info("  Will include lensing shear\n");
   print_info("\n");
@@ -394,6 +442,44 @@ void write_imap(ParamCoLoRe *par)
       }
       free(map_write);
     }
+    if(NodeThis==0) timer(2);
+    print_info("\n");
+  }
+}
+
+void write_kappa(ParamCoLoRe *par)
+{
+  if(par->do_kappa) {
+    int ir;
+    char fname[256];
+    long npx=he_nside2npix(par->nside_kappa);
+    flouble *map_write=my_malloc(npx*sizeof(flouble));
+    if(NodeThis==0) timer(0);
+    print_info("*** Writing kappa source maps\n");
+    for(ir=0;ir<par->kmap->nr;ir++) {
+      long ip;
+      long ir_t=ir*par->kmap->num_pix;
+      
+      //Write local pixels to dummy map
+      memset(map_write,0,npx*sizeof(flouble));
+      sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
+      for(ip=0;ip<npx;ip++) {
+	int id_pix=par->kmap->listpix[ip];
+	if(id_pix>0)
+	  map_write[ip]+=par->kmap->data[ir_t+id_pix];
+      }
+
+      //Collect all dummy maps
+      if(NodeThis==0)
+	MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+      else
+	MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+      
+      //Write dummy map
+      if(NodeThis==0)
+	he_write_healpix_map(&map_write,1,par->nside_kappa,fname);
+    }
+    free(map_write);
     if(NodeThis==0) timer(2);
     print_info("\n");
   }
@@ -587,6 +673,10 @@ void param_colore_free(ParamCoLoRe *par)
     }
     if(par->imap!=NULL)
       free(par->imap);
+  }
+
+  if(par->do_kappa) {
+    free_hp_shell(par->kmap);
   }
 
 #ifdef _DEBUG
