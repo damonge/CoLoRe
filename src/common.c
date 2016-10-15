@@ -269,6 +269,28 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
   return nmemb;
 }
 
+static inline flouble get_res(int nside)
+{
+#if PIXTYPE == PT_CEA
+    return acos(1-2.0/nside);
+#elif PIXTYPE == PT_CAR
+    return M_PI/nside;
+#else
+    return acos(1-2.0/nside);
+#endif //PIXTYPE
+}
+
+static inline flouble get_lat_index(int nside,flouble cth)
+{
+#if PIXTYPE == PT_CEA
+  return 0.5*(cth+1)*nside;
+#elif PIXTYPE == PT_CAR
+  return (1-acos(cth)/M_PI)*nside;
+#else
+  return 0.5*(cth+1)*nside;
+#endif //PIXTYPE
+}
+
 OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
 {
   int ir;
@@ -290,15 +312,13 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
   for(ir=0;ir<oi->nr;ir++) {
     int nside_here=nside_base;
     flouble rm=(ir+0.5)*dr;
-    flouble dr_trans=rm*sqrt(4*M_PI/(2*nside_here*nside_here));
-    //    flouble dr_trans=rm*acos(1-2.0/nside_here);
+    flouble dr_trans=rm*get_res(nside_here);
     oi->r0_arr[ir]=ir*dr;
     oi->rf_arr[ir]=(ir+1)*dr;
 
     while(dr_trans>FAC_CART2SPH_VOL*dx) {
       nside_here*=2;
-      dr_trans=rm*sqrt(4*M_PI/(2*nside_here*nside_here));
-      //      dr_trans=rm*acos(1-2.0/nside_here);
+      dr_trans=rm*get_res(nside_here);
     }
     oi->nside_arr[ir]=nside_here;
   }
@@ -340,8 +360,8 @@ OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par)
       cth0=z0_here/rf;
       cthf=zf_here/rf;
     }
-    icth0=(int)(0.5*(cth0+1)*oi->nside_arr[ir]-1);
-    icthf=(int)(0.5*(cthf+1)*oi->nside_arr[ir]+1);
+    icth0=(int)(get_lat_index(oi->nside_arr[ir],cth0)-1);
+    icthf=(int)(get_lat_index(oi->nside_arr[ir],cthf)+1);
     icth0=CLAMP(icth0,0,oi->nside_arr[ir]-1);
     icthf=CLAMP(icthf,0,oi->nside_arr[ir]-1);
     oi->icth0_arr[ir]=icth0;
@@ -359,7 +379,7 @@ OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par)
     int nside_here=oi->nside_arr[ir];
     fprintf(par->f_dbg,
 	    "  Shell %d, r=%lf, nside=%d, angular resolution %lf Mpc/h, cell size %lf, %d pixels\n",
-	    ir,rm,nside_here,rm*sqrt(4*M_PI/(2*nside_here*nside_here)),dx,oi->num_pix[ir]);
+	    ir,rm,nside_here,rm*get_res(nside_here),dx,oi->num_pix[ir]);
 #endif //_DEBUG
   }
 
@@ -416,7 +436,7 @@ OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
     int nside_here=oi[0]->nside_arr[ir];
     fprintf(par->f_dbg,
 	    "  Shell %d, r=%lf, nside=%d, angular resolution %lf Mpc/h, cell size %lf",
-	    ir,rm,nside_here,rm*sqrt(4*M_PI/(2*nside_here*nside_here)),dx);
+	    ir,rm,nside_here,rm*get_res(nside_here),dx);
     fprintf(par->f_dbg,"[ ");
     for(ib=0;ib<par->n_beams_here;ib++)
       fprintf(par->f_dbg,"%d ",oi[ib]->num_pix[ir]);

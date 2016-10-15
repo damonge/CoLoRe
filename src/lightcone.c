@@ -21,6 +21,15 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
+static inline double get_cosine(int index,double dx)
+{
+#if PIXTYPE==PT_CEA
+  return index*dx-1;
+#elif PIXTYPE==PT_CAR
+  return cos(M_PI-index*dx);
+#endif //PIXTYPE
+}
+
 static void get_sources_single(ParamCoLoRe *par,int ipop)
 {
   //////
@@ -66,9 +75,13 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       if(ndens>0) {
 	int ib;
 	int nside=par->oi_beams[0]->nside_arr[ir];
-	double dcth=2./nside;
 	double dphi=M_PI/nside;
+#if PIXTYPE==PT_CEA
+	double dcth=2./nside;
 	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
 	double bias=bias_of_z_srcs(par,redshift,ipop);
 	double gfb=dgrowth_of_r(par,rm)*bias;
 	for(ib=0;ib<par->n_beams_here;ib++) {
@@ -80,6 +93,11 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
+#if PIXTYPE==PT_CAR
+	    double dcth=get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+1,dth)-
+	      get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+0,dth);
+	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
+#endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      double lambda=ndens*cell_vol*exp(gfb*(dens_slice[ind_cth_t+ind_phi]-0.5*gfb*par->sigma2_gauss));
 	      int npp=rng_poisson(lambda,rng_thr);
@@ -150,7 +168,11 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       if(ndens>0) {
 	int ib;
 	int nside=par->oi_beams[0]->nside_arr[ir];
+#if PIXTYPE==PT_CEA
 	double dcth=2./nside;
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
 	double dphi=M_PI/nside;
 	double vg=vgrowth_of_r(par,rm);
 	for(ib=0;ib<par->n_beams_here;ib++) {
@@ -164,7 +186,12 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
-	    double cth0=(ind_cth+icth0)*dcth-1;
+#if PIXTYPE==PT_CEA
+	    double cth0=get_cosine(ind_cth+icth0,dcth);
+#elif PIXTYPE==PT_CAR
+	    double cth0=get_cosine(ind_cth+icth0,dth);
+	    double dcth=get_cosine(ind_cth+icth0+1,dth)-cth0;
+#endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      int ip;
 	      double e1=0,e2=0;
@@ -358,8 +385,13 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
     for(ib=0;ib<par->n_beams_here;ib++) {
       OnionInfo *beam=par->oi_beams[ib];
       double cth0_b,cthf_b,phi0_b,phif_b;
-      cth0_b=-1+beam->icth0_arr[0]*2./beam->nside_arr[0];
-      cthf_b=-1+(beam->icthf_arr[0]+1)*2./beam->nside_arr[0];
+#if PIXTYPE==PT_CEA
+      cth0_b=get_cosine(beam->icth0_arr[0]+0,2./beam->nside_arr[0]);
+      cthf_b=get_cosine(beam->icth0_arr[0]+1,2./beam->nside_arr[0]);
+#elif PIXTYPE==PT_CAR
+      cth0_b=get_cosine(beam->icth0_arr[0]+0,M_PI/beam->nside_arr[0]);
+      cthf_b=get_cosine(beam->icth0_arr[0]+1,M_PI/beam->nside_arr[0]);
+#endif //PIXTYPE
       phi0_b=beam->iphi0_arr[0]*M_PI/beam->nside_arr[0];
       phif_b=(beam->iphif_arr[0]+1)*M_PI/beam->nside_arr[0];
       if(((cth0<=cthf_b)&&(cth0>=cth0_b)) || ((cthf<=cthf_b)&&(cthf>=cth0_b))) { //cth in range
@@ -425,9 +457,13 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	int ib;
 	int irad=0;
 	int nside=par->oi_beams[0]->nside_arr[ir];
-	double dcth=2./nside;
 	double dphi=M_PI/nside;
+#if PIXTYPE==PT_CEA
+	double dcth=2./nside;
 	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_SUBVOL;
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
 	double bias=bias_of_z_imap(par,redshift,ipop);
 	double gfb=dgrowth_of_r(par,rm)*bias;
 	double prefac_rsd=ihub_of_r(par,rm)*vgrowth_of_r(par,rm);
@@ -442,7 +478,13 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
-	    double cth0=(ind_cth+icth0)*dcth-1;
+#if PIXTYPE==PT_CEA
+	    double cth0=get_cosine(ind_cth+icth0,dcth);
+#elif PIXTYPE==PT_CAR
+	    double cth0=get_cosine(ind_cth+icth0,dth);
+	    double dcth=get_cosine(ind_cth+icth0+1,dth)-cth0;
+	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
+#endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      int ip;
 	      double phi0=(ind_phi+iphi0)*dphi;

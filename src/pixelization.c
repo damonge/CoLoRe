@@ -219,9 +219,19 @@ static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,fl
       if(oi->num_pix[ir]>0) {
 	int icth;
 	flouble dr=oi->rf_arr[ir]-oi->r0_arr[ir];
+#if PIXTYPE==PT_CEA
 	flouble dcth=2.0/oi->nside_arr[ir];
+#elif PIXTYPE==PT_CAR
+	flouble dth=M_PI/oi->nside_arr[ir];
+#endif //PIXTYPE
 	flouble dphi=M_PI/oi->nside_arr[ir];
-	flouble dr_sub=dr/FAC_CART2SPH_NSUB,dcth_sub=dcth/FAC_CART2SPH_NSUB,dphi_sub=dphi/FAC_CART2SPH_NSUB;
+	flouble dr_sub=dr/FAC_CART2SPH_NSUB;
+#if PIXTYPE==PT_CEA
+	flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
+#elif PIXTYPE==PT_CAR
+	flouble dth_sub=dth/FAC_CART2SPH_NSUB;
+#endif //PIXTYPE
+	flouble dphi_sub=dphi/FAC_CART2SPH_NSUB;
 	int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
 	int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
 	flouble r0=oi->r0_arr[ir];
@@ -229,7 +239,9 @@ static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,fl
 	for(icth=0;icth<ncth;icth++) {
 	  int iphi;
 	  int index_cth=nphi*icth;
+#if PIXTYPE==PT_CEA
 	  flouble cth0=-1+(oi->icth0_arr[ir]+icth)*dcth;
+#endif //PIXTYPE
 	  for(iphi=0;iphi<nphi;iphi++) {
 	    int ir2;
 	    flouble phi0=(oi->iphi0_arr[ir]+iphi)*dphi;
@@ -242,7 +254,11 @@ static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,fl
 	      flouble r=r0+(ir2+0.5)*dr_sub;
 	      for(icth2=0;icth2<FAC_CART2SPH_NSUB;icth2++) {
 		int iphi2;
+#if PIXTYPE==PT_CEA
 		flouble cth=cth0+(icth2+0.5)*dcth_sub;
+#elif PIXTYPE==PT_CAR
+		flouble cth=cos(M_PI-((oi->icth0_arr[ir]+icth)*dth+(icth2+0.5)*dth_sub));
+#endif //PIXTYPE
 		flouble sth=sqrt(1-cth*cth);
 		for(iphi2=0;iphi2<FAC_CART2SPH_NSUB;iphi2++) {
 		  int ax;

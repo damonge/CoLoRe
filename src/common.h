@@ -61,6 +61,14 @@
 #endif //_WITH_SHT
 #include "cosmo_mad.h"
 
+#define PT_CEA 0
+#define PT_CAR 1
+
+//Pixelization type
+#ifndef PIXTYPE
+#define PIXTYPE PT_CEA
+#endif //PIXTYPE
+
 //Resolution parameter for nearest onion shell
 #ifndef NSIDE_ONION_BASE
 #define NSIDE_ONION_BASE 2
