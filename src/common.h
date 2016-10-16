@@ -66,7 +66,7 @@
 
 //Pixelization type
 #ifndef PIXTYPE
-#define PIXTYPE PT_CEA
+#define PIXTYPE PT_CAR
 #endif //PIXTYPE
 
 //Resolution parameter for nearest onion shell

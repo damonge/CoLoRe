@@ -331,7 +331,7 @@ void get_sources(ParamCoLoRe *par)
   print_info("\n");
 }
 
-static int get_r_index(HealpixShells *sh,double r,int ir_start)
+static int get_r_index_imap(HealpixShells *sh,double r,int ir_start)
 {
   int gotit=0;
   int ir0;
@@ -480,7 +480,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 #elif PIXTYPE==PT_CAR
 	    double cth0=get_cosine(ind_cth+icth0+0.0,dth);
 	    double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
-	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
+	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_SUBVOL;
 #endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      int ip;
@@ -489,7 +489,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	      double dr_rsd=prefac_rsd*vrad_slice[ind_cth_t+ind_phi];
 	      for(ip=0;ip<N_SUBVOL;ip++) {
 		double r=r0+dr_rsd+dr*disp[3*ip+0];
-		irad=get_r_index(par->imap[ipop],r,irad);
+		irad=get_r_index_imap(par->imap[ipop],r,irad);
 		if((irad>=0) && (irad<par->imap[ipop]->nr)) {
 		  long pix_id;
 		  long irad_t=irad*par->imap[ipop]->num_pix;
@@ -552,8 +552,9 @@ void get_kappa(ParamCoLoRe *par)
 #pragma omp parallel default(none) \
   shared(par)
   {
-    int ir;
-    double inv_hpix_area=he_nside2npix(par->kmap->nside)/4*M_PI;
+    int ir,ipx;
+    double inv_hpix_area=he_nside2npix(par->kmap->nside)/(4*M_PI);
+    int *nparr=malloc(par->kmap->num_pix*sizeof(int));
 
     //Maybe OMP this
 #pragma omp for
@@ -572,6 +573,7 @@ void get_kappa(ParamCoLoRe *par)
 	irb=par->oi_beams[0]->nr-1;
 	print_info("Source plane %d is outside range\n",ir+1);
       }
+      memset(nparr,0,par->kmap->num_pix*sizeof(int));
 
       for(ib=0;ib<par->n_beams_here;ib++) {
 	int ind_cth;
@@ -598,7 +600,6 @@ void get_kappa(ParamCoLoRe *par)
 	  int nsub_perside=(int)(sqrt(dcth*dphi*inv_hpix_area)+1);
 	  double dcth_sub=dcth/nsub_perside;
 	  double dphi_sub=dphi/nsub_perside;
-	  double area_ratio=dcth_sub*dphi_sub*inv_hpix_area;
 	  for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	    int icth_sub;
 	    double phi0=(ind_phi+iphi0)*dphi;
@@ -614,13 +615,20 @@ void get_kappa(ParamCoLoRe *par)
 		long pix_id=par->kmap->listpix[ipix];
 		if(pix_id<0)
 		  report_error(1,"NOOO\n");
-		par->kmap->data[irad_t+pix_id]+=kappa*area_ratio;
+		par->kmap->data[irad_t+pix_id]+=kappa;
+		nparr[pix_id]++;
 	      }
 	    }
 	  }
 	}
       }
+
+      for(ipx=0;ipx<par->kmap->num_pix;ipx++) {
+      	if(nparr[ipx]>0)
+      	  par->kmap->data[irad_t+ipx]/=nparr[ipx];
+      }
     } //end omp for
+    free(nparr);
   } //end omp parallel
 
   if(NodeThis==0) timer(2);

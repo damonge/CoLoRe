@@ -67,7 +67,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
   par->grid_dumm=NULL;
-  par->sigma2_gauss=-1;
+  par->sigma2_gauss=0;
 
   par->do_lensing=0;
   par->nside_base=-1;
@@ -159,12 +159,9 @@ static void conf_read_double_array(config_t *conf,char *secname,char *varname,
     report_error(1,"Too many elements in %s (%d > %d)\n",fullpath,n_elem,nmax);
 
   *nel=n_elem;
-  //  printf("[ ");
   for(index=0;index<n_elem;index++) {
     out[index]=config_setting_get_float_elem(arr,index);
-    //    printf("%lE,",out[index]);
   }
-  //  printf("]\n");
 }
 
 static void conf_read_int(config_t *conf,char *secname,char *varname,int *out)
@@ -431,10 +428,12 @@ void write_imap(ParamCoLoRe *par)
 	}
 
 	//Collect all dummy maps
+#ifdef _HAVE_MPI
 	if(NodeThis==0)
 	  MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
 	else
 	  MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
 
 	//Write dummy map
 	if(NodeThis==0)
@@ -470,10 +469,12 @@ void write_kappa(ParamCoLoRe *par)
       }
 
       //Collect all dummy maps
+#ifdef _HAVE_MPI
       if(NodeThis==0)
 	MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
       else
 	MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
       
       //Write dummy map
       if(NodeThis==0)

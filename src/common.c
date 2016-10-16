@@ -272,13 +272,13 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
 static inline flouble get_res(int nside)
 {
 #if PIXTYPE == PT_CEA
-  //  return acos(1-2.0/nside);
-  return sqrt(2*M_PI)/nside;
+  return acos(1-2.0/nside);
 #elif PIXTYPE == PT_CAR
   return M_PI/nside;
 #else
   return acos(1-2.0/nside);
 #endif //PIXTYPE
+  //  return sqrt(2*M_PI)/nside;
 }
 
 static inline flouble get_lat_index(int nside,flouble cth)
@@ -286,7 +286,7 @@ static inline flouble get_lat_index(int nside,flouble cth)
 #if PIXTYPE == PT_CEA
   return 0.5*(cth+1)*nside;
 #elif PIXTYPE == PT_CAR
-  return (1-acos(cth)/M_PI)*nside;
+  return (1-acos(CLAMP(cth,-1,1))/M_PI)*nside;
 #else
   return 0.5*(cth+1)*nside;
 #endif //PIXTYPE
@@ -342,7 +342,7 @@ OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par)
     double rf=oi->rf_arr[ir];
     double rm=0.5*(r0+rf);
     long npix=2*oi->nside_arr[ir]*oi->nside_arr[ir];
-    flouble dr_trans=rm*sqrt(4*M_PI/npix);
+    flouble dr_trans=rm*get_res(oi->nside_arr[ir]);
     double dz_additional=dr_trans+dx;
     double z0_here=z0_node-dz_additional;
     double zf_here=zf_node+dz_additional;
