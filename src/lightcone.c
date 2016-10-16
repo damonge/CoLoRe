@@ -590,27 +590,39 @@ void get_kappa(ParamCoLoRe *par)
 	  int ind_phi;
 	  int ind_cth_t=ind_cth*nphi;
 #if PIXTYPE==PT_CEA
-	  double cth=get_cosine(ind_cth+icth0+0.5,dcth);
+	  double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
 #elif PIXTYPE==PT_CAR
-	  double cth=get_cosine(ind_cth+icth0+0.5,dth);
-	  double dcth=get_cosine(ind_cth+icth0+1.0,dth)-get_cosine(ind_cth+icth0+0.0,dth);
+	  double cth0=get_cosine(ind_cth+icth0+0.0,dth);
+	  double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
 #endif //PIXTYPE
-	  double area_ratio=dcth*dphi*inv_hpix_area;
+	  int nsub_perside=(int)(sqrt(dcth*dphi*inv_hpix_area)+1);
+	  double dcth_sub=dcth/nsub_perside;
+	  double dphi_sub=dphi/nsub_perside;
+	  double area_ratio=dcth_sub*dphi_sub*inv_hpix_area;
 	  for(ind_phi=0;ind_phi<nphi;ind_phi++) {
-	    double phi=(ind_phi+iphi0+0.5)*dphi;
+	    int icth_sub;
+	    double phi0=(ind_phi+iphi0)*dphi;
 	    double pxx=par->p_xx_beams[ib][irb][ind_cth_t+ind_phi];
 	    double pyy=par->p_yy_beams[ib][irb][ind_cth_t+ind_phi];
 	    double kappa=pxx+pyy;
-	    long ipix=he_ang2pix(par->kmap->nside,cth,phi);
-	    long pix_id=par->kmap->listpix[ipix];
-	    if(pix_id<0)
-	      report_error(1,"NOOO\n");
-	    par->kmap->data[irad_t+pix_id]+=kappa*area_ratio;
+	    for(icth_sub=0;icth_sub<nsub_perside;icth_sub++) {
+	      int iphi_sub;
+	      double cth=cth0+(icth_sub+0.5)*dcth_sub;
+	      for(iphi_sub=0;iphi_sub<nsub_perside;iphi_sub++) {
+		double phi=phi0+(iphi_sub+0.5)*dphi_sub;
+		long ipix=he_ang2pix(par->kmap->nside,cth,phi);
+		long pix_id=par->kmap->listpix[ipix];
+		if(pix_id<0)
+		  report_error(1,"NOOO\n");
+		par->kmap->data[irad_t+pix_id]+=kappa*area_ratio;
+	      }
+	    }
 	  }
 	}
       }
     } //end omp for
   } //end omp parallel
 
+  if(NodeThis==0) timer(2);
   printf("\n");
 }
