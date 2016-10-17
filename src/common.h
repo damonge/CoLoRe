@@ -166,6 +166,7 @@ typedef struct {
   flouble *r0; //r_min in this shell
   flouble *rf; //r_max in this shell
   flouble *data;
+  int *nadd;
 } HealpixShells;
 
 typedef struct {

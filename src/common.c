@@ -582,6 +582,7 @@ void free_hp_shell(HealpixShells *shell)
   free(shell->r0);
   free(shell->rf);
   free(shell->data);
+  free(shell->nadd);
 }
 
 HealpixShells *new_hp_shell(int nside,int nr)

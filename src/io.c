@@ -416,17 +416,21 @@ void write_imap(ParamCoLoRe *par)
       int ir;
       long npx=he_nside2npix(par->imap[i_pop]->nside);
       flouble *map_write=my_malloc(npx*sizeof(flouble));
+      //      int *map_nadd=my_malloc(npx*sizeof(int));
       for(ir=0;ir<par->imap[i_pop]->nr;ir++) {
 	long ip;
 	long ir_t=ir*par->imap[i_pop]->num_pix;
 
 	//Write local pixels to dummy map
 	memset(map_write,0,npx*sizeof(flouble));
+	//	memset(map_nadd,0,npx*sizeof(int));
 	sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,i_pop,ir);
 	for(ip=0;ip<npx;ip++) {
 	  int id_pix=par->imap[i_pop]->listpix[ip];
-	  if(id_pix>0)
+	  if(id_pix>0) {
 	    map_write[ip]+=par->imap[i_pop]->data[ir_t+id_pix];
+	    //	    map_nadd[ip]+=par->imap[i_pop]->nadd[ir_t+id_pix];
+	  }
 	}
 
 	//Collect all dummy maps
@@ -435,13 +439,23 @@ void write_imap(ParamCoLoRe *par)
 	  MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
 	else
 	  MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+	//	if(NodeThis==0)
+	//	  MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+	//	else
+	//	  MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
 
+	//	for(ip=0;ip<npx;ip++) {
+	//	  if(map_nadd[ip]>0)
+	//	    map_write[ip]/=map_nadd[ip];
+	//	}
+	//	
 	//Write dummy map
 	if(NodeThis==0)
 	  he_write_healpix_map(&map_write,1,par->imap[i_pop]->nside,fname);
       }
       free(map_write);
+      //      free(map_nadd);
     }
     if(NodeThis==0) timer(2);
     print_info("\n");
@@ -455,6 +469,7 @@ void write_kappa(ParamCoLoRe *par)
     char fname[256];
     long npx=he_nside2npix(par->nside_kappa);
     flouble *map_write=my_malloc(npx*sizeof(flouble));
+    int *map_nadd=my_malloc(npx*sizeof(int));
     if(NodeThis==0) timer(0);
     print_info("*** Writing kappa source maps\n");
     for(ir=0;ir<par->kmap->nr;ir++) {
@@ -463,11 +478,14 @@ void write_kappa(ParamCoLoRe *par)
       
       //Write local pixels to dummy map
       memset(map_write,0,npx*sizeof(flouble));
+      memset(map_nadd,0,npx*sizeof(int));
       sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
       for(ip=0;ip<npx;ip++) {
 	int id_pix=par->kmap->listpix[ip];
-	if(id_pix>0)
+	if(id_pix>0) {
 	  map_write[ip]+=par->kmap->data[ir_t+id_pix];
+	  map_nadd[ip]+=par->kmap->nadd[ir_t+id_pix];
+	}
       }
 
       //Collect all dummy maps
@@ -476,13 +494,23 @@ void write_kappa(ParamCoLoRe *par)
 	MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
       else
 	MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+      if(NodeThis==0)
+	MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+      else
+	MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
+
+      for(ip=0;ip<npx;ip++) {
+	if(map_nadd[ip]>0)
+	  map_write[ip]/=map_nadd[ip];
+      }
       
       //Write dummy map
       if(NodeThis==0)
 	he_write_healpix_map(&map_write,1,par->nside_kappa,fname);
     }
     free(map_write);
+    free(map_nadd);
     if(NodeThis==0) timer(2);
     print_info("\n");
   }

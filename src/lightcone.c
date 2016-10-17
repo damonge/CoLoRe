@@ -413,6 +413,7 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
   }
 
   shell->data=my_calloc(shell->nr*shell->num_pix,sizeof(flouble));
+  shell->nadd=my_calloc(shell->nr*shell->num_pix,sizeof(int));
 }
 
 #define N_SUBVOL 10
@@ -532,6 +533,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
       for(ipix=0;ipix<par->imap[ipop]->num_pix;ipix++) {
 	long index=ir_t+ipix;
 	par->imap[ipop]->data[index]*=i_pixel_vol;
+	par->imap[ipop]->nadd[index]=1;
       }
     }//end omp for
   } //end omp parallel
@@ -564,7 +566,6 @@ void get_kappa(ParamCoLoRe *par)
   {
     int ir,ipx;
     double inv_hpix_area=he_nside2npix(par->kmap->nside)/(4*M_PI);
-    int *nparr=malloc(par->kmap->num_pix*sizeof(int));
 
     //Maybe OMP this
 #ifdef _HAVE_OMP
@@ -585,7 +586,6 @@ void get_kappa(ParamCoLoRe *par)
 	irb=par->oi_beams[0]->nr-1;
 	print_info("Source plane %d is outside range\n",ir+1);
       }
-      memset(nparr,0,par->kmap->num_pix*sizeof(int));
 
       for(ib=0;ib<par->n_beams_here;ib++) {
 	int ind_cth;
@@ -628,19 +628,13 @@ void get_kappa(ParamCoLoRe *par)
 		if(pix_id<0)
 		  report_error(1,"NOOO %lE, %lE\n",cth,phi/M_PI);
 		par->kmap->data[irad_t+pix_id]+=kappa;
-		nparr[pix_id]++;
+		par->kmap->nadd[irad_t+pix_id]++;
 	      }
 	    }
 	  }
 	}
       }
-
-      for(ipx=0;ipx<par->kmap->num_pix;ipx++) {
-      	if(nparr[ipx]>0)
-      	  par->kmap->data[irad_t+ipx]/=nparr[ipx];
-      }
     } //end omp for
-    free(nparr);
   } //end omp parallel
 
   if(NodeThis==0) timer(2);
