@@ -46,6 +46,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->r_min=-1;
   par->r2_smooth=2.0;
   par->do_smoothing=1;
+  par->smooth_potential=0;
   par->numk=0;
   par->logkmax=1;
   par->logkmin=-3;
@@ -201,6 +202,7 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_string(conf,"global","prefix_out",par->prefixOut);
   conf_read_string(conf,"global","pk_filename",par->fnamePk);
   conf_read_double(conf,"global","r_smooth",&(par->r2_smooth));
+  conf_read_bool(conf,"global","smooth_potential",&(par->smooth_potential));
   conf_read_double(conf,"global","z_min",&(par->z_min));
   conf_read_double(conf,"global","z_max",&(par->z_max));
   conf_read_int(conf,"global","n_grid",&(par->n_grid));

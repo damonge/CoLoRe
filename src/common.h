@@ -185,6 +185,7 @@ typedef struct {
   double r_max; //Maximum radial comoving distance
   double r_min; //Minimum radial comoving distance
   double r2_smooth; //Square of the smoothing scale
+  int smooth_potential; //Do we smooth the newtonian potential as well?
   int do_smoothing; //Are we smoothing the density field?
 
 #ifdef _DEBUG

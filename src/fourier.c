@@ -309,8 +309,10 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
 	    par->grid_npot_f[index]=factor_p*par->grid_dens_f[index]/k_mod2;
 	    if(par->do_smoothing) {
-	      par->grid_dens_f[index]*=exp(-0.5*par->r2_smooth*k_mod2);
-	      par->grid_npot_f[index]*=exp(-0.5*par->r2_smooth*k_mod2);
+	      double sm=exp(-0.5*par->r2_smooth*k_mod2);
+	      par->grid_dens_f[index]*=sm;
+	      if(par->smooth_potential)
+		par->grid_npot_f[index]*=sm;
 	    }
 	  }
 	}
