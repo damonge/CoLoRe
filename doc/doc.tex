@@ -1,0 +1,262 @@
+\documentclass[a4paper,10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{fullpage}
+
+%opening
+\title{Fast lognormal realizations for multi-probe experiments}
+\author{David Alonso}
+
+\begin{document}
+
+\maketitle
+
+\section{Notation}
+$\chi$ is comoving radial density. We use units $c=1$ throughout.
+
+\section{Algorithm}
+  \begin{itemize}
+    \item Generate a Gaussian realization of the linear density field
+      $\delta_G$ and the newtonian potential $\phi$ at $z=0$. For
+      this we use FFTW in a box able to hold a sufficiently large
+      sphere. In what follows, let $dx$ be the comoving resolution 
+      used for this.
+    \item Interpolate cartesian grid into spherical shells. These
+      are generated with a width $dr=dx$. The pixels are defined
+      using a CEA scheme (cylindrical equal area), with constant
+      intervals in $\phi$ and $\mu\equiv \cos\theta$.
+
+      Let $N_\mu$ be the number of divisions used in $\mu$. Firstly,
+      we will use $2\times N_\mu$ divisions in $\phi$. Secondly,
+      the largest transverse scale covered by each pixel is given by
+      \begin{equation}
+        \Delta d_{\rm max} = \chi\,{\rm arccos}(1-2/N_\mu),
+      \end{equation}
+      where $\chi$ is the comoving distance to the shell.
+      We determine $N_\mu$ by trying to achieve $\Delta d_{\rm max}=dx$,
+      which implies $N_\mu={\rm ceiling}(2/[1-\cos(dx/\chi)])$.
+    \item While doing the interpolation we compute the relevant
+      quantities at $z=0$ that will be used later. These are the radial
+      velocity, $v_r$, proportional to the radial gradient of $\phi$, and
+      the transverse tidal field, given by the angular second derivatives
+      of $\phi$. These two objects are needed for the computation of RSDs
+      and lensing. We compute these quantities by differentiating through
+      finite differences in the Cartesian grid, rotating and interpolating
+      into the spherical shells (in this order).
+    \item These fields are then evolved in the lightcone in different
+      ways (see details below). Galaxies are Poisson-sampled according
+      to the evolved, bias and lognormalized value of the density 
+      field, and are assigned redshift and shape distortions according
+      to the evolved velocity and lightcone-integrated transverse tidal
+      field.
+  \end{itemize}
+
+\section{Relevant equations}
+  \begin{align}
+    &\phi_{\bf k}(z=0)=-\frac{3}{2}\Omega_MH_0^2
+    \frac{\delta_{\bf k}(z=0)}{k^2},\hspace{12pt}
+    v_r(z=0)=-\frac{2\,f_0}{3\,H_0\Omega_M}\hat{\bf n}\cdot\nabla\phi(z=0)\\
+    &\delta(z)=D(z)\,\delta(z=0),\hspace{12pt}
+    v_r(z)=\frac{D(z)f(z)H(z)}{f_0H_0}v_r(z=0),\hspace{12pt}
+    \phi(z)=(1+z)D(z)\phi(z=0)
+  \end{align}
+
+\section{Sources}
+  At each pixel, we compute the physical galaxy density for each galaxy
+  type $i$ as
+  \begin{equation}
+    n_i(\chi,\hat{\bf n})=
+    \bar{n}_i(\chi)\,
+    \exp\left[D(\chi)b_i(\chi)\left(\delta_G(\chi,\hat{\bf n})-
+      D(\chi)b_i(\chi)\sigma_G^2/2\right)\right],
+  \end{equation}
+  where $\bar{n}_i$ is the mean number density of galaxies, and $\sigma_G^2$
+  is the variance of the density field at $z=0$. $\bar{n}$ is related to
+  $dn/(d\Omega dz)$ as $dn/(d\Omega dz)=\bar{n}\,\chi^2/H$.
+
+  Then, at each pixel we sample a number of galaxies from a Poisson distribution with mean
+  $\lambda\equiv V_{\rm pix}n_i$, where $V_{\rm pix}$ is the comoving volume of each
+  spherical voxel. We then place the resulting number of particles inside each voxel at
+  random within it. Each galaxy is given a cosmological redshift corresponding $z_c$
+  corresponding to its comoving distance by inverting
+  \begin{equation}
+    \chi=\int_0^{z_c}\frac{dz}{H(z)}.
+  \end{equation}
+  In addition, each galaxy is given a redshift distortion $\Delta z=v_r$ according to the
+  value of the comoving velocity field in their corresponding voxel.
+
+\section{Intensity mapping}
+  The brightness temperature for a line-emitting species $a$ in a voxel $i$ is
+  \begin{equation}
+    T_a(\nu,\hat{\bf n})=\bar{T}_a(\nu)\left[1+\Delta^a_i(\chi\hat{\bf n})\right].
+  \end{equation}
+  where the mean brightness temperature is
+  \begin{equation}
+    \bar{T}_a(z)=\frac{3\hbar A_{21} x_2 c^2}{32\pi G k_B m_a \nu_{21}^2}
+    \frac{H_0^2\Omega_{a}(z)(1+z)^2}{H(z)}
+  \end{equation}
+  and $\Delta^a_i$ is the redshift-space overdensity of the line-emitting species
+  smoothed over the voxel. Here $x_2$ is the fraction of atoms in the excited state,
+  $\Omega_a$ is the fractional density of the species, $\nu_{21}$ is the rest-frame
+  frequency of the transition and $A_{21}$ is the corresponding Einstein coefficient
+  for emission.
+
+  The procedure to generate intensity maps is:
+  \begin{itemize}
+    \item We cycle over each voxel in the spherical shells for which we have stored
+      the value of the density and velocity fields.
+    \item We compute the overdensity in the voxel using a log-normal model:
+      \begin{equation}
+        1+\delta^a_i=
+        \exp\left[D(\chi)b_a(\chi)\left(\delta_G(\chi,\hat{\bf n})-
+          D(\chi)b_a(\chi)\sigma_G^2/2\right)\right].
+      \end{equation}
+    \item We sub-sample the voxel in $N_{\rm sub}$ random points. Each point is
+      assigned a brightness temperature
+      \begin{equation}
+        T_{a,{\rm sub}}=\bar{T_a}(\nu)\,(1+\delta^a_i)\frac{v_{\rm vox}}{N_{\rm sub}},
+      \end{equation}
+      where $v_{\rm vox}$ is the comoving volume of the voxel, as well as a redshift
+      displacement given by $v_r$, the value of the lightcone-evolved radial velocity
+      field in the voxel.
+    \item We compute the frequency channel corresponding to each point from their
+      redshift (computed as the sum of its cosmological redshift and the RSD term),
+      as well as the pixel index in that frequency channel corresponding to the
+      angular coordinates of the point. We then add the brightness temperature of
+      this point computed in the previous step to the total brightness temperature
+      in the pixel.
+    \item Each intensity mapping pixel is finally divided by the total comoving
+      volume covered by the pixel.
+  \end{itemize}
+  
+\section{Shear}
+  We compute the shear tensor as
+  \begin{align}
+    &\hat{T}\equiv\left(
+    \begin{array}{ccc}
+      \phi_{xx}&\phi_{xy}&\phi_{xz}\\
+      \phi_{yx}&\phi_{yy}&\phi_{yz}\\
+      \phi_{zx}&\phi_{zy}&\phi_{zz}\\
+    \end{array}\right),\hspace{12pt} 
+    \hat{R}\equiv\left(
+    \begin{array}{ccc}
+      \sin\theta\,\cos\phi&\sin\theta\,\sin\phi&\cos\theta\\
+      \cos\theta\,\cos\phi&\cos\theta\,\sin\phi&-\sin\theta\\
+      -\sin\phi           &\cos\phi            &0\\
+    \end{array}\right),\\
+    &\hat{t}\equiv \hat{R}\cdot\hat{T}\cdot\hat{R}^T,\hspace{12pt}
+    \hat{\tau}\equiv\left(
+    \begin{array}{cc}
+      t_{11}&t_{12}\\
+      t_{21}&t_{22}
+    \end{array}\right),\\
+    &\hat{\Gamma}(\chi,\hat{\bf n})
+    \equiv\int_0^\chi d\chi'\,\hat{\tau}(\chi'\hat{\bf n})\,
+    \chi'\left(1-\frac{\chi'}{\chi}\right)=
+    \int_0^\chi d\chi'\,\hat{\tau}(\chi'\hat{\bf n})\,\chi'-
+    \frac{1}{\chi}\int_0^\chi d\chi'\,\hat{\tau}(\chi'\hat{\bf n})\,\chi'^2.\\
+    &\hat{\Gamma}(\chi_i)=\hat{I}_{i}-\frac{1}{\chi_{i+1/2}}\hat{J}_{i},\hspace{12pt}
+    \hat{I}_{i}=\hat{I}_{i-1}+\hat{\tau}(\chi_i)\frac{\chi_{i+1/2}^2-\chi_{i-1/2}^2}{2},\hspace{12pt}
+    \hat{J}_{i}=\hat{J}_{i-1}+\hat{\tau}(\chi_i)\frac{\chi_{i+1/2}^3-\chi_{i-1/2}^3}{3}
+  \end{align}
+
+\section{CMB lensing}
+  For $\kappa\equiv{\rm Tr}(\hat{\Gamma})/2$ we compute, from the simulation, $\kappa(\chi_{\rm max})$,
+  where $\chi_{\rm max}$ is the maximum radial distance that fits in the box. In order to get CMB
+  lensing we need $\kappa(\chi_{\rm LSS})=\tilde{\kappa}_{\rm max}+\Delta\kappa$, where
+  \begin{align}
+    \tilde{\kappa}_{\rm max}\equiv\int_0^{\chi_{\rm max}}   d\chi\delta(\chi)\frac{\chi}{2}\left(1-\frac{\chi}{\chi_{\rm LSS}}\right)\\
+    \Delta\kappa\equiv\int_{\chi_{\rm max}}^{\chi_{\rm LSS}}d\chi\delta(\chi)\frac{\chi}{2}\left(1-\frac{\chi}{\chi_{\rm LSS}}\right).
+  \end{align}
+  The strategy to compute these is:
+  \begin{itemize}
+    \item We compute $\tilde{\kappa}_{\rm max}$ from $\kappa(\chi_{\rm max})$ using the same
+      strategy used for shear, but taking care to divide by $\chi_{\rm LSS}$ instead of $\chi_{\rm max}$.
+    \item We compute $\Delta\kappa$ as a Gaussian realization constrained to have the right correlation
+      with $\tilde{\kappa}_{\rm max}$. Do do this we start by rewriting the previous equation as
+      \begin{align}
+        &\tilde{\kappa}_{\rm max}\equiv \int d\chi w_1(\chi)\delta(\chi\hat{\bf n}),\hspace{12pt}
+        \Delta \kappa           \equiv \int d\chi w_2(\chi)\delta(\chi\hat{\bf n}),\\
+        &w_1(\chi)\equiv\frac{\chi}{2}\left(1-\frac{\chi}{\chi_{\rm LSS}}\right)
+        \Theta(\chi,0,\chi_{\rm max}),\hspace{12pt}
+        w_2(\chi)\equiv\frac{\chi}{2}\left(1-\frac{\chi}{\chi_{\rm LSS}}\right)
+        \Theta(\chi,\chi_{\rm max},\chi_{\rm LSS}).
+      \end{align}
+      where $\Theta(x,x_0,x_f)$ is a top-hat function.
+
+      The covariance matrix of the two terms is therefore
+      \begin{align}
+        &\langle|\tilde{\kappa}_{{\rm max},\ell m}|^2\rangle=\frac{2}{\pi}\int_0^\infty dk\,k^2\,P(k)\,w^2_{1,\ell}(k),\hspace{12pt}
+        \langle|\Delta\kappa_{\ell m}|^2\rangle=\frac{2}{\pi}\int_0^\infty dk\,k^2\,P(k)\,w^2_{2,\ell}(k)\\
+        &\langle{\rm Re}(\tilde{\kappa}_{{\rm max},\ell m}\Delta\kappa_{\ell m})\rangle=
+        \frac{2}{\pi}\int_0^\infty dk\,k^2\,P(k)\,w_{1,\ell}(k)\,w_{2,\ell}(k),\hspace{12pt}
+        w_{i,\ell}(k)\equiv\int_0^\infty d\chi\,w_i(\chi)\,j_\ell(k\chi)
+      \end{align}
+
+      Thus we generate a realization of $\Delta\kappa$ at each multipole order as a Gaussian number
+      with distribution $\mathcal{N}(\mu,\sigma)$, where
+      \begin{align}
+        \mu=\frac{\langle{\rm Re}(\tilde{\kappa}_{{\rm max},\ell m}\Delta\kappa_{\ell m})\rangle}
+        {\langle|\tilde{\kappa}_{{\rm max},\ell m}|^2\rangle}\tilde{\kappa}_{{\rm max},\ell m},\hspace{12pt}
+        \sigma=\langle|\Delta\kappa_{\ell m}|^2\rangle-\frac{\langle{\rm Re}(\tilde{\kappa}_{{\rm max},\ell m}\Delta\kappa_{\ell m})\rangle^2}{\langle|\tilde{\kappa}_{{\rm max},\ell m}|^2\rangle}
+      \end{align}
+  \end{itemize}
+
+\section{Full-sky expressions}
+The angular power spectrum between two contributions is:
+\begin{equation}
+ C^{ij}_\ell=4\pi\int_0^\infty \frac{dk}{k}\,\mathcal{P}_\Phi(k)\Delta^i_\ell(k)\Delta^j_\ell(k).
+\end{equation}
+The expressions for density, RSD, magnification, lensing convergence and CMB lensing are:
+\begin{align}
+  &\Delta_\ell^D(k)=\int dz p_z(z) b(z) T_\delta(k,z) j_\ell(k\chi(z))\\
+  &\Delta_\ell^{RSD}(k)=\int dz \frac{(1+z) p_z(z)}{H(z)}T_\theta(k,z) j_\ell''(k\chi(z))\\
+  &\Delta_\ell^M(k)=-\ell(\ell+1)\int \frac{dz}{H(z)} W^M(z) T_{\phi+\psi}(k,z) j_\ell(k\chi(z)), \\ 
+  &\Delta_\ell^L(k)=-\frac{\ell(\ell+1)}{2}\int \frac{dz}{H(z)} W^L(z) T_{\phi+\psi}(k,z) j_\ell(k\chi(z)),  \\
+  &\Delta_\ell^C(k)=\frac{\ell(\ell+1)}{2}\int_0^{\chi_*}d\chi
+  \frac{\chi_*-\chi}{\chi\chi_*} T_{\phi+\psi}(k,z) j_\ell(k\chi),  
+\end{align}
+where
+\begin{align}
+ &W^M(z)\equiv\int_z^\infty dz' p_z(z')\frac{2-5s(z')}{2}\frac{\chi(z')-\chi(z)}{\chi(z')}\\
+ &W^L(z)\equiv\int_z^\infty dz' p_z(z')\frac{\chi(z')-\chi(z)}{\chi(z')}
+\end{align}
+
+\section{Limber approximation}
+The Limber approximation is
+\begin{equation}
+ j_\ell(x)\simeq\sqrt{\frac{\pi}{2\ell+1}}\,\delta\left(\ell+\frac{1}{2}-x\right).
+\end{equation}
+Thus for each $k$ and $\ell$ we can define a radial distance $\chi_\ell\equiv(\ell+1/2)/k$
+
+
+\section{Expressions in the Limber approximation}
+The expressions above can be written as follows in the Limber approximation. First, the power spectrum
+can be rewritten as
+\begin{equation}
+ C^{ij}_\ell=\frac{2}{2\ell+1}\int_0^\infty dk\,P_\delta\left(k,z=0\right)
+ \tilde{\Delta}^i_\ell(k)\tilde{\Delta}^j_\ell(k).
+\end{equation}
+where
+\begin{align}
+ &\tilde{\Delta}_\ell^D(k)=p_z(\chi_\ell)\,b(\chi_\ell)\,D(\chi_\ell)\,H(\chi_\ell)\\
+ &\tilde{\Delta}_\ell^{RSD}(k)=
+ \frac{1+8\ell}{(2\ell+1)^2}\,p_z(\chi_\ell)\,f(\chi_\ell)\,D(\chi_\ell)\,H(\chi_\ell)
+ -\frac{4}{2\ell+3}\sqrt{\frac{2\ell+1}{2\ell+3}}p_z(\chi_{\ell+1})\,f(\chi_{\ell+1})\,D(\chi_{\ell+1})\,H(\chi_{\ell+1})
+\longrightarrow0\\
+ &\tilde{\Delta}^{ISW}_\ell(k)=
+ \frac{3\Omega_{M,0}H_0^2}{k^2}H(\chi_\ell)g(\chi_\ell)\left[1-f(\chi_\ell)\right]\\
+ &\tilde{\Delta}_\ell^M(k)=3\Omega_{M,0}H_0^2\frac{\ell(\ell+1)}{k^2}\,
+ \frac{D(\chi_\ell)}{a(\chi_\ell)\chi_\ell}W^M(\chi_\ell)\longrightarrow
+ 3\Omega_{M,0}H_0^2\,\frac{\chi_\ell D(\chi_\ell)}{a(\chi_\ell)}W^M(\chi_\ell)\\
+ &\tilde{\Delta}_\ell^L(k)=\frac{3}{2}\Omega_{M,0}H_0^2\sqrt{\frac{(\ell+2)!}{(\ell-2)}}\frac{1}{k^2}\,
+ \frac{D(\chi_\ell)}{a(\chi_\ell)\chi_\ell}W^M(\chi_\ell)\longrightarrow
+ \frac{3}{2}\Omega_{M,0}H_0^2\,\frac{\chi_\ell D(\chi_\ell)}{a(\chi_\ell)}W^M(\chi_\ell)\\
+ &\tilde{\Delta}_\ell^C(k)=\frac{3}{2}\Omega_{M,0}H_0^2\frac{\ell(\ell+1)}{k^2}\,
+ \frac{D(\chi_\ell)}{a(\chi_\ell)\chi_\ell}\frac{\chi_*-\chi_\ell}{\chi_*}\Theta(\chi_\ell-\chi_*)\longrightarrow
+ \frac{3}{2}\Omega_{M,0}H_0^2\,\frac{\chi_\ell D(\chi_\ell)}{a(\chi_\ell)}\frac{\chi_*-\chi_\ell}{\chi_*}\Theta(\chi_\ell-\chi_*)
+\end{align}
+
+
+
+\end{document}

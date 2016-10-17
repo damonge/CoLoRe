@@ -21,6 +21,15 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
+static inline double get_cosine(double index,double dx)
+{
+#if PIXTYPE==PT_CEA
+  return index*dx-1;
+#elif PIXTYPE==PT_CAR
+  return cos(M_PI-index*dx);
+#endif //PIXTYPE
+}
+
 static void get_sources_single(ParamCoLoRe *par,int ipop)
 {
   //////
@@ -51,7 +60,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 #else //_HAVE_OMP
     int ithr=0;
 #endif //_HAVE_OMP
-    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_gals*IThread0);
+    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_srcs*IThread0);
     gsl_rng *rng_thr=init_rng(seed_thr);
 
 #ifdef _HAVE_OMP
@@ -62,14 +71,18 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       double rf=par->oi_beams[0]->rf_arr[ir];
       double rm=(rf+r0)*0.5;
       double redshift=z_of_r(par,rm);
-      double ndens=ndens_of_z_gals(par,redshift,ipop);
+      double ndens=ndens_of_z_srcs(par,redshift,ipop);
       if(ndens>0) {
 	int ib;
 	int nside=par->oi_beams[0]->nside_arr[ir];
-	double dcth=2./nside;
 	double dphi=M_PI/nside;
+#if PIXTYPE==PT_CEA
+	double dcth=2./nside;
 	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
-	double bias=bias_of_z_gals(par,redshift,ipop);
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
+	double bias=bias_of_z_srcs(par,redshift,ipop);
 	double gfb=dgrowth_of_r(par,rm)*bias;
 	for(ib=0;ib<par->n_beams_here;ib++) {
 	  int ind_cth;
@@ -80,6 +93,11 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
+#if PIXTYPE==PT_CAR
+	    double dcth=get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+1.0,dth)-
+	      get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+0.0,dth);
+	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
+#endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      double lambda=ndens*cell_vol*exp(gfb*(dens_slice[ind_cth_t+ind_phi]-0.5*gfb*par->sigma2_gauss));
 	      int npp=rng_poisson(lambda,rng_thr);
@@ -119,7 +137,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
   
-  par->gals[ipop]=my_malloc(par->nsources_this[ipop]*sizeof(Gal));
+  par->srcs[ipop]=my_malloc(par->nsources_this[ipop]*sizeof(Src));
 
   if(NodeThis==0) timer(0);
   print_info("   Assigning coordinates\n");
@@ -134,7 +152,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 #else //_HAVE_OMP
     int ithr=0;
 #endif //_HAVE_OMP
-    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_gals*IThread0);
+    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_srcs*IThread0);
     gsl_rng *rng_thr=init_rng(seed_thr);
 
 #ifdef _HAVE_OMP
@@ -146,11 +164,15 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       double dr=rf-r0;
       double rm=r0+0.5*dr;
       double redshift=z_of_r(par,rm);
-      double ndens=ndens_of_z_gals(par,redshift,ipop);
+      double ndens=ndens_of_z_srcs(par,redshift,ipop);
       if(ndens>0) {
 	int ib;
 	int nside=par->oi_beams[0]->nside_arr[ir];
+#if PIXTYPE==PT_CEA
 	double dcth=2./nside;
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
 	double dphi=M_PI/nside;
 	double vg=vgrowth_of_r(par,rm);
 	for(ib=0;ib<par->n_beams_here;ib++) {
@@ -164,14 +186,19 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
-	    double cth0=(ind_cth+icth0)*dcth-1;
+#if PIXTYPE==PT_CEA
+	    double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
+#elif PIXTYPE==PT_CAR
+	    double cth0=get_cosine(ind_cth+icth0+0.0,dth);
+	    double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
+#endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      int ip;
 	      double e1=0,e2=0;
 	      double phi0=(ind_phi+iphi0)*dphi;
 	      int npp=nsrc_slice[ind_cth_t+ind_phi];
 	      double dz_rsd=vg*vrad_slice[ind_cth_t+ind_phi];
-	      if(par->shear_gals[ipop]) {
+	      if(par->shear_srcs[ipop]) {
 		double pxx=par->p_xx_beams[ib][ir][ind_cth_t+ind_phi];
 		double pxy=par->p_xy_beams[ib][ir][ind_cth_t+ind_phi];
 		double pyy=par->p_yy_beams[ib][ir][ind_cth_t+ind_phi];
@@ -191,12 +218,12 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 		double phi=phi0+dphi*rng_01(rng_thr);
 		double r=r0+dr*rng_01(rng_thr); //TODO: this is not completely correct
 		lint pid=np_tot_thr[ithr];
-		par->gals[ipop][pid].ra=RTOD*phi;
-		par->gals[ipop][pid].dec=90-RTOD*acos(cth);
-		par->gals[ipop][pid].z0=z_of_r(par,r);
-		par->gals[ipop][pid].dz_rsd=dz_rsd;
-		par->gals[ipop][pid].e1=e1;
-		par->gals[ipop][pid].e2=e2;
+		par->srcs[ipop][pid].ra=RTOD*phi;
+		par->srcs[ipop][pid].dec=90-RTOD*acos(cth);
+		par->srcs[ipop][pid].z0=z_of_r(par,r);
+		par->srcs[ipop][pid].dz_rsd=dz_rsd;
+		par->srcs[ipop][pid].e1=e1;
+		par->srcs[ipop][pid].e2=e2;
 		np_tot_thr[ithr]++;
 	      }
 	    }
@@ -214,12 +241,12 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 //////
 // Integrates the Newtonian potential along the line of sight
 // with the lensing kernel.
-static void integrate_lensing(ParamCoLoRe *par)
+void integrate_lensing(ParamCoLoRe *par)
 {
   int ib;
 
 #ifdef _DEBUG
-  print_info("Integrating lensing\n");
+  print_info("*** Integrating lensing\n");
   if(NodeThis==0) timer(0);
 #endif //_DEBUG
   for(ib=0;ib<par->n_beams_here;ib++) {
@@ -249,6 +276,8 @@ static void integrate_lensing(ParamCoLoRe *par)
       double rm=0.5*(r0+rf),dr=rf-r0;
       double redshift=z_of_r(par,rm);
       double g_phi=dgrowth_of_r(par,rm)*(1+redshift);
+      //      double integ1=g_phi*0.5*(rf*rf-r0*r0);
+      //      double integ2=g_phi*(rf*rf*rf-r0*r0*r0)/3;
       double integ1=g_phi*rm*dr;
       double integ2=g_phi*rm*rm*dr;
       if(ncth*nphi!=par->oi_beams[ib]->num_pix[ir])
@@ -296,16 +325,13 @@ void get_sources(ParamCoLoRe *par)
   int ipop;
 
   //First, compute lensing Hessian
-  if(par->do_lensing)
-    integrate_lensing(par);
-
   print_info("*** Getting point sources\n");
-  for(ipop=0;ipop<par->n_gals;ipop++)
+  for(ipop=0;ipop<par->n_srcs;ipop++)
     get_sources_single(par,ipop);
   print_info("\n");
 }
 
-static int get_r_index(HealpixShells *sh,double r,int ir_start)
+static int get_r_index_imap(HealpixShells *sh,double r,int ir_start)
 {
   int gotit=0;
   int ir0;
@@ -356,8 +382,13 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
     for(ib=0;ib<par->n_beams_here;ib++) {
       OnionInfo *beam=par->oi_beams[ib];
       double cth0_b,cthf_b,phi0_b,phif_b;
-      cth0_b=-1+beam->icth0_arr[0]*2./beam->nside_arr[0];
-      cthf_b=-1+(beam->icthf_arr[0]+1)*2./beam->nside_arr[0];
+#if PIXTYPE==PT_CEA
+      cth0_b=get_cosine(beam->icth0_arr[0]+0.0,2./beam->nside_arr[0]);
+      cthf_b=get_cosine(beam->icth0_arr[0]+1.0,2./beam->nside_arr[0]);
+#elif PIXTYPE==PT_CAR
+      cth0_b=get_cosine(beam->icth0_arr[0]+0.0,M_PI/beam->nside_arr[0]);
+      cthf_b=get_cosine(beam->icth0_arr[0]+1.0,M_PI/beam->nside_arr[0]);
+#endif //PIXTYPE
       phi0_b=beam->iphi0_arr[0]*M_PI/beam->nside_arr[0];
       phif_b=(beam->iphif_arr[0]+1)*M_PI/beam->nside_arr[0];
       if(((cth0<=cthf_b)&&(cth0>=cth0_b)) || ((cthf<=cthf_b)&&(cthf>=cth0_b))) { //cth in range
@@ -423,9 +454,13 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	int ib;
 	int irad=0;
 	int nside=par->oi_beams[0]->nside_arr[ir];
-	double dcth=2./nside;
 	double dphi=M_PI/nside;
+#if PIXTYPE==PT_CEA
+	double dcth=2./nside;
 	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_SUBVOL;
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
 	double bias=bias_of_z_imap(par,redshift,ipop);
 	double gfb=dgrowth_of_r(par,rm)*bias;
 	double prefac_rsd=ihub_of_r(par,rm)*vgrowth_of_r(par,rm);
@@ -440,7 +475,13 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
 	    int ind_phi;
 	    int ind_cth_t=ind_cth*nphi;
-	    double cth0=(ind_cth+icth0)*dcth-1;
+#if PIXTYPE==PT_CEA
+	    double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
+#elif PIXTYPE==PT_CAR
+	    double cth0=get_cosine(ind_cth+icth0+0.0,dth);
+	    double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
+	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_SUBVOL;
+#endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      int ip;
 	      double phi0=(ind_phi+iphi0)*dphi;
@@ -448,7 +489,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	      double dr_rsd=prefac_rsd*vrad_slice[ind_cth_t+ind_phi];
 	      for(ip=0;ip<N_SUBVOL;ip++) {
 		double r=r0+dr_rsd+dr*disp[3*ip+0];
-		irad=get_r_index(par->imap[ipop],r,irad);
+		irad=get_r_index_imap(par->imap[ipop],r,irad);
 		if((irad>=0) && (irad<par->imap[ipop]->nr)) {
 		  long pix_id;
 		  long irad_t=irad*par->imap[ipop]->num_pix;
@@ -499,4 +540,97 @@ void get_imap(ParamCoLoRe *par)
   for(ipop=0;ipop<par->n_imap;ipop++)
     get_imap_single(par,ipop);
   print_info("\n");
+}
+
+void get_kappa(ParamCoLoRe *par)
+{
+
+  print_info("*** Getting kappa maps\n");
+  if(NodeThis==0) timer(0);
+  find_shell_pixels(par,par->kmap);
+
+#pragma omp parallel default(none) \
+  shared(par)
+  {
+    int ir,ipx;
+    double inv_hpix_area=he_nside2npix(par->kmap->nside)/(4*M_PI);
+    int *nparr=malloc(par->kmap->num_pix*sizeof(int));
+
+    //Maybe OMP this
+#pragma omp for
+    for(ir=0;ir<par->n_kappa;ir++) {
+      int ib,irb=0;
+      double r=par->kmap->r0[ir];
+      long irad_t=ir*par->kmap->num_pix;
+      while(irb<par->oi_beams[0]->nr) {
+	if((r>=par->oi_beams[0]->r0_arr[irb]) &&
+	   (r<=par->oi_beams[0]->rf_arr[irb]))
+	  break;
+	else
+	  irb++;
+      }
+      if(irb>=par->oi_beams[0]->nr) {
+	irb=par->oi_beams[0]->nr-1;
+	print_info("Source plane %d is outside range\n",ir+1);
+      }
+      memset(nparr,0,par->kmap->num_pix*sizeof(int));
+
+      for(ib=0;ib<par->n_beams_here;ib++) {
+	int ind_cth;
+	int icth0=par->oi_beams[ib]->icth0_arr[irb];
+	int iphi0=par->oi_beams[ib]->iphi0_arr[irb];
+	int ncth=par->oi_beams[ib]->icthf_arr[irb]-par->oi_beams[ib]->icth0_arr[irb]+1;
+	int nphi=par->oi_beams[ib]->iphif_arr[irb]-par->oi_beams[ib]->iphi0_arr[irb]+1;
+	int nside=par->oi_beams[ib]->nside_arr[irb];
+	double dphi=M_PI/nside;
+#if PIXTYPE==PT_CEA
+	double dcth=2./nside;
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
+	for(ind_cth=0;ind_cth<ncth;ind_cth++) {
+	  int ind_phi;
+	  int ind_cth_t=ind_cth*nphi;
+#if PIXTYPE==PT_CEA
+	  double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
+#elif PIXTYPE==PT_CAR
+	  double cth0=get_cosine(ind_cth+icth0+0.0,dth);
+	  double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
+#endif //PIXTYPE
+	  int nsub_perside=(int)(sqrt(dcth*dphi*inv_hpix_area)+1);
+	  double dcth_sub=dcth/nsub_perside;
+	  double dphi_sub=dphi/nsub_perside;
+	  for(ind_phi=0;ind_phi<nphi;ind_phi++) {
+	    int icth_sub;
+	    double phi0=(ind_phi+iphi0)*dphi;
+	    double pxx=par->p_xx_beams[ib][irb][ind_cth_t+ind_phi];
+	    double pyy=par->p_yy_beams[ib][irb][ind_cth_t+ind_phi];
+	    double kappa=pxx+pyy;
+	    for(icth_sub=0;icth_sub<nsub_perside;icth_sub++) {
+	      int iphi_sub;
+	      double cth=cth0+(icth_sub+0.5)*dcth_sub;
+	      for(iphi_sub=0;iphi_sub<nsub_perside;iphi_sub++) {
+		double phi=phi0+(iphi_sub+0.5)*dphi_sub;
+		long ipix=he_ang2pix(par->kmap->nside,cth,phi);
+		long pix_id=par->kmap->listpix[ipix];
+		if(pix_id<0)
+		  report_error(1,"NOOO\n");
+		par->kmap->data[irad_t+pix_id]+=kappa;
+		nparr[pix_id]++;
+	      }
+	    }
+	  }
+	}
+      }
+
+      for(ipx=0;ipx<par->kmap->num_pix;ipx++) {
+      	if(nparr[ipx]>0)
+      	  par->kmap->data[irad_t+ipx]/=nparr[ipx];
+      }
+    } //end omp for
+    free(nparr);
+  } //end omp parallel
+
+  if(NodeThis==0) timer(2);
+  printf("\n");
 }

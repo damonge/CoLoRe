@@ -51,27 +51,38 @@ int main(int argc,char **argv)
   //Interpolate into beams
   pixelize(par);
 
+  //Precompute lensing if needed
+  if(par->do_lensing)
+    integrate_lensing(par);
+
   //Poisson-sample the galaxies
-  if(par->do_gals)
+  if(par->do_sources)
     get_sources(par);
 
   //Generate intensity maps
   if(par->do_imap)
     get_imap(par);
 
+  //Generate kappa maps
+  if(par->do_kappa)
+    get_kappa(par);
+
   //Write output
-  if(par->do_gals)
+  if(par->do_sources)
     write_catalog(par);
   if(par->do_imap)
     write_imap(par);
+  if(par->do_kappa)
+    write_kappa(par);
   if(par->do_pred)
     write_predictions(par);
-  
+
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
 
   param_colore_free(par);
 
+  if(NodeThis==0) timer(5);
 #ifdef _HAVE_MPI
   MPI_Finalize();
 #endif //_HAVE_MPI

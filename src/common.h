@@ -61,6 +61,14 @@
 #endif //_WITH_SHT
 #include "cosmo_mad.h"
 
+#define PT_CEA 0
+#define PT_CAR 1
+
+//Pixelization type
+#ifndef PIXTYPE
+#define PIXTYPE PT_CAR
+#endif //PIXTYPE
+
 //Resolution parameter for nearest onion shell
 #ifndef NSIDE_ONION_BASE
 #define NSIDE_ONION_BASE 2
@@ -136,7 +144,7 @@ typedef struct {
   float dz_rsd; //RSD contribution
   float e1;
   float e2;
-} Gal;
+} Src;
 
 typedef struct {
   int nr;
@@ -151,115 +159,123 @@ typedef struct {
 } OnionInfo;
 
 typedef struct {
-  int nside;
+  int nside; //Resolution parameter
   long num_pix;
   long *listpix;
-  int nr;
-  flouble *r0;
-  flouble *rf;
+  int nr; //Number of spherical shells
+  flouble *r0; //r_min in this shell
+  flouble *rf; //r_max in this shell
   flouble *data;
 } HealpixShells;
 
 typedef struct {
-  char fnamePk[256];
-  double OmegaM;
-  double OmegaL;
-  double OmegaB;
-  double hhub;
-  double weos;
-  double n_scal;
-  double sig8;
+  char fnamePk[256]; //File containing power spectrum
+  double OmegaM; //Cosmological parameters
+  double OmegaL; //Cosmological parameters
+  double OmegaB; //Cosmological parameters
+  double hhub; //Cosmological parameters
+  double weos; //Cosmological parameters
+  double n_scal; //Cosmological parameters
+  double sig8; //Cosmological parameters
   //Derived parameters
-  double fgrowth_0;
-  double hubble_0;
-  double z_max;
-  double z_min;
-  double r_max;
-  double r_min;
-  double r2_smooth;
-  int do_smoothing;
+  double fgrowth_0; //Growth rate at z=0
+  double hubble_0; //Expansion rate at z=0 (inverse length units)
+  double z_max; //Maximum redshift
+  double z_min; //Minimum redshift
+  double r_max; //Maximum radial comoving distance
+  double r_min; //Minimum radial comoving distance
+  double r2_smooth; //Square of the smoothing scale
+  int smooth_potential; //Do we smooth the newtonian potential as well?
+  int do_smoothing; //Are we smoothing the density field?
 
 #ifdef _DEBUG
-  FILE *f_dbg;
+  FILE *f_dbg; //File into which all debug info is written
 #endif //_DEBUG
 
   //Only used in common.c
-  int numk;
-  double logkmax;
-  double logkmin;
-  double idlogk;
-  double *logkarr;
-  double *pkarr;
-  double z_arr_z2r[NZ];
-  double r_arr_z2r[NZ];
-  double z_arr_r2z[NZ];
-  double r_arr_r2z[NZ];
-  double growth_d_arr[NZ];
-  double growth_v_arr[NZ];
-  double ihub_arr[NZ];
-  double glob_idr;
+  int numk; //Number of k-values
+  double logkmax; //Maximum log10(k)
+  double logkmin; //Minimum log10(k)
+  double idlogk; //1/D(log10(k))
+  double *logkarr; //Array of log10(k) values (units of h/Mpc)
+  double *pkarr; //Array of power spectrum values (units of (Mpc/h)^3)
+  double z_arr_z2r[NZ]; //Array of redshifts used to compute r(z)
+  double r_arr_z2r[NZ]; //Array of comoving distances used to compute r(z)
+  double z_arr_r2z[NZ]; //Array of redshifts used to compute z(r)
+  double r_arr_r2z[NZ]; //Array of comoving distances used to compute z(r), D_d(r), D_v(r), 1/H(z)
+  double growth_d_arr[NZ]; //Array of density growth factors used to compute D_d(r)
+  double growth_v_arr[NZ]; //Array of velocity growth factors used to compute D_v(r)
+  double ihub_arr[NZ]; //Array of 1/H(z)
+  double glob_idr; //1/dr, where dr is the radial comoving distance interval used in the arrays above
 
-  unsigned int seed_rng;
+  unsigned int seed_rng; //RNG seed
 
-  int n_grid;
-  double l_box;
-  int nz_here;
-  int iz0_here;
+  int n_grid; //Number of cells per side for the Cartesian grid
+  double l_box; //Box size for the cartesian grid
+  int nz_here; //Number of cells in the z-direction stored in this node
+  int iz0_here; //index of the first cell in the z-direction stored in this node
 
-  char prefixOut[256];
+  char prefixOut[256]; //Output prefix
   int output_format; //0-> ASCII, 1-> FITS, 2-> HDF5
-  int output_density;
-  double pos_obs[3];
+  int output_density; //Do you want to output the density grid?
+  double pos_obs[3]; //Observer position
 
-  dftw_complex *grid_dens_f;
-  flouble *grid_dens;
-  dftw_complex *grid_npot_f;
-  flouble *grid_npot;
-  flouble *grid_dumm;
-  flouble *slice_left;
-  flouble *slice_right;
-  double sigma2_gauss;
+  dftw_complex *grid_dens_f; //Fourier-space grid for the density field
+  flouble *grid_dens; //Real-space grid for the density field
+  dftw_complex *grid_npot_f; //Fourier-space grid for the Newtonian potential
+  flouble *grid_npot; //Real-space grid for the Newtonian potential
+  flouble *grid_dumm; //Dummy array used to interpolate into shells
+  flouble *slice_left; //Dummy array to store grid cells coming from the left node
+  flouble *slice_right; //Dummy array to store grid cells coming from the right node
+  double sigma2_gauss; //Variance of the cartesian density field
 
-  int do_lensing;
-  int nside_base;
-  int n_beams_here;
-  OnionInfo *oi_slices;
-  OnionInfo *oi_sl_dum;
-  OnionInfo **oi_beams;
-  flouble **dens_slices;
-  flouble ***dens_beams;
-  flouble **vrad_slices;
-  flouble ***vrad_beams;
-  flouble **p_xx_slices;
-  flouble ***p_xx_beams;
-  flouble **p_xy_slices;
-  flouble ***p_xy_beams;
-  flouble **p_yy_slices;
-  flouble ***p_yy_beams;
-  int ***nsrc_beams;
+  int do_lensing; //Do we need to compute the lensing potential?
+  int nside_base; //Minimum n_side used in the pixelization
+  int n_beams_here; //Number of beams stored in this node for the lightcone
+  OnionInfo *oi_slices; //Slices of the onion shells stored in this node
+  OnionInfo *oi_sl_dum; //Dummy onion slices used to communicate slices into beams
+  OnionInfo **oi_beams; //Onion beams stored in this node
+  flouble **dens_slices; //Density slices
+  flouble ***dens_beams; //Density beams
+  flouble **vrad_slices; //v_r slices
+  flouble ***vrad_beams; //v_r beams
+  flouble **p_xx_slices; //phi_xx slices
+  flouble ***p_xx_beams; //phi_xx beams
+  flouble **p_xy_slices; //phi_xy slices
+  flouble ***p_xy_beams; //phi_xy beams
+  flouble **p_yy_slices; //phi_yy slices
+  flouble ***p_yy_beams; //phi_yy beams
+  int ***nsrc_beams; //Beams with total number of sources
 
-  int do_gals;
-  int n_gals;
-  char fnameBzGals[NPOP_MAX][256];
-  char fnameNzGals[NPOP_MAX][256];
-  gsl_spline *spline_gals_bz[NPOP_MAX];
-  gsl_spline *spline_gals_nz[NPOP_MAX];
-  gsl_interp_accel *intacc_gals[NPOP_MAX];
-  int shear_gals[NPOP_MAX];
-  lint *nsources_this;
-  Gal **gals;
+  int do_sources; //Do we include sources
+  int n_srcs; //Number of source types
+  char fnameBzSrcs[NPOP_MAX][256]; //Files containing b(z) for each source type
+  char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega 
+                                   //(number of sources per redshift interval and square degree)
+  gsl_spline *spline_srcs_bz[NPOP_MAX]; //Spline for b(z)
+  gsl_spline *spline_srcs_nz[NPOP_MAX]; //Spline for n(z)
+  gsl_interp_accel *intacc_srcs[NPOP_MAX]; //Spline accelerator for sources
+  int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
+  lint *nsources_this; //Number of sources found in this node
+  Src **srcs; //Galaxy objects stored in this node
 
-  int do_imap;
-  int n_imap;
-  char fnameBzImap[NPOP_MAX][256];
-  char fnameTzImap[NPOP_MAX][256];
-  char fnameNuImap[NPOP_MAX][256];
-  gsl_spline *spline_imap_bz[NPOP_MAX];
-  gsl_spline *spline_imap_tz[NPOP_MAX];
-  gsl_interp_accel *intacc_imap[NPOP_MAX];
-  int nside_imap[NPOP_MAX];
-  double nu0_imap[NPOP_MAX];
-  HealpixShells **imap;
+  int do_imap; //Do we include intensity mapping
+  int n_imap; //Number of IM species
+  char fnameBzImap[NPOP_MAX][256]; //Files containing b(z) for each IM species
+  char fnameTzImap[NPOP_MAX][256]; //Files containing T(z) for each IM species
+  char fnameNuImap[NPOP_MAX][256]; //Files containing frequency table for each IM species
+  gsl_spline *spline_imap_bz[NPOP_MAX]; //Spline for b(z)
+  gsl_spline *spline_imap_tz[NPOP_MAX]; //Spline for T(z)
+  gsl_interp_accel *intacc_imap[NPOP_MAX]; //Spline accelerator for IM
+  int nside_imap[NPOP_MAX]; //Output angular resolution for each IM species
+  double nu0_imap[NPOP_MAX]; //Rest-frame frequency for each IM species
+  HealpixShells **imap; //intensity maps for each IM species
+
+  int do_kappa; //Do you want to output kappa maps?
+  int n_kappa; //How many maps?
+  double z_kappa_out[NPOP_MAX]; //Array of source plane redshifts
+  int nside_kappa;
+  HealpixShells *kmap; //Kappa maps at each redshift
 
   int do_pred;
   double pred_dz;
@@ -299,12 +315,12 @@ double z_of_r(ParamCoLoRe *par,double r);
 double dgrowth_of_r(ParamCoLoRe *par,double r);
 double vgrowth_of_r(ParamCoLoRe *par,double r);
 double ihub_of_r(ParamCoLoRe *par,double r);
-double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop);
-double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop);
+double ndens_of_z_srcs(ParamCoLoRe *par,double z,int ipop);
+double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop);
 double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop);
 double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop);
 void free_hp_shell(HealpixShells *shell);
-HealpixShells *new_hp_shell(int nside,char *fname_nutable);
+HealpixShells *new_hp_shell(int nside,int nr);
 
 
 //////
@@ -312,8 +328,10 @@ HealpixShells *new_hp_shell(int nside,char *fname_nutable);
 ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
+void write_kappa(ParamCoLoRe *par);
 void write_grids(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
+
 
 /////
 // Functions defined in predictions.h
@@ -331,10 +349,14 @@ void end_fftw(ParamCoLoRe *par);
 // Functions defined in pixelization.c
 void pixelize(ParamCoLoRe *par);
 
+
 //////
 // Functions defined in grid_tools.c
+void integrate_lensing(ParamCoLoRe *par);
 void get_sources(ParamCoLoRe *par);
 void get_imap(ParamCoLoRe *par);
+void get_kappa(ParamCoLoRe *par);
+
 
 //////
 // Defined in healpix_extra.c

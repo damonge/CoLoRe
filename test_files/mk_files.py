@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 nz=256
 z0=0
 zf=1.0
-zx=0.15
+zx=0.10
 pow1=1.5
 ngal=1.4E6
 zx2=0.60

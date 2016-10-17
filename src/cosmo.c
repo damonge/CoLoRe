@@ -96,12 +96,12 @@ double ihub_of_r(ParamCoLoRe *par,double r)
   }
 }
 
-double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop)
+double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
     return 0;
   else
-    return gsl_spline_eval(par->spline_gals_bz[ipop],z,par->intacc_gals[ipop]);
+    return gsl_spline_eval(par->spline_srcs_bz[ipop],z,par->intacc_srcs[ipop]);
 }
 
 double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop)
@@ -112,12 +112,12 @@ double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop)
     return gsl_spline_eval(par->spline_imap_bz[ipop],z,par->intacc_imap[ipop]);
 }
 
-double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop)
+double ndens_of_z_srcs(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
     return 0;
   else
-    return gsl_spline_eval(par->spline_gals_nz[ipop],z,par->intacc_gals[ipop]);
+    return gsl_spline_eval(par->spline_srcs_nz[ipop],z,par->intacc_srcs[ipop]);
 }
 
 double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop)
@@ -374,6 +374,7 @@ static void pk_linear_set(ParamCoLoRe *par)
   par->logkmax=par->logkarr[par->numk-1];
   par->idlogk=(par->numk-1)/(par->logkmax-par->logkmin);
 
+  //Re-interpolate just in case the file is not equi-spaced in log10(k)
   gsl_interp_accel *intacc=gsl_interp_accel_alloc();
   gsl_spline *spline=gsl_spline_alloc(gsl_interp_cspline,par->numk);
   gsl_spline_init(spline,par->logkarr,par->pkarr,par->numk);
@@ -397,10 +398,10 @@ static void pk_linear_set(ParamCoLoRe *par)
   print_info("  Sigma_Gauss should be %lf\n",
 	     sqrt(sigL2(par,r_effective,r_effective,"Gauss","Gauss")));
 #endif //_DEBUG
-
 }
 
-static void compute_hp_shell_distances(HealpixShells *shell,flouble nu_rest,char *fname_nutable,Csm_params *pars)
+static void compute_hp_shell_distances_imap(HealpixShells *shell,flouble nu_rest,
+					    char *fname_nutable,Csm_params *pars)
 {
   int ii;
   FILE *fi;
@@ -414,7 +415,6 @@ static void compute_hp_shell_distances(HealpixShells *shell,flouble nu_rest,char
     if(stat!=2) error_read_line(fname_nutable,ii+1);
     shell->r0[ii]=csm_radial_comoving_distance(pars,nuf/nu_rest);
     shell->rf[ii]=csm_radial_comoving_distance(pars,nu0/nu_rest);
-    printf("%d %lE %lE\n",ii,shell->r0[ii],shell->rf[ii]);
   }
   fclose(fi);
 }
@@ -444,32 +444,32 @@ void cosmo_set(ParamCoLoRe *par)
   par->pos_obs[1]=0.5*par->l_box;
   par->pos_obs[2]=0.5*par->l_box;
 
-  for(ipop=0;ipop<par->n_gals;ipop++) {
-    fi=fopen(par->fnameBzGals[ipop],"r");
-    if(fi==NULL) error_open_file(par->fnameBzGals[ipop]);
+  for(ipop=0;ipop<par->n_srcs;ipop++) {
+    fi=fopen(par->fnameBzSrcs[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameBzSrcs[ipop]);
     nz=linecount(fi); rewind(fi);
     zarr=my_malloc(nz*sizeof(double));
     fzarr=my_malloc(nz*sizeof(double));
     for(ii=0;ii<nz;ii++) {
       int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-      if(stat!=2) error_read_line(par->fnameBzGals[ipop],ii+1);
+      if(stat!=2) error_read_line(par->fnameBzSrcs[ipop],ii+1);
     }
     if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
       report_error(1,"Bias z-range is too small\n");
-    par->spline_gals_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_gals_bz[ipop],zarr,fzarr,nz);
+    par->spline_srcs_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_srcs_bz[ipop],zarr,fzarr,nz);
     free(zarr); free(fzarr);
     fclose(fi);
 
-    fi=fopen(par->fnameNzGals[ipop],"r");
-    if(fi==NULL) error_open_file(par->fnameNzGals[ipop]);
+    fi=fopen(par->fnameNzSrcs[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameNzSrcs[ipop]);
     nz=linecount(fi); rewind(fi);
     zarr=my_malloc(nz*sizeof(double));
     fzarr=my_malloc(nz*sizeof(double));
     for(ii=0;ii<nz;ii++) {
       double rz,hz,a;
       int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-      if(stat!=2) error_read_line(par->fnameNzGals[ipop],ii+1);
+      if(stat!=2) error_read_line(par->fnameNzSrcs[ipop],ii+1);
       a=1./(1+zarr[ii]);
       hz=csm_hubble(pars,a);
       rz=csm_radial_comoving_distance(pars,a);
@@ -480,12 +480,12 @@ void cosmo_set(ParamCoLoRe *par)
       fzarr[0]=fzarr[1];
     if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
       report_error(1,"N(z) z-range is too small\n");
-    par->spline_gals_nz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_gals_nz[ipop],zarr,fzarr,nz);
-
-    par->intacc_gals[ipop]=gsl_interp_accel_alloc();
+    par->spline_srcs_nz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_srcs_nz[ipop],zarr,fzarr,nz);
     free(zarr); free(fzarr);
     fclose(fi);
+
+    par->intacc_srcs[ipop]=gsl_interp_accel_alloc();
   }
 
   for(ipop=0;ipop<par->n_imap;ipop++) {
@@ -523,7 +523,20 @@ void cosmo_set(ParamCoLoRe *par)
 
     par->intacc_imap[ipop]=gsl_interp_accel_alloc();
 
-    compute_hp_shell_distances(par->imap[ipop],par->nu0_imap[ipop],par->fnameNuImap[ipop],pars);
+    compute_hp_shell_distances_imap(par->imap[ipop],par->nu0_imap[ipop],
+				    par->fnameNuImap[ipop],pars);
+  }
+
+  if(par->do_kappa) {
+    for(ii=0;ii<par->n_kappa;ii++) {
+      double z=par->z_kappa_out[ii];
+#ifdef _DEBUG
+      if((z<par->z_min) || (z>par->z_max))
+	print_info("Source plane %d outside redshift range\n",ii+1);
+#endif //_DEBUG
+      par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+    }
   }
 
   //Set z-dependent functions
@@ -535,7 +548,7 @@ void cosmo_set(ParamCoLoRe *par)
     par->r_arr_z2r[ii]=rz;
   }
   if((par->z_arr_z2r[NZ-1]<=par->z_max)||(par->r_arr_z2r[NZ-1]<=par->r_max))
-    report_error(1,"OMG!\n");
+    report_error(1,"Error: only supports z<%.3lf\n",NZ*DZ);
 
   double growth0=csm_growth_factor(pars,1);
   par->glob_idr=(NZ-1)/(par->r_arr_z2r[NZ-1]-par->r_arr_z2r[0]);
@@ -543,19 +556,17 @@ void cosmo_set(ParamCoLoRe *par)
     double r=ii/par->glob_idr;
     double z=z_of_r_provisional(par,r);
     double a=1/(1+z);
-    par->z_arr_r2z[ii]=z;
-    par->r_arr_r2z[ii]=r;
-
     double gz=csm_growth_factor(pars,a)/growth0;
     double fz=csm_f_growth(pars,a);
     double hhz=csm_hubble(pars,a);
+    par->z_arr_r2z[ii]=z;
+    par->r_arr_r2z[ii]=r;
     par->growth_d_arr[ii]=gz;
-    //This is for the comoving velocity
-    par->growth_v_arr[ii]=(gz*hhz*fz)/(par->fgrowth_0*par->hubble_0);
+    par->growth_v_arr[ii]=(gz*hhz*fz)/(par->fgrowth_0*par->hubble_0); //This is for the comoving velocity
     par->ihub_arr[ii]=1./hhz;
   }
   if((par->z_arr_r2z[NZ-1]<=par->z_max)||(par->r_arr_r2z[NZ-1]<=par->r_max))
-    report_error(1,"OMG!\n");
+    report_error(1,"Error: only supports z<%.3lf\n",NZ*DZ);
 
   csm_params_free(pars);
 

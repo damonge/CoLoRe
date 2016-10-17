@@ -27,6 +27,15 @@
 #define CPY_TASK_P_XY 3
 #define CPY_TASK_P_YY 4
 
+static inline double get_cosine(double index,double dx)
+{
+#if PIXTYPE==PT_CEA
+  return index*dx-1;
+#elif PIXTYPE==PT_CAR
+  return cos(M_PI-index*dx);
+#endif //PIXTYPE
+}
+
 //////
 // Copies new observable quantity into dummy array
 static void copy_to_dum(ParamCoLoRe *par,int cpy_task)
@@ -219,9 +228,15 @@ static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,fl
       if(oi->num_pix[ir]>0) {
 	int icth;
 	flouble dr=oi->rf_arr[ir]-oi->r0_arr[ir];
+#if PIXTYPE==PT_CEA
 	flouble dcth=2.0/oi->nside_arr[ir];
+	flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
+#elif PIXTYPE==PT_CAR
+	flouble dth=M_PI/oi->nside_arr[ir];
+#endif //PIXTYPE
 	flouble dphi=M_PI/oi->nside_arr[ir];
-	flouble dr_sub=dr/FAC_CART2SPH_NSUB,dcth_sub=dcth/FAC_CART2SPH_NSUB,dphi_sub=dphi/FAC_CART2SPH_NSUB;
+	flouble dr_sub=dr/FAC_CART2SPH_NSUB;
+	flouble dphi_sub=dphi/FAC_CART2SPH_NSUB;
 	int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
 	int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
 	flouble r0=oi->r0_arr[ir];
@@ -229,7 +244,13 @@ static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,fl
 	for(icth=0;icth<ncth;icth++) {
 	  int iphi;
 	  int index_cth=nphi*icth;
-	  flouble cth0=-1+(oi->icth0_arr[ir]+icth)*dcth;
+#if PIXTYPE==PT_CEA
+	  flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dcth);
+#elif PIXTYPE==PT_CAR
+	  flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dth);
+	  flouble dcth=get_cosine(oi->icth0_arr[ir]+icth+1.0,dth)-cth0;
+	  flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
+#endif //PIXTYPE
 	  for(iphi=0;iphi<nphi;iphi++) {
 	    int ir2;
 	    flouble phi0=(oi->iphi0_arr[ir]+iphi)*dphi;
@@ -316,9 +337,9 @@ static void compute_slices(ParamCoLoRe *par,int task)
     report_error(1,"Wrong task %d\n",task);
 }
 
-#ifdef _HAVE_MPI
 static void communicate_onion_slices(OnionInfo *oi_send,OnionInfo *oi_recv,MPI_Status *stat)
 {
+#ifdef _HAVE_MPI
   MPI_Sendrecv(oi_send->iphi0_arr,oi_send->nr,MPI_INT,NodeRight,1,
 	       oi_recv->iphi0_arr,oi_send->nr,MPI_INT,NodeLeft ,1,
 	       MPI_COMM_WORLD,stat);
@@ -334,8 +355,8 @@ static void communicate_onion_slices(OnionInfo *oi_send,OnionInfo *oi_recv,MPI_S
   MPI_Sendrecv(oi_send->num_pix,oi_send->nr,MPI_INT,NodeRight,5,
 	       oi_recv->num_pix,oi_send->nr,MPI_INT,NodeLeft ,5,
 	       MPI_COMM_WORLD,stat);
-}
 #endif //_HAVE_MPI
+}
 
 static void slices2beams(ParamCoLoRe *par,int task)
 {
@@ -371,9 +392,10 @@ static void slices2beams(ParamCoLoRe *par,int task)
   else
     report_error(1,"Wrong task %d\n",task);
 
-#ifdef _HAVE_MPI
   int inode;
+#ifdef _HAVE_MPI
   MPI_Status stat;
+#endif //_HAVE_MPI
 
   for(inode=0;inode<NNodes;inode++) {
     //Receive onion_slices from left into onion_sl_dum
@@ -387,9 +409,13 @@ static void slices2beams(ParamCoLoRe *par,int task)
 
       //Receive slices from left into dum_slices
       flouble *dum_slice=my_malloc(par->oi_sl_dum->num_pix[ir]*sizeof(flouble));
+#ifdef _HAVE_MPI
       MPI_Sendrecv(slices[ir],par->oi_slices->num_pix[ir],FLOUBLE_MPI,NodeRight,ir,
       		   dum_slice,par->oi_sl_dum->num_pix[ir],FLOUBLE_MPI,NodeLeft,ir,
 		   MPI_COMM_WORLD,&stat);
+#else //_HAVE_MPI
+      memcpy(dum_slice,slices[ir],par->oi_slices->num_pix[ir]*sizeof(flouble));
+#endif //_HAVE_MPI
 
       //Add dum_slice into beams
       if(par->oi_sl_dum->num_pix[ir]>0) {
@@ -405,8 +431,9 @@ static void slices2beams(ParamCoLoRe *par,int task)
 	    int iphi;
 	    int ind_cth_bm=(icth-icth0_bm)*nphi_bm;
 	    int ind_cth_sl=(icth-icth0_sl)*nphi_sl;
-	    for(iphi=0;iphi<nphi_bm;iphi++)
+	    for(iphi=0;iphi<nphi_bm;iphi++) {
 	      beams[ib][ir][ind_cth_bm+iphi]+=dum_slice[ind_cth_sl+iphi0_bm+iphi];
+	    }
 	  }
 	}
       }
@@ -425,13 +452,6 @@ static void slices2beams(ParamCoLoRe *par,int task)
     memcpy(par->oi_slices->num_pix,par->oi_sl_dum->num_pix,par->oi_slices->nr*sizeof(int));
   }
 
-#else //_HAVE_MPI
-  for(ir=0;ir<par->oi_beams[0]->nr;ir++) {
-    if(par->oi_beams[0]->num_pix[ir]>0)
-      memcpy(beams[0][ir],slices[ir],par->oi_beams[0]->num_pix[ir]*sizeof(flouble));
-  }
-#endif //_HAVE_MPI 
-
 #ifdef _DEBUG
   if(NodeThis==0) timer(2);
 #endif //_DEBUG
@@ -449,7 +469,7 @@ void pixelize(ParamCoLoRe *par)
   }
 
   end_fftw(par);
-  
+
   //Communicate into beams
   alloc_beams(par);
   slices2beams(par,CPY_TASK_DENS);

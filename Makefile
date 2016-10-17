@@ -3,7 +3,7 @@
 ###Compiler and compilation options
 COMP_SER = gcc
 COMP_MPI = mpicc
-OPTIONS = -Wall -O3
+OPTIONS = -Wall -O3 -std=c99
 #
 ### Behavioural flags
 #Use double precision integer (enable in general)
@@ -82,9 +82,9 @@ endif #OMP
 ifeq ($(strip $(USE_MPI)),yes)
 LIB_FFTW += -lfftw3_mpi 
 endif #MPI
-LIB_FFTW += -lfftw3
 
 endif #SINGLE_PRECISION
+LIB_FFTW += -lfftw3
 
 # for fftlog
 LIB_FFTW += -lfftw3
@@ -111,9 +111,10 @@ LCO = src/lightcone.o
 IOO = src/io.o
 HPIXO = src/healpix_extra.o
 PIXO = src/pixelization.o
-PREDO = src/predictions.o src/fftlog.o
+PREDICTO = src/predictions.o
+FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe
 

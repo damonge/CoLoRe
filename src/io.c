@@ -46,6 +46,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->r_min=-1;
   par->r2_smooth=2.0;
   par->do_smoothing=1;
+  par->smooth_potential=0;
   par->numk=0;
   par->logkmax=1;
   par->logkmin=-3;
@@ -67,7 +68,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
   par->grid_dumm=NULL;
-  par->sigma2_gauss=-1;
+  par->sigma2_gauss=0;
 
   par->do_lensing=0;
   par->nside_base=-1;
@@ -87,18 +88,21 @@ static ParamCoLoRe *param_colore_new(void)
   par->p_yy_beams=NULL;
   par->nsrc_beams=NULL;
 
-  par->do_gals=0;
+  par->do_sources=0;
   par->do_imap=0;
+  par->do_kappa=0;
   par->do_pred=0;
-  par->n_gals=-1;
+  par->n_srcs=-1;
   par->n_imap=-1;
+  par->n_kappa=-1;
+  par->nside_kappa=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
-    sprintf(par->fnameBzGals[ii],"default");
-    sprintf(par->fnameNzGals[ii],"default");
-    par->spline_gals_bz[ii]=NULL;
-    par->spline_gals_nz[ii]=NULL;
-    par->intacc_gals[ii]=NULL;
-    par->shear_gals[ii]=0;
+    sprintf(par->fnameBzSrcs[ii],"default");
+    sprintf(par->fnameNzSrcs[ii],"default");
+    par->spline_srcs_bz[ii]=NULL;
+    par->spline_srcs_nz[ii]=NULL;
+    par->intacc_srcs[ii]=NULL;
+    par->shear_srcs[ii]=0;
     sprintf(par->fnameBzImap[ii],"default");
     sprintf(par->fnameTzImap[ii],"default");
     sprintf(par->fnameNuImap[ii],"default");
@@ -106,10 +110,12 @@ static ParamCoLoRe *param_colore_new(void)
     par->spline_imap_tz[ii]=NULL;
     par->intacc_imap[ii]=NULL;
     par->nside_imap[ii]=-1;
+    par->z_kappa_out[ii]=-1;
     par->nu0_imap[ii]=-1;
   }
-  par->gals=NULL;
+  par->srcs=NULL;
   par->imap=NULL;
+  par->kmap=NULL;
   par->nsources_this=NULL;
 
   return par;
@@ -135,6 +141,28 @@ static void conf_read_double(config_t *conf,char *secname,char *varname,double *
   stat=config_lookup_float(conf,fullpath,out);
   if(stat==CONFIG_FALSE)
     report_error(1,"Couldn't read variable %s\n",fullpath);
+}
+
+static void conf_read_double_array(config_t *conf,char *secname,char *varname,
+				   double *out,int *nel,int nmax)
+{
+  int n_elem,index;
+  config_setting_t *arr;
+  char fullpath[256];
+  sprintf(fullpath,"%s.%s",secname,varname);
+  arr=config_lookup(conf,fullpath);
+  if(arr==NULL)
+    report_error(1,"Couldn't read variable %s\n",fullpath);
+  n_elem=config_setting_length(arr);
+  if(n_elem==0)
+    report_error(1,"Couldn't read variable %s\n",fullpath);
+  if(n_elem>nmax)
+    report_error(1,"Too many elements in %s (%d > %d)\n",fullpath,n_elem,nmax);
+
+  *nel=n_elem;
+  for(index=0;index<n_elem;index++) {
+    out[index]=config_setting_get_float_elem(arr,index);
+  }
 }
 
 static void conf_read_int(config_t *conf,char *secname,char *varname,int *out)
@@ -174,6 +202,7 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_string(conf,"global","prefix_out",par->prefixOut);
   conf_read_string(conf,"global","pk_filename",par->fnamePk);
   conf_read_double(conf,"global","r_smooth",&(par->r2_smooth));
+  conf_read_bool(conf,"global","smooth_potential",&(par->smooth_potential));
   conf_read_double(conf,"global","z_min",&(par->z_min));
   conf_read_double(conf,"global","z_max",&(par->z_max));
   conf_read_int(conf,"global","n_grid",&(par->n_grid));
@@ -213,28 +242,28 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_double(conf,"cosmo_par","sigma_8",&(par->sig8));
 
   //Get number of galaxy populations
-  par->n_gals=0;
+  par->n_srcs=0;
   found=1;
   while(found) {
-    sprintf(c_dum,"gals%d",par->n_gals+1);
+    sprintf(c_dum,"srcs%d",par->n_srcs+1);
     cset=config_lookup(conf,c_dum);
     if(cset==NULL)
       found=0;
     else
-      par->n_gals++;
+      par->n_srcs++;
   }
-  if(par->n_gals>NPOP_MAX)
-    report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_gals);
-  for(ii=0;ii<par->n_gals;ii++) {
-    sprintf(c_dum,"gals%d",ii+1);
-    conf_read_string(conf,c_dum,"nz_filename",par->fnameNzGals[ii]);
-    conf_read_string(conf,c_dum,"bias_filename",par->fnameBzGals[ii]);
-    conf_read_bool(conf,c_dum,"include_shear",&(par->shear_gals[ii]));
-    if(par->shear_gals[ii])
+  if(par->n_srcs>NPOP_MAX)
+    report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_srcs);
+  for(ii=0;ii<par->n_srcs;ii++) {
+    sprintf(c_dum,"srcs%d",ii+1);
+    conf_read_string(conf,c_dum,"nz_filename",par->fnameNzSrcs[ii]);
+    conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
+    conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
+    if(par->shear_srcs[ii])
       par->do_lensing=1;
   }
-  if(par->n_gals>0)
-    par->do_gals=1;
+  if(par->n_srcs>0)
+    par->do_sources=1;
 
   //Get number of intensity mapping species
   par->n_imap=0;
@@ -260,18 +289,33 @@ ParamCoLoRe *read_run_params(char *fname)
   if(par->n_imap>0)
     par->do_imap=1;
 
-  if(par->do_gals) {
-    par->gals=my_malloc(par->n_gals*sizeof(Gal *));
-    par->nsources_this=my_malloc(par->n_gals*sizeof(lint));
+  //Kappa maps
+  cset=config_lookup(conf,"kappa");
+  if(cset!=NULL) {
+    par->do_kappa=1;
+    par->do_lensing=1;
+    conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPOP_MAX);
+    conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
+  }
+
+  if(par->do_sources) {
+    par->srcs=my_malloc(par->n_srcs*sizeof(Src *));
+    par->nsources_this=my_malloc(par->n_srcs*sizeof(lint));
   }
 
   if(par->do_imap) {
     par->imap=my_malloc(par->n_imap*sizeof(HealpixShells *));
-    for(ii=0;ii<par->n_imap;ii++)
-      par->imap[ii]=new_hp_shell(par->nside_imap[ii],par->fnameNuImap[ii]);
+    for(ii=0;ii<par->n_imap;ii++) {
+      FILE *fnu=fopen(par->fnameNuImap[ii],"r");
+      if(fnu==NULL) error_open_file(par->fnameNuImap[ii]);
+      par->imap[ii]=new_hp_shell(par->nside_imap[ii],linecount(fnu));
+      fclose(fnu);
+    }
   }
 
-        
+  if(par->do_kappa)
+    par->kmap=new_hp_shell(par->nside_kappa,par->n_kappa);
+
 #ifdef _DEBUG
   sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
   par->f_dbg=fopen(c_dum,"w");
@@ -316,10 +360,12 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  Density field pre-smoothed on scales: x_s = %.3lE Mpc/h\n",sqrt(par->r2_smooth));
   else
     print_info("  No extra smoothing\n");
-  if(par->do_gals)
-    print_info("  %d galaxy populations\n",par->n_gals);
+  if(par->do_sources)
+    print_info("  %d galaxy populations\n",par->n_srcs);
   if(par->do_imap)
     print_info("  %d intensity mapping species\n",par->n_imap);
+  if(par->do_kappa)
+    print_info("  %d lensing source planes\n",par->n_kappa);
   if(par->do_lensing)
     print_info("  Will include lensing shear\n");
   print_info("\n");
@@ -384,10 +430,12 @@ void write_imap(ParamCoLoRe *par)
 	}
 
 	//Collect all dummy maps
+#ifdef _HAVE_MPI
 	if(NodeThis==0)
 	  MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
 	else
 	  MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
 
 	//Write dummy map
 	if(NodeThis==0)
@@ -400,18 +448,58 @@ void write_imap(ParamCoLoRe *par)
   }
 }
 
+void write_kappa(ParamCoLoRe *par)
+{
+  if(par->do_kappa) {
+    int ir;
+    char fname[256];
+    long npx=he_nside2npix(par->nside_kappa);
+    flouble *map_write=my_malloc(npx*sizeof(flouble));
+    if(NodeThis==0) timer(0);
+    print_info("*** Writing kappa source maps\n");
+    for(ir=0;ir<par->kmap->nr;ir++) {
+      long ip;
+      long ir_t=ir*par->kmap->num_pix;
+      
+      //Write local pixels to dummy map
+      memset(map_write,0,npx*sizeof(flouble));
+      sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
+      for(ip=0;ip<npx;ip++) {
+	int id_pix=par->kmap->listpix[ip];
+	if(id_pix>0)
+	  map_write[ip]+=par->kmap->data[ir_t+id_pix];
+      }
+
+      //Collect all dummy maps
+#ifdef _HAVE_MPI
+      if(NodeThis==0)
+	MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+      else
+	MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+      
+      //Write dummy map
+      if(NodeThis==0)
+	he_write_healpix_map(&map_write,1,par->nside_kappa,fname);
+    }
+    free(map_write);
+    if(NodeThis==0) timer(2);
+    print_info("\n");
+  }
+}
+
 void write_catalog(ParamCoLoRe *par)
 {
   int i_pop;
   char fname[256];
 
-  if(par->do_gals) {
+  if(par->do_sources) {
     if(NodeThis==0) timer(0);
     if(par->output_format==2) { //HDF5
 #ifdef _HAVE_HDF5
       hid_t file_id,gal_types[6];
       hsize_t chunk_size=128;
-      size_t dst_offset[6]={HOFFSET(Gal,ra),HOFFSET(Gal,dec),HOFFSET(Gal,z0),HOFFSET(Gal,dz_rsd),HOFFSET(Gal,e1),HOFFSET(Gal,e2)};
+      size_t dst_offset[6]={HOFFSET(Src,ra),HOFFSET(Src,dec),HOFFSET(Src,z0),HOFFSET(Src,dz_rsd),HOFFSET(Src,e1),HOFFSET(Src,e2)};
       const char *names[6]={"RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
       char *tunit[6]=      {"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
       gal_types[0]=H5T_NATIVE_FLOAT;
@@ -422,17 +510,17 @@ void write_catalog(ParamCoLoRe *par)
       gal_types[5]=H5T_NATIVE_FLOAT;
 
       print_info("*** Writing catalog (HDF5)\n");
-      sprintf(fname,"%s_gals_%d.h5",par->prefixOut,NodeThis);
+      sprintf(fname,"%s_srcs_%d.h5",par->prefixOut,NodeThis);
 
       //Create file
       file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
       //Write table for each galaxy type
-      for(i_pop=0;i_pop<par->n_gals;i_pop++) {
+      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
 	char table_title[256],table_name[256];
 	sprintf(table_title,"sources%d_data",i_pop);
 	sprintf(table_name,"/sources%d",i_pop);
-	H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Gal),
-		       names,dst_offset,gal_types,chunk_size,NULL,0,par->gals[i_pop]);
+	H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Src),
+		       names,dst_offset,gal_types,chunk_size,NULL,0,par->srcs[i_pop]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_1_UNITS",tunit[1]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
@@ -462,7 +550,7 @@ void write_catalog(ParamCoLoRe *par)
 	nfields=7;
 
       print_info("*** Writing catalog (FITS)\n");
-      sprintf(fname,"!%s_gals_%d.fits",par->prefixOut,NodeThis);
+      sprintf(fname,"!%s_srcs_%d.fits",par->prefixOut,NodeThis);
 
       fits_create_file(&fptr,fname,&status);
       fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
@@ -477,7 +565,7 @@ void write_catalog(ParamCoLoRe *par)
       e2_arr=my_malloc(nrw*sizeof(float));
 
       long offset=0;
-      for(i_pop=0;i_pop<par->n_gals;i_pop++) {
+      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
 	long row_here=0;
 	while(row_here<par->nsources_this[i_pop]) {
 	  long nrw_here;
@@ -488,13 +576,13 @@ void write_catalog(ParamCoLoRe *par)
 
 	  for(ii=0;ii<nrw_here;ii++) {
 	    type_arr[ii]=i_pop;
-	    ra_arr[ii]=par->gals[i_pop][row_here+ii].ra;
-	    dec_arr[ii]=par->gals[i_pop][row_here+ii].dec;
-	    z0_arr[ii]=par->gals[i_pop][row_here+ii].z0;
-	    rsd_arr[ii]=par->gals[i_pop][row_here+ii].dz_rsd;
+	    ra_arr[ii]=par->srcs[i_pop][row_here+ii].ra;
+	    dec_arr[ii]=par->srcs[i_pop][row_here+ii].dec;
+	    z0_arr[ii]=par->srcs[i_pop][row_here+ii].z0;
+	    rsd_arr[ii]=par->srcs[i_pop][row_here+ii].dz_rsd;
 	    if(par->do_lensing) {
-	      e1_arr[ii]=par->gals[i_pop][row_here+ii].e1;
-	      e2_arr[ii]=par->gals[i_pop][row_here+ii].e2;
+	      e1_arr[ii]=par->srcs[i_pop][row_here+ii].e1;
+	      e2_arr[ii]=par->srcs[i_pop][row_here+ii].e2;
 	    }
 	  }
 	  fits_write_col(fptr,TINT  ,1,offset+row_here+1,1,nrw_here,type_arr,&status);
@@ -525,7 +613,7 @@ void write_catalog(ParamCoLoRe *par)
     }
     else   {
       print_info("*** Writing catalog (ASCII)\n");
-      sprintf(fname,"%s_gals_%d.txt",par->prefixOut,NodeThis);
+      sprintf(fname,"%s_srcs_%d.txt",par->prefixOut,NodeThis);
 
       lint jj;
       FILE *fil=fopen(fname,"w");
@@ -535,13 +623,13 @@ void write_catalog(ParamCoLoRe *par)
 	fprintf(fil,"#[6]e1, [7]e2\n");
       else
 	fprintf(fil,"\n");
-      for(i_pop=0;i_pop<par->n_gals;i_pop++) {
+      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
 	for(jj=0;jj<par->nsources_this[i_pop];jj++) {
 	  fprintf(fil,"%d %E %E %E %E ",
-		  i_pop,par->gals[i_pop][jj].ra,par->gals[i_pop][jj].dec,
-		  par->gals[i_pop][jj].z0,par->gals[i_pop][jj].dz_rsd);
+		  i_pop,par->srcs[i_pop][jj].ra,par->srcs[i_pop][jj].dec,
+		  par->srcs[i_pop][jj].z0,par->srcs[i_pop][jj].dz_rsd);
 	  if(par->do_lensing)
-	    fprintf(fil,"%E %E \n",par->gals[i_pop][jj].e1,par->gals[i_pop][jj].e2);
+	    fprintf(fil,"%E %E \n",par->srcs[i_pop][jj].e1,par->srcs[i_pop][jj].e2);
 	  else
 	    fprintf(fil,"\n");
 	}
@@ -566,16 +654,16 @@ void param_colore_free(ParamCoLoRe *par)
     free_onion_info(par->oi_beams[ii]);
   free(par->oi_beams);
 
-  if(par->do_gals) {
-    for(ii=0;ii<par->n_gals;ii++) {
-      gsl_spline_free(par->spline_gals_bz[ii]);
-      gsl_spline_free(par->spline_gals_nz[ii]);
-      gsl_interp_accel_free(par->intacc_gals[ii]);
-      if(par->gals[ii]!=NULL)
-      	free(par->gals[ii]);
+  if(par->do_sources) {
+    for(ii=0;ii<par->n_srcs;ii++) {
+      gsl_spline_free(par->spline_srcs_bz[ii]);
+      gsl_spline_free(par->spline_srcs_nz[ii]);
+      gsl_interp_accel_free(par->intacc_srcs[ii]);
+      if(par->srcs[ii]!=NULL)
+      	free(par->srcs[ii]);
     }
-    if(par->gals!=NULL)
-      free(par->gals);
+    if(par->srcs!=NULL)
+      free(par->srcs);
     free(par->nsources_this);
   }
 
@@ -588,6 +676,10 @@ void param_colore_free(ParamCoLoRe *par)
     }
     if(par->imap!=NULL)
       free(par->imap);
+  }
+
+  if(par->do_kappa) {
+    free_hp_shell(par->kmap);
   }
 
 #ifdef _DEBUG
