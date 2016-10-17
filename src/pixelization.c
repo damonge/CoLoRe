@@ -337,9 +337,9 @@ static void compute_slices(ParamCoLoRe *par,int task)
     report_error(1,"Wrong task %d\n",task);
 }
 
+#ifdef _HAVE_MPI
 static void communicate_onion_slices(OnionInfo *oi_send,OnionInfo *oi_recv,MPI_Status *stat)
 {
-#ifdef _HAVE_MPI
   MPI_Sendrecv(oi_send->iphi0_arr,oi_send->nr,MPI_INT,NodeRight,1,
 	       oi_recv->iphi0_arr,oi_send->nr,MPI_INT,NodeLeft ,1,
 	       MPI_COMM_WORLD,stat);
@@ -355,8 +355,8 @@ static void communicate_onion_slices(OnionInfo *oi_send,OnionInfo *oi_recv,MPI_S
   MPI_Sendrecv(oi_send->num_pix,oi_send->nr,MPI_INT,NodeRight,5,
 	       oi_recv->num_pix,oi_send->nr,MPI_INT,NodeLeft ,5,
 	       MPI_COMM_WORLD,stat);
-#endif //_HAVE_MPI
 }
+#endif //_HAVE_MPI
 
 static void slices2beams(ParamCoLoRe *par,int task)
 {
@@ -399,7 +399,9 @@ static void slices2beams(ParamCoLoRe *par,int task)
 
   for(inode=0;inode<NNodes;inode++) {
     //Receive onion_slices from left into onion_sl_dum
+#ifdef _HAVE_MPI
     communicate_onion_slices(par->oi_slices,par->oi_sl_dum,&stat);
+#endif //_HAVE_MPI
     for(ir=0;ir<par->oi_slices->nr;ir++) {
       int ib;
       //cth range

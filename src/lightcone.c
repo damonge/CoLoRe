@@ -374,7 +374,15 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
     double th0,thf,thm,cth0,cthf;
     pix2ang_ring(shell->nside,ip,&thm,&phim);
     phi0=phim-pixsize;
+    if(phi0>=2*M_PI)
+      phi0-=2*M_PI;
+    if(phi0<0)
+      phi0+=2*M_PI;
     phif=phim+pixsize;
+    if(phif>=2*M_PI)
+      phif-=2*M_PI;
+    if(phif<0)
+      phif+=2*M_PI;
     th0=CLAMP(thm-pixsize,0,M_PI);
     thf=CLAMP(thm+pixsize,0,M_PI);
     cthf=cos(th0);
@@ -498,7 +506,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 		  long ipix=he_ang2pix(par->imap[ipop]->nside,cth,phi);
 		  pix_id=par->imap[ipop]->listpix[ipix];
 		  if(pix_id<0)
-		    report_error(1,"NOOOO\n");
+		    report_error(1,"NOOOO %lE %lE\n",cth,phi);
 #ifdef _HAVE_OMP
 #pragma omp atomic
 #endif //_HAVE_OMP
@@ -549,15 +557,19 @@ void get_kappa(ParamCoLoRe *par)
   if(NodeThis==0) timer(0);
   find_shell_pixels(par,par->kmap);
 
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none) \
   shared(par)
+#endif //_HAVE_OMP
   {
     int ir,ipx;
     double inv_hpix_area=he_nside2npix(par->kmap->nside)/(4*M_PI);
     int *nparr=malloc(par->kmap->num_pix*sizeof(int));
 
     //Maybe OMP this
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ir=0;ir<par->n_kappa;ir++) {
       int ib,irb=0;
       double r=par->kmap->r0[ir];
@@ -614,7 +626,7 @@ void get_kappa(ParamCoLoRe *par)
 		long ipix=he_ang2pix(par->kmap->nside,cth,phi);
 		long pix_id=par->kmap->listpix[ipix];
 		if(pix_id<0)
-		  report_error(1,"NOOO\n");
+		  report_error(1,"NOOO %lE, %lE\n",cth,phi/M_PI);
 		par->kmap->data[irad_t+pix_id]+=kappa;
 		nparr[pix_id]++;
 	      }
