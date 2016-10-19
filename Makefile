@@ -44,8 +44,8 @@ HDF5_LIB =
 CONF_INC = 
 CONF_LIB =
 #healpix
-HPIX_INC = -I/home/anze/src/Healpix_3.20/include
-HPIX_LIB = -L/home/anze/src/Healpix_3.20/lib/
+HPIX_INC =
+HPIX_LIB =
 #
 ########## End of user-definable ##########
 
