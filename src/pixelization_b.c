@@ -459,119 +459,15 @@ static void slices2beams(ParamCoLoRe *par,int task)
 #endif //_DEBUG
 }
 
-static void get_element(ParamCoLoRe *par,int task,int ix,int iy,int iz,
-			flouble *txx,flouble *txy,flouble *txz,
-			flouble *tyy,flouble *tyz,flouble *tzz)
-{
-  if(task==CPY_TASK_DENS) {
-    par->grid_dens[ix+2*(par->n_grid/2+1)*(iy+//HERE
-}
-
 void pixelize(ParamCoLoRe *par)
 {
-  int i;
-  MPI_Status stat;
-  lint size_slice=(par->nz_max+2)*((lint)(2*par->n_grid*(par->n_grid/2+1)));
-  for(i=0;i<NNodes;i++) {
-    int ib;
-    int node_i_am_now=(NodeThis+i)%NNodes;
-    MPI_Sendrecv(par->grid_npot,size_slice,FLOUBLE_MPI,NodeRight,i,
-		 par->grid_npot,size_slice,FLOUBLE_MPI,NodeLeft,i,
-		 MPI_COMM_WORLD,&stat);
-    MPI_Sendrecv(par->grid_dens,size_slice,FLOUBLE_MPI,NodeRight,i,
-		 par->grid_dens,size_slice,FLOUBLE_MPI,NodeLeft,i,
-		 MPI_COMM_WORLD,&stat);
-
-    for(ib=0;ib<par->n_beams_here;ib++) {
-      int ir;
-      OnionInfo *oi=par->oi_beams[ib];
-      flouble prefac_cart2sph_nsub=1./(FAC_CART2SPH_SUB*FAC_CART2SPH_SUB*FAC_CART2SPH_SUB);
-      for(ir=0;ir<par->oi_beams[ib]->nr;ir++) {
-	int icth;
-	double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
-#if PIXTYPE==PT_CEA
-	flouble dcth=2.0/oi->nside_arr[ir];
-	flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
-#elif PIXTYPE==PT_CAR
-	flouble dth=M_PI/oi->nside_arr[ir];
-#endif //PIXTYPE
-	flouble dphi=M_PI/oi->nside_arr[ir];
-	flouble dr_sub=dr/FAC_CART2SPH_NSUB;
-	flouble dphi_sub=dphi/FAC_CART2SPH_NSUB;
-	int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
-	int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
-	flouble r0=oi->r0_arr[ir];
-	for(icth=0;icth<ncth;icth++) {
-	  int iphi;
-	  int index_cth=nphi*icth;
-#if PIXTYPE==PT_CEA
-	  flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dcth);
-#elif PIXTYPE==PT_CAR
-	  flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dth);
-	  flouble dcth=get_cosine(oi->icth0_arr[ir]+icth+1.0,dth)-cth0;
-	  flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
-#endif //PIXTYPE
-	  for(iphi=0;iphi<nphi;iphi++) {
-	    int ir2;
-	    flouble phi0=(oi->iphi0_arr[ir]+iphi)*dphi;
-	    int index=index_cth+iphi;
-	    flouble arr_add=0;
-
-	    //Make sub-voxels
-	    for(ir2=0;ir2<FAC_CART2SPH_NSUB;ir2++) {
-	      int icth2;
-	      flouble r=r0+(ir2+0.5)*dr_sub;
-	      for(icth2=0;icth2<FAC_CART2SPH_NSUB;icth2++) {
-		int iphi2;
-		flouble cth=cth0+(icth2+0.5)*dcth_sub;
-		flouble sth=sqrt(1-cth*cth);
-		for(iphi2=0;iphi2<FAC_CART2SPH_NSUB;iphi2++) {
-		  int ax;
-		  lint ix1[3],ix0[3];
-		  flouble x[3],h0x[3],h1x[3];
-		  flouble phi=phi0+(iphi2+0.5)*dphi_sub;
-		  x[0]=r*sth*cos(phi);
-		  x[1]=r*sth*sin(phi);
-		  x[2]=r*cth;
-
-		  //Trilinear interpolation
-		  for(ax=0;ax<3;ax++) {
-		    x[ax]+=par->pos_obs[ax];
-		    ix0[ax]=(int)(x[ax]*idx);
-		    h0x[ax]=x[ax]*idx-ix0[ax];
-		    h1x[ax]=1-h0x[ax];
-		    ix1[ax]=ix0[ax]+1;
-		    if(ix0[ax]>=par->n_grid)
-		      ix0[ax]-=par->n_grid;
-		    else if(ix0[ax]<0)
-		      ix0[ax]+=par->n_grid;
-		    if(ix1[ax]>=par->n_grid)
-		      ix1[ax]-=par->n_grid;
-		    else if(ix1[ax]<0)
-		      ix1[ax]+=par->n_grid;
-		    h0x[ax]/=FAC_CART2SPH_SUB;
-		    h1x[ax]/=FAC_CART2SPH_SUB;
-		  }
-		  ix0[2]-=par->iz0_here;
-		  ix1[2]-=par->iz0_here;
-	  
-		  if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-		    flouble g_000,g_001,g_010,g_011;
-
-		    par->dens_beams[ib][ir][index]+=(g_000*h1x[2]*h1x[1]*h1x[0]+g_001*h1x[2]*h1x[1]*h0x[0]+
-						     g_010*h1x[2]*h0x[1]*h1x[0]+g_011*h1x[2]*h0x[1]*h0x[0]);
-		  }
-		  if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
-		    flouble g_100,g_101,g_110,g_111;
-		    arr_add+=(g_100*h0x[2]*h1x[1]*h1x[0]+g_101*h0x[2]*h1x[1]*h0x[0]+
-			      g_110*h0x[2]*h0x[1]*h1x[0]+g_111*h0x[2]*h0x[1]*h0x[0])*prefac_cart2sph_nsub;
-		  }
-
-    //Copy to beams dens
-    //Copy to beams vr
-    //Copy to beams pxx
-    //Copy to beams pyy
-    //Copy to beams pzz
+  //Interpolate into slices
+  compute_slices(par,CPY_TASK_DENS);
+  compute_slices(par,CPY_TASK_VRAD);
+  if(par->do_lensing) {
+    compute_slices(par,CPY_TASK_P_XX);
+    compute_slices(par,CPY_TASK_P_XY);
+    compute_slices(par,CPY_TASK_P_YY);
   }
 
   end_fftw(par);

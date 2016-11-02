@@ -62,6 +62,9 @@ static ParamCoLoRe *param_colore_new(void)
   par->l_box=-1;
   par->nz_here=512;
   par->iz0_here=0;
+  par->nz_max=512;
+  par->nz_all=NULL;
+  par->iz0_all=NULL;
   sprintf(par->prefixOut,"default");
   par->output_format=0;
   par->grid_dens_f=NULL;
@@ -74,14 +77,14 @@ static ParamCoLoRe *param_colore_new(void)
   par->do_lensing=0;
   par->nside_base=-1;
   par->n_beams_here=-1;
-  par->oi_slices=NULL;
+  //  par->oi_slices=NULL;
   par->oi_beams=NULL;
-  par->oi_sl_dum=NULL;
-  par->dens_slices=NULL;
-  par->vrad_slices=NULL;
-  par->p_xx_slices=NULL;
-  par->p_xy_slices=NULL;
-  par->p_yy_slices=NULL;
+  //  par->oi_sl_dum=NULL;
+  //  par->dens_slices=NULL;
+  //  par->vrad_slices=NULL;
+  //  par->p_xx_slices=NULL;
+  //  par->p_xy_slices=NULL;
+  //  par->p_yy_slices=NULL;
   par->dens_beams=NULL;
   par->vrad_beams=NULL;
   par->p_xx_beams=NULL;
@@ -349,11 +352,12 @@ ParamCoLoRe *read_run_params(char *fname)
   while(2*par->nside_base*par->nside_base<NNodes)
     par->nside_base*=2;
 
-  par->oi_slices=alloc_onion_info_slices(par);
-  par->oi_sl_dum=alloc_onion_info_slices(par);
+  //  par->oi_slices=alloc_onion_info_slices(par);
+  //  par->oi_sl_dum=alloc_onion_info_slices(par);
   par->oi_beams=alloc_onion_info_beams(par);
-  par->nside_base=par->oi_slices->nside_arr[0];
-  alloc_slices(par);
+  par->nside_base=par->oi_beams[0]->nside_arr[0];
+  //  alloc_slices(par);
+  alloc_beams(par);
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");
@@ -700,12 +704,14 @@ void write_catalog(ParamCoLoRe *par)
 void param_colore_free(ParamCoLoRe *par)
 {
   int ii;
+  free(par->nz_all);
+  free(par->iz0_all);
   free(par->logkarr);
   free(par->pkarr);
 
   free_beams(par);
-  free_onion_info(par->oi_slices);
-  free_onion_info(par->oi_sl_dum);
+  //  free_onion_info(par->oi_slices);
+  //  free_onion_info(par->oi_sl_dum);
   for(ii=0;ii<par->n_beams_here;ii++)
     free_onion_info(par->oi_beams[ii]);
   free(par->oi_beams);

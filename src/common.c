@@ -234,6 +234,7 @@ void mpi_init(int* p_argc,char*** p_argv)
   MPIThreadsOK=0;
 #endif //_HAVE_OMP
 #endif //_HAVE_MPI
+
 #ifdef _DEBUG
   printf("Node %d, thread count starts at %d\n",NodeThis,IThread0);
   print_info(" Threads = %d\n",MPIThreadsOK);
@@ -338,6 +339,7 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
   return oi;
 }
 
+/*
 OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par)
 {
   int ir;
@@ -397,6 +399,7 @@ OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par)
 
   return oi;
 }
+*/
 
 OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
 {
@@ -474,6 +477,7 @@ void free_onion_info(OnionInfo *oi)
   free(oi);
 }
 
+/*
 void free_slices(ParamCoLoRe *par)
 {
   int ii;
@@ -516,6 +520,7 @@ void alloc_slices(ParamCoLoRe *par)
     }
   }
 }
+*/
 
 void free_beams(ParamCoLoRe *par)
 {
@@ -523,7 +528,7 @@ void free_beams(ParamCoLoRe *par)
 
   for(ib=0;ib<par->n_beams_here;ib++) {
     int ii;
-    for(ii=0;ii<par->oi_slices->nr;ii++) {
+    for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
       free(par->dens_beams[ib][ii]);
       free(par->vrad_beams[ib][ii]);
       if(par->do_lensing) {
@@ -574,7 +579,7 @@ void alloc_beams(ParamCoLoRe *par)
       par->p_yy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
     }
     par->nsrc_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(int *));
-    for(ii=0;ii<par->oi_slices->nr;ii++) {
+    for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
       par->dens_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
       par->vrad_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
       if(par->do_lensing) {

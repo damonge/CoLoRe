@@ -101,6 +101,10 @@ static void fftw_wrap(int ng,dftw_complex *pin,flouble *pout)
 void init_fftw(ParamCoLoRe *par)
 {
   ptrdiff_t dsize;
+
+  par->nz_all =my_calloc(NNodes,sizeof(int));
+  par->iz0_all=my_calloc(NNodes,sizeof(int));
+
 #ifdef _HAVE_MPI
   ptrdiff_t nz,iz0;
 
@@ -147,6 +151,11 @@ void init_fftw(ParamCoLoRe *par)
   par->nz_here=nz;
   par->iz0_here=iz0;
 
+  MPI_Allreduce(&(par->nz_here),&(par->nz_max),1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
+  MPI_Allgather(&(par->nz_here),1,MPI_INT,par->nz_all,1,MPI_INT,MPI_COMM_WORLD);
+  MPI_Allgather(&(par->iz0_here),1,MPI_INT,par->iz0_all,1,MPI_INT,MPI_COMM_WORLD);
+  dsize=par->nz_max*((lint)(par->n_grid*(par->n_grid/2+1)));
+
 #else //_HAVE_MPI
 
 #ifdef _HAVE_OMP
@@ -170,6 +179,9 @@ void init_fftw(ParamCoLoRe *par)
   dsize=(par->n_grid/2+1)*((lint)(par->n_grid*par->n_grid));
   par->nz_here=par->n_grid;
   par->iz0_here=0;
+  par->nz_max=par->nz_here;
+  par->nz_all[0]=par->nz_here;
+  par->iz0_all[0]=par->iz0_here;
 #endif //_HAVE_MPI
 
 #ifdef _SPREC
@@ -182,9 +194,9 @@ void init_fftw(ParamCoLoRe *par)
   par->grid_dens=(flouble *)(par->grid_dens_f);
 
 #ifdef _SPREC
-  par->grid_npot_f=fftwf_alloc_complex(dsize);
+  par->grid_npot_f=fftwf_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
 #else //_SPREC
-  par->grid_npot_f=fftw_alloc_complex(dsize);
+  par->grid_npot_f= fftw_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
 #endif //_SPREC
   if(par->grid_npot_f==NULL)
     report_error(1,"Ran out of memory\n");
@@ -192,8 +204,10 @@ void init_fftw(ParamCoLoRe *par)
 
   par->grid_dumm=my_malloc(2*dsize*sizeof(flouble));
 #ifdef _HAVE_MPI
-  par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
-  par->slice_right=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
+  //  par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
+  //  par->slice_right=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
+  par->slice_left =&(par->grid_npot[2*dsize]);
+  par->slice_right=&(par->grid_npot[2*(dsize+par->n_grid*(par->n_grid/2+1))]);
 #endif //_HAVE_MPI
 }
 
@@ -213,8 +227,8 @@ void end_fftw(ParamCoLoRe *par)
   free(par->grid_dumm);
 
 #ifdef _HAVE_MPI
-  free(par->slice_left);
-  free(par->slice_right);
+  //  free(par->slice_left);
+  //  free(par->slice_right);
 
 #ifdef _HAVE_OMP
   if(MPIThreadsOK) {
