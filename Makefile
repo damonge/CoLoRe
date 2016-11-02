@@ -10,10 +10,10 @@ OPTIONS = -Wall -O3 -std=c99
 DEFINEFLAGS += -D_LONGIDS
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
-#DEFINEFLAGS += -D_OLD_IM
-#DEFINEFLAGS += -D_IM_3D22D
 #Use double precision floating point? Set to "yes" or "no"
 USE_SINGLE_PRECISION = yes
+#Add random perturbations to kappa from redshifts outside the box
+ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
 USE_HDF5 = yes
 #Compile with FITS capability? Set to "yes" or "no"
@@ -27,10 +27,8 @@ USE_MPI = yes
 ###If two or more of the dependencies reside in the same paths, only
 ###one instance is necessary.
 #GSL
-GSL_INC = -I/home/damonge/include
-GSL_LIB = -L/home/damonge/lib
-#GSL_INC = -I/add/path
-#GSL_LIB = -L/add/path
+GSL_INC = -I/add/path
+GSL_LIB = -L/add/path
 #FFTW
 FFTW_INC =
 FFTW_LIB =
@@ -46,6 +44,9 @@ CONF_LIB =
 #healpix
 HPIX_INC =
 HPIX_LIB =
+#libsharp
+SHT_INC =
+SHT_LIB =
 #
 ########## End of user-definable ##########
 
@@ -89,8 +90,12 @@ LIB_FFTW += -lfftw3
 
 OPTIONS += $(DEFINEFLAGS)
 
-INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC)
-LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW) -lcfitsio -lchealpix
+INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC) $(SHT_INC) $(HPIX_INC)
+LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) $(SHT_LIB) $(HPIX_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW) -lcfitsio -lchealpix
+ifeq ($(strip $(ADD_EXTRA_KAPPA)),yes)
+DEFINEFLAGS += -D_ADD_EXTRA_KAPPA -D_WITH_SHT
+LIB_ALL += -lsharp -lfftpack -lc_utils
+endif #EXTRA_KAPPA
 ifeq ($(strip $(USE_HDF5)),yes)
 DEFINEFLAGS += -D_HAVE_HDF5
 LIB_ALL += -lhdf5 -lhdf5_hl -lz

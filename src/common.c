@@ -168,6 +168,14 @@ void rng_delta_gauss(double *module,double *phase,
   *module=sqrt(-sigma2*log(1-u));
 }
 
+void rng_gauss(gsl_rng *rng,double *r1,double *r2)
+{
+  double phase=2*M_PI*rng_01(rng);
+  double u=sqrt(-2*log(1-rng_01(rng)));
+  *r1=u*cos(phase);
+  *r2=u*sin(phase);
+}
+
 void end_rng(gsl_rng *rng)
 {
   gsl_rng_free(rng);

@@ -40,6 +40,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->sig8=0.83;
   par->fgrowth_0=-1;
   par->hubble_0=-1;
+  par->prefac_lensing=-1;
   par->z_max=1.5;
   par->z_min=0.5;
   par->r_max=-1;
@@ -313,8 +314,14 @@ ParamCoLoRe *read_run_params(char *fname)
     }
   }
 
-  if(par->do_kappa)
+  if(par->do_kappa) {
     par->kmap=new_hp_shell(par->nside_kappa,par->n_kappa);
+#ifdef _ADD_EXTRA_KAPPA
+    par->need_extra_kappa=my_calloc(par->nside_kappa,sizeof(int));
+    par->fl_mean_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
+    par->cl_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
+#endif //_ADD_EXTRA_KAPPA
+  }
 
 #ifdef _DEBUG
   sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
@@ -504,7 +511,28 @@ void write_kappa(ParamCoLoRe *par)
 	if(map_nadd[ip]>0)
 	  map_write[ip]/=map_nadd[ip];
       }
-      
+
+#ifdef _ADD_EXTRA_KAPPA
+      if(par->need_extra_kappa[ir]) {
+	if(NodeThis==0) {
+	  int lmax=3*par->kmap->nside;
+	  flouble *map_extra;
+	  flouble *map_mean=my_calloc(npx,sizeof(flouble));
+	  //	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
+	  print_info("Adding perturbations to kappa shell #%d\n",ir+1);
+	  //	  he_map2alm(par->kmap->nside,lmax,1,&map_write,&alm);
+	  //	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_kappa[ir]);
+	  //	  he_alm2map(par->kmap->nside,lmax,1,&map_mean,&alm);
+	  //	  free(alm);
+	  map_extra=he_synfast(par->cl_extra_kappa[ir],par->kmap->nside,lmax,par->seed_rng);
+	  for(ip=0;ip<npx;ip++)
+	    map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
+	  free(map_extra);
+	  free(map_mean);
+	}
+      }
+#endif //_ADD_EXTRA_KAPPA
+
       //Write dummy map
       if(NodeThis==0)
 	he_write_healpix_map(&map_write,1,par->nside_kappa,fname);
@@ -708,6 +736,17 @@ void param_colore_free(ParamCoLoRe *par)
 
   if(par->do_kappa) {
     free_hp_shell(par->kmap);
+#ifdef _ADD_EXTRA_KAPPA
+    for(ii=0;ii<par->n_kappa;ii++) {
+      if(par->need_extra_kappa[ii]) {
+	free(par->fl_mean_extra_kappa[ii]);
+	free(par->cl_extra_kappa[ii]);
+      }
+    }
+    free(par->need_extra_kappa);
+    free(par->fl_mean_extra_kappa);
+    free(par->cl_extra_kappa);
+#endif //_ADD_EXTRA_KAPPA
   }
 
 #ifdef _DEBUG

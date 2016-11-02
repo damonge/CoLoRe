@@ -545,7 +545,7 @@ flouble *he_synfast(flouble *cl,int nside,int lmax,unsigned int seed)
   int lmax_here=lmax;
   long npix=12*((long)nside)*nside;
   flouble *map=my_malloc(npix*sizeof(flouble));
-  Rng *rng=init_rng(seed);
+  gsl_rng *rng=init_rng(seed);
 
   if(lmax>3*nside-1)
     lmax_here=3*nside-1;
@@ -555,13 +555,12 @@ flouble *he_synfast(flouble *cl,int nside,int lmax,unsigned int seed)
   for(ll=0;ll<=lmax_here;ll++) {
     int mm;
     flouble sigma=sqrt(0.5*cl[ll]);
-    flouble r1,r2;
-    r1=rand_gauss(rng);
+    double r1,r2;
+    rng_gauss(rng,&r1,&r2);
     alms[he_indexlm(ll,0,lmax_here)]=(fcomplex)(M_SQRT2*sigma*r1);
 
     for(mm=1;mm<=ll;mm++) {
-      r1=rand_gauss(rng);
-      r2=rand_gauss(rng);
+      rng_gauss(rng,&r1,&r2);
       alms[he_indexlm(ll,mm,lmax_here)]=(fcomplex)(sigma*(r1+I*r2));
     }
   }

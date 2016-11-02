@@ -93,8 +93,7 @@
 
 #define TWOPIPIINVLOGTEN  0.1166503235296796 //ln(10)/(2*pi^2)
 #define TWOPIPIINV  0.05066059182116889 //1/(2*pi^2)
-#define DZ 0.001
-#define NZ 5001
+#define NA 5001
 #define NPOP_MAX 10
 
 #ifdef _HAVE_MPI
@@ -181,6 +180,7 @@ typedef struct {
   //Derived parameters
   double fgrowth_0; //Growth rate at z=0
   double hubble_0; //Expansion rate at z=0 (inverse length units)
+  double prefac_lensing; //3*O_M*H_0^2/2
   double z_max; //Maximum redshift
   double z_min; //Minimum redshift
   double r_max; //Maximum radial comoving distance
@@ -200,13 +200,13 @@ typedef struct {
   double idlogk; //1/D(log10(k))
   double *logkarr; //Array of log10(k) values (units of h/Mpc)
   double *pkarr; //Array of power spectrum values (units of (Mpc/h)^3)
-  double z_arr_z2r[NZ]; //Array of redshifts used to compute r(z)
-  double r_arr_z2r[NZ]; //Array of comoving distances used to compute r(z)
-  double z_arr_r2z[NZ]; //Array of redshifts used to compute z(r)
-  double r_arr_r2z[NZ]; //Array of comoving distances used to compute z(r), D_d(r), D_v(r), 1/H(z)
-  double growth_d_arr[NZ]; //Array of density growth factors used to compute D_d(r)
-  double growth_v_arr[NZ]; //Array of velocity growth factors used to compute D_v(r)
-  double ihub_arr[NZ]; //Array of 1/H(z)
+  double a_arr_a2r[NA]; //Array of redshifts used to compute r(z)
+  double r_arr_a2r[NA]; //Array of comoving distances used to compute r(z)
+  double z_arr_r2z[NA]; //Array of redshifts used to compute z(r)
+  double r_arr_r2z[NA]; //Array of comoving distances used to compute z(r), D_d(r), D_v(r), 1/H(z)
+  double growth_d_arr[NA]; //Array of density growth factors used to compute D_d(r)
+  double growth_v_arr[NA]; //Array of velocity growth factors used to compute D_v(r)
+  double ihub_arr[NA]; //Array of 1/H(z)
   double glob_idr; //1/dr, where dr is the radial comoving distance interval used in the arrays above
 
   unsigned int seed_rng; //RNG seed
@@ -277,6 +277,11 @@ typedef struct {
   double z_kappa_out[NPOP_MAX]; //Array of source plane redshifts
   int nside_kappa;
   HealpixShells *kmap; //Kappa maps at each redshift
+#ifdef _ADD_EXTRA_KAPPA
+  int *need_extra_kappa;
+  flouble **fl_mean_extra_kappa;
+  flouble **cl_extra_kappa;
+#endif //_ADD_EXTRA_KAPPA
 
   int do_pred;
   double pred_dz;
@@ -297,6 +302,7 @@ double rng_01(gsl_rng *rng);
 int rng_poisson(double lambda,gsl_rng *rng);
 void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
+void rng_gauss(gsl_rng *rng,double *r1,double *r2);
 void end_rng(gsl_rng *rng);
 OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par);
 OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
@@ -371,6 +377,11 @@ void he_ring2nest_inplace(flouble *map_in,long nside);
 void he_nest2ring_inplace(flouble *map_in,long nside);
 void he_udgrade(flouble *map_in,long nside_in,flouble *map_out,long nside_out,int nest);
 #ifdef _WITH_SHT
+#ifdef _SPREC
+#define SHT_TYPE 0
+#else //_SPREC
+#define SHT_TYPE SHARP_DP
+#endif //_SPREC
 #define HE_MAX_SHT 32
 #define HE_FWHM2SIGMA 0.00012352884853326381 //Transforms FWHM in arcmin to sigma_G in rad:
 long he_nalms(int lmax);

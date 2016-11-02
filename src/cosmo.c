@@ -23,27 +23,28 @@
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_errno.h>
 
-static double z_of_r_provisional(ParamCoLoRe *par,double r)
+static double a_of_r_provisional(ParamCoLoRe *par,double r)
 {
-  if(r<=0) return 0;
-  else if(r>=par->r_arr_z2r[NZ-1]) return par->z_arr_z2r[NZ-1];
+  if(r<=0) return 1.;
+  else if(r>=par->r_arr_a2r[0]) return 1E-6;
   else {
-    int iz=0;
-    while(r>=par->r_arr_z2r[iz])
-      iz++;
-    return par->z_arr_z2r[iz-1]+(par->z_arr_z2r[iz]-par->z_arr_z2r[iz-1])*
-      (r-par->r_arr_z2r[iz-1])/(par->r_arr_z2r[iz]-par->r_arr_z2r[iz-1]);
+    int ia=0;
+    while(r<=par->r_arr_a2r[ia])
+      ia++;
+    return  par->a_arr_a2r[ia-1]+(par->a_arr_a2r[ia]-par->a_arr_a2r[ia-1])*
+      (r-par->r_arr_a2r[ia-1])/(par->r_arr_a2r[ia]-par->r_arr_a2r[ia-1]);
   }
 }
 
 double r_of_z(ParamCoLoRe *par,double z)
 {
-  if(z<=0) return 0;
-  else if(z>=par->z_arr_z2r[NZ-1]) return par->r_arr_z2r[NZ-1];
+  double a=1./(1+z);
+  if(a>=1) return 0;
+  else if(a<=0) return par->r_arr_a2r[0];
   else {
-    int iz=(int)(z/DZ);
-    double r=par->r_arr_z2r[iz]+(par->r_arr_z2r[iz+1]-par->r_arr_z2r[iz])*
-      (z-par->z_arr_z2r[iz])/DZ;
+    int ia=(int)(a*(NA-1));
+    double r=par->r_arr_a2r[ia]+(par->r_arr_a2r[ia+1]-par->r_arr_a2r[ia])*
+      (a-par->a_arr_a2r[ia])*(NA-1.);
     return r;
   }
 }
@@ -51,7 +52,7 @@ double r_of_z(ParamCoLoRe *par,double z)
 double z_of_r(ParamCoLoRe *par,double r)
 {
   if(r<=0) return 0;
-  else if(r>=par->r_arr_r2z[NZ-1]) return par->z_arr_r2z[NZ-1];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->z_arr_r2z[NA-1];
   else {
     int ir=(int)(r*par->glob_idr);
     double z=par->z_arr_r2z[ir]+(par->z_arr_r2z[ir+1]-par->z_arr_r2z[ir])*
@@ -63,7 +64,7 @@ double z_of_r(ParamCoLoRe *par,double r)
 double dgrowth_of_r(ParamCoLoRe *par,double r)
 {
   if(r<=0) return 1;
-  else if(r>=par->r_arr_r2z[NZ-1]) return par->growth_d_arr[NZ-1];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_d_arr[NA-1];
   else {
     int ir=(int)(r*par->glob_idr);
     double gd=par->growth_d_arr[ir]+(par->growth_d_arr[ir+1]-par->growth_d_arr[ir])*
@@ -74,8 +75,8 @@ double dgrowth_of_r(ParamCoLoRe *par,double r)
 
 double vgrowth_of_r(ParamCoLoRe *par,double r)
 {
-  if(r<=0) return 1;
-  else if(r>=par->r_arr_r2z[NZ-1]) return par->growth_v_arr[NZ-1];
+  if(r<=0) return par->growth_v_arr[0];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_v_arr[NA-1];
   else {
     int ir=(int)(r*par->glob_idr);
     double gv=par->growth_v_arr[ir]+(par->growth_v_arr[ir+1]-par->growth_v_arr[ir])*
@@ -86,8 +87,8 @@ double vgrowth_of_r(ParamCoLoRe *par,double r)
 
 double ihub_of_r(ParamCoLoRe *par,double r)
 {
-  if(r<=0) return 1;
-  else if(r>=par->r_arr_r2z[NZ-1]) return par->ihub_arr[NZ-1];
+  if(r<=0) return par->ihub_arr[NA-1];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->ihub_arr[NA-1];
   else {
     int ir=(int)(r*par->glob_idr);
     double gv=par->ihub_arr[ir]+(par->ihub_arr[ir+1]-par->ihub_arr[ir])*
@@ -128,6 +129,66 @@ double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop)
     return gsl_spline_eval(par->spline_imap_tz[ipop],z,par->intacc_imap[ipop]);
 }
 
+typedef struct {
+  ParamCoLoRe *par;
+  int l;
+  double chi_0_a;
+  double chi_f_a;
+  double chi_0_b;
+  double chi_f_b;
+  double chi_s;
+} ClParams;
+
+static double window_kappa_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
+{
+  double chi_l=(l+0.5)/k;
+
+  if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
+    return 0;
+  else {
+    double gf=dgrowth_of_r(par,chi_l);
+    double aa=1/(1+z_of_r(par,chi_l));
+  
+    return par->prefac_lensing*l*(l+1.)*gf*(chi_s-chi_l)/(k*k*chi_s*chi_l*aa);
+  }
+}
+
+static double cl_integrand(double lk,void *params)
+{
+  ClParams *p=(ClParams *)params;
+  double k=pow(10.,lk);
+  double pk=pk_linear0(p->par,lk);
+  double wa=window_kappa_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
+  double wb=window_kappa_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
+  if((p->par->do_smoothing) && (p->par->smooth_potential))
+    pk*=exp(-k*k*p->par->r2_smooth);
+
+  return k*wa*wb*pk;
+}
+
+static double compute_cl_kappa(ParamCoLoRe *par,int l,
+			       double chi_0_a,double chi_f_a,
+			       double chi_0_b,double chi_f_b,
+			       double chi_s)
+{
+  ClParams p;
+  double result=0,eresult;
+  gsl_function F;
+  gsl_integration_workspace *w=gsl_integration_workspace_alloc(1000);
+  p.par=par;
+  p.l=l;
+  p.chi_0_a=chi_0_a;
+  p.chi_f_a=chi_f_a;
+  p.chi_0_b=chi_0_b;
+  p.chi_f_b=chi_f_b;
+  p.chi_s=chi_s;
+  F.function=&cl_integrand;
+  F.params=&p;
+  gsl_integration_qag(&F,-5.,2.,0,1E-4,1000,GSL_INTEG_GAUSS41,w,&result,&eresult);
+  gsl_integration_workspace_free(w);
+
+  return M_LN10*result/(l+0.5);
+}
 
 static void int_error_handle(int status,double result,
                              double error)
@@ -439,6 +500,8 @@ void cosmo_set(ParamCoLoRe *par)
   par->r_min=csm_radial_comoving_distance(pars,1/(1+par->z_min));
   par->r_max=csm_radial_comoving_distance(pars,1/(1+par->z_max));
 
+  par->prefac_lensing=1.5*par->hubble_0*par->hubble_0*par->OmegaM;
+
   par->l_box=2*par->r_max*(1+2./par->n_grid);
   par->pos_obs[0]=0.5*par->l_box;
   par->pos_obs[1]=0.5*par->l_box;
@@ -527,35 +590,20 @@ void cosmo_set(ParamCoLoRe *par)
 				    par->fnameNuImap[ipop],pars);
   }
 
-  if(par->do_kappa) {
-    for(ii=0;ii<par->n_kappa;ii++) {
-      double z=par->z_kappa_out[ii];
-#ifdef _DEBUG
-      if((z<par->z_min) || (z>par->z_max))
-	print_info("Source plane %d outside redshift range\n",ii+1);
-#endif //_DEBUG
-      par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
-      par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
-    }
-  }
-
   //Set z-dependent functions
-  for(ii=0;ii<NZ;ii++) {
-    double z=((double)ii)*DZ;
-    double a=1/(1+z);
-    double rz=csm_radial_comoving_distance(pars,a);
-    par->z_arr_z2r[ii]=z;
-    par->r_arr_z2r[ii]=rz;
+  for(ii=0;ii<NA;ii++) {
+    double a=((double)ii)/(NA-1);
+    double ra=csm_radial_comoving_distance(pars,a);
+    par->a_arr_a2r[ii]=a;
+    par->r_arr_a2r[ii]=ra;
   }
-  if((par->z_arr_z2r[NZ-1]<=par->z_max)||(par->r_arr_z2r[NZ-1]<=par->r_max))
-    report_error(1,"Error: only supports z<%.3lf\n",NZ*DZ);
 
   double growth0=csm_growth_factor(pars,1);
-  par->glob_idr=(NZ-1)/(par->r_arr_z2r[NZ-1]-par->r_arr_z2r[0]);
-  for(ii=0;ii<NZ;ii++) {
+  par->glob_idr=(NA-1)/par->r_arr_a2r[0];
+  for(ii=0;ii<NA;ii++) {
     double r=ii/par->glob_idr;
-    double z=z_of_r_provisional(par,r);
-    double a=1/(1+z);
+    double a=a_of_r_provisional(par,r);
+    double z=1./a-1;
     double gz=csm_growth_factor(pars,a)/growth0;
     double fz=csm_f_growth(pars,a);
     double hhz=csm_hubble(pars,a);
@@ -565,10 +613,46 @@ void cosmo_set(ParamCoLoRe *par)
     par->growth_v_arr[ii]=(gz*hhz*fz)/(par->fgrowth_0*par->hubble_0); //This is for the comoving velocity
     par->ihub_arr[ii]=1./hhz;
   }
-  if((par->z_arr_r2z[NZ-1]<=par->z_max)||(par->r_arr_r2z[NZ-1]<=par->r_max))
-    report_error(1,"Error: only supports z<%.3lf\n",NZ*DZ);
-
-  csm_params_free(pars);
 
   pk_linear_set(par);
+
+  if(par->do_kappa) {
+    for(ii=0;ii<par->n_kappa;ii++) {
+      double z=par->z_kappa_out[ii];
+      if(z>par->z_max) {
+#ifdef _ADD_EXTRA_KAPPA
+	int l,nl=3*par->kmap->nside;
+	double chi_here=r_of_z(par,z);
+	if(NodeThis==0)
+	  fprintf(par->f_dbg,"Power spectra for extra kappa, shell %d (z=%.3lf)\n",ii+1,z);
+	par->need_extra_kappa[ii]=1;
+	par->fl_mean_extra_kappa[ii]=my_malloc(nl*sizeof(flouble));
+	par->cl_extra_kappa[ii]=my_malloc(nl*sizeof(flouble));
+	for(l=0;l<nl;l++) {
+	  flouble cl_11=compute_cl_kappa(par,l,0.        ,par->r_max,0.        ,par->r_max,chi_here);
+	  flouble cl_12=compute_cl_kappa(par,l,0.        ,par->r_max,par->r_max,chi_here  ,chi_here);
+	  flouble cl_22=compute_cl_kappa(par,l,par->r_max,chi_here  ,par->r_max,chi_here  ,chi_here);
+	  par->fl_mean_extra_kappa[ii][l]=cl_12/cl_11;
+	  par->cl_extra_kappa[ii][l]=cl_22-cl_12*cl_12/cl_11;
+	  //	  par->fl_mean_extra_kappa[ii][l]=0;
+	  //	  par->cl_extra_kappa[ii][l]=cl_22+cl_11+2*cl_12;
+	  if(l==0) {
+	    par->fl_mean_extra_kappa[ii][l]=0;
+	    par->cl_extra_kappa[ii][l]=0;
+	  }
+	  if(NodeThis==0)
+	    fprintf(par->f_dbg,"%d %lE %lE\n",l,par->fl_mean_extra_kappa[ii][l],par->cl_extra_kappa[ii][l]);
+	}
+	if(NodeThis==0)
+	  fprintf(par->f_dbg,"\n");
+#else //_ADD_EXTRA_KAPPA
+	report_error(1,"Source plane %d outside redshift range\n",ii+1);
+#endif //_ADD_EXTRA_KAPPA
+      }
+      par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+    }
+  }
+
+  csm_params_free(pars);
 }
