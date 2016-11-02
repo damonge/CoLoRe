@@ -39,7 +39,7 @@ FITS_LIB =
 HDF5_INC =
 HDF5_LIB =
 #libconfig
-CONF_INC =
+CONF_INC = 
 CONF_LIB =
 #healpix
 HPIX_INC =
@@ -50,7 +50,7 @@ SHT_LIB =
 #
 ########## End of user-definable ##########
 
-DEFINEFLAGS += -DHAVE_INLINE -DGSL_RANGE_CHECK_OFF
+DEFINEFLAGS += -DHAVE_INLINE -DGSL_RANGE_CHECK_OFF 
 
 ifeq ($(strip $(USE_OMP)),yes)
 OPTIONS += -fopenmp
@@ -81,12 +81,14 @@ ifeq ($(strip $(USE_OMP)),yes)
 LIB_FFTW += -lfftw3_omp
 endif #OMP
 ifeq ($(strip $(USE_MPI)),yes)
-LIB_FFTW += -lfftw3_mpi
+LIB_FFTW += -lfftw3_mpi 
 endif #MPI
 
 endif #SINGLE_PRECISION
 LIB_FFTW += -lfftw3
 
+# for fftlog
+LIB_FFTW += -lfftw3
 
 OPTIONS += $(DEFINEFLAGS)
 

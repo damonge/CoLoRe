@@ -43,13 +43,22 @@ void write_predictions(ParamCoLoRe *par) {
   double *xi=my_malloc(Nk*sizeof(double));
   double *xilin=my_malloc(Nk*sizeof(double));
   for (int i=0; i<Nk; i++) ka[i]=kmin*pow((kmax/kmin),i*1.0/(Nk-1));
-  FILE *fpk, *fxi;
-  char fnamepk[256], fnamexi[256];
-	
+  FILE *fpk, *fxi, *fg;
+  char fnamepk[256], fnamexi[256], gbiasfn[256];
+  sprintf(gbiasfn,"%s_gbias.dat",par->prefixOut);
+  fg=fopen(gbiasfn,"w");
+  fprintf (fg,"#1-z 2-r(z) 3-g(z) ");
+  for (int ipop=0; ipop<par->n_srcs; ipop++)
+    fprintf(fg,"%d-bg_%d(z) ",ipop+4,ipop+1);	
+  for (int ipop=0; ipop<par->n_imap; ipop++)
+    fprintf(fg,"%d-bi_%d(z) ",ipop+4+par->n_srcs,ipop+);
+  fprintf(fg,"\n");
+
   // outter loop is over redshifts
   for (double z=0; z<=par->z_max; z+=par->pred_dz) {
     double r=r_of_z(par,z);
     double g=dgrowth_of_r(par,r);
+    fprintf (fg,"%g %g %g ",z,r,g);
     for (int i=0; i<Nk; i++) pklin[i]=pk_linear0(par,log10(ka[i]))*g*g;
     pk2xi(Nk,ka,pklin,ra,xilin);
     // inner loop is over populations, ipop=-1 is the unbiased version
@@ -58,6 +67,7 @@ void write_predictions(ParamCoLoRe *par) {
     if(par->do_sources) {
       for (int ipop=0; ipop<par->n_srcs; ipop++) {
 	double bias=bias_of_z_srcs(par,z,ipop);
+	fprintf(fg,"%g ",bias);
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
 	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-par->r2_smooth*ka[i]*ka[i]);
 	pk2xi(Nk,ka,pk,ra,xi);
@@ -83,6 +93,7 @@ void write_predictions(ParamCoLoRe *par) {
     if(par->do_imap) {
       for (int ipop=0; ipop<par->n_imap; ipop++) {
 	double bias=bias_of_z_imap(par,z,ipop);
+	fprintf(fg,"%g ",bias);
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
 	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-par->r2_smooth*ka[i]*ka[i]);
 	pk2xi(Nk,ka,pk,ra,xi);
@@ -105,7 +116,9 @@ void write_predictions(ParamCoLoRe *par) {
 	fclose(fxi);
       }
     }
+    fprintf(fg,"\n");
   }
+  fclose(fg);
   free(ka);
   free(pk);
   free(pklin);
