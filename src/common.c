@@ -214,7 +214,10 @@ void mpi_init(int* p_argc,char*** p_argv)
 #endif //_HAVE_OMP
   MPI_Allgather(&nthreads_this,1,MPI_INT,nthreads_all,1,MPI_INT,MPI_COMM_WORLD);
 #ifdef _DEBUG
-  printf("Node %d has %d threads\n",NodeThis,nthreads_all[NodeThis]);
+  if(NodeThis==0) {
+    for(ii=0;ii<NNodes;ii++)
+      printf("Node %d has %d threads\n",ii,nthreads_all[ii]);
+  }
 #endif //_DEBUG
   IThread0=0;
   for(ii=0;ii<NodeThis;ii++)
