@@ -23,7 +23,9 @@
 
 #define INTERP_NGP 0
 #define INTERP_CIC 1
-#define INTERP_TYPE INTERP_NGP
+#ifndef INTERP_TYPE
+#define INTERP_TYPE INTERP_CIC
+#endif //INTERP_TYPE
 
 #define IND_XX 0
 #define IND_XY 1
@@ -41,8 +43,8 @@ static inline double get_cosine(double index,double dx)
 #endif //PIXTYPE
 }
 
-static inline void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
-			       flouble *d,flouble v[3],flouble t[6])
+static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
+			flouble *d,flouble v[3],flouble t[6])
 {
   int ngx=2*(par->n_grid/2+1);
   lint iz_hi=iz+1,iz_lo=iz-1,iz_0=iz;
@@ -113,9 +115,6 @@ void pixelize(ParamCoLoRe *par)
   if(NodeThis==0) timer(0);
 
   int i;
-#ifdef _HAVE_MPI
-  MPI_Status stat;
-#endif //_HAVE_MPI
   lint size_slice_npot=(par->nz_max+2)*((lint)(2*par->n_grid*(par->n_grid/2+1)));
   lint size_slice_dens=par->nz_max*((lint)(2*par->n_grid*(par->n_grid/2+1)));
 
@@ -126,12 +125,10 @@ void pixelize(ParamCoLoRe *par)
 #ifdef _DEBUG
     print_info("Communication %d, Node %d is now Node %d\n",i,NodeThis,node_i_am_now);
 #endif //_DEBUG
-    MPI_Sendrecv(par->grid_npot,size_slice_npot,FLOUBLE_MPI,NodeRight,i,
-		 par->grid_npot,size_slice_npot,FLOUBLE_MPI,NodeLeft,i,
-		 MPI_COMM_WORLD,&stat);
-    MPI_Sendrecv(par->grid_dens,size_slice_dens,FLOUBLE_MPI,NodeRight,i,
-		 par->grid_dens,size_slice_dens,FLOUBLE_MPI,NodeLeft,i,
-		 MPI_COMM_WORLD,&stat);
+    MPI_Sendrecv_replace(par->grid_npot,size_slice_npot,FLOUBLE_MPI,
+			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    MPI_Sendrecv_replace(par->grid_dens,size_slice_dens,FLOUBLE_MPI,
+			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
 #endif //_HAVE_MPI
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
@@ -266,7 +263,6 @@ void pixelize(ParamCoLoRe *par)
 		      
 		      added_anything=1;
 		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000);
-		      printf("%lE\n",t_000[0]);
 		      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001);
 		      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010);
 		      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011);

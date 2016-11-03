@@ -64,10 +64,18 @@
 #define PT_CEA 0
 #define PT_CAR 1
 
+#define INTERP_NGP 0
+#define INTERP_CIC 1
+
 //Pixelization type
 #ifndef PIXTYPE
 #define PIXTYPE PT_CAR
 #endif //PIXTYPE
+
+//Interpolation type
+#ifndef INTERP_TYPE
+#define INTERP_TYPE INTERP_CIC
+#endif //INTERP_TYPE
 
 //Resolution parameter for nearest onion shell
 #ifndef NSIDE_ONION_BASE
