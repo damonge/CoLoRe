@@ -228,7 +228,6 @@ typedef struct {
   flouble *grid_dens; //Real-space grid for the density field
   dftw_complex *grid_npot_f; //Fourier-space grid for the Newtonian potential
   flouble *grid_npot; //Real-space grid for the Newtonian potential
-  flouble *grid_dumm; //Dummy array used to interpolate into shells
   flouble *slice_left; //Dummy array to store grid cells coming from the left node
   flouble *slice_right; //Dummy array to store grid cells coming from the right node
   double sigma2_gauss; //Variance of the cartesian density field

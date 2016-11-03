@@ -21,11 +21,16 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-#define CPY_TASK_DENS 0
-#define CPY_TASK_VRAD 1
-#define CPY_TASK_P_XX 2
-#define CPY_TASK_P_XY 3
-#define CPY_TASK_P_YY 4
+#define INTERP_NGP 0
+#define INTERP_CIC 1
+#define INTERP_TYPE INTERP_NGP
+
+#define IND_XX 0
+#define IND_XY 1
+#define IND_XZ 2
+#define IND_YY 3
+#define IND_YZ 4
+#define IND_ZZ 5
 
 static inline double get_cosine(double index,double dx)
 {
@@ -36,555 +41,293 @@ static inline double get_cosine(double index,double dx)
 #endif //PIXTYPE
 }
 
-//////
-// Copies new observable quantity into dummy array
-static void copy_to_dum(ParamCoLoRe *par,int cpy_task)
+static inline void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
+			       flouble *d,flouble v[3],flouble t[6])
 {
-#ifdef _DEBUG
-  print_info("Copying to dum\n");
-  if(NodeThis==0) timer(0);
-#endif //_DEBUG
-#ifdef _HAVE_OMP
-#pragma omp parallel default(none)		\
-  shared(par,cpy_task)
-#endif //_HAVE_OMP
-  {
-    double dx=par->l_box/par->n_grid;
-    double idx=1./dx;
-    int iz;
-    int ngx=2*(par->n_grid/2+1);
-    double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
-    gsl_matrix *mat_tij=NULL,*mat_basis=NULL,*mat_dum=NULL;
-    if((cpy_task==CPY_TASK_P_XX) || (cpy_task==CPY_TASK_P_XY) || (cpy_task==CPY_TASK_P_YY)) {
-      mat_tij=gsl_matrix_alloc(3,3);
-      mat_basis=gsl_matrix_alloc(3,3);
-      mat_dum=gsl_matrix_alloc(3,3);
-    }
+  int ngx=2*(par->n_grid/2+1);
+  lint iz_hi=iz+1,iz_lo=iz-1,iz_0=iz;
+  lint iy_hi=iy+1,iy_lo=iy-1,iy_0=iy;
+  lint ix_hi=ix+1,ix_lo=ix-1,ix_0=ix;
+  if(iy==0) iy_lo=par->n_grid-1;
+  if(iy==par->n_grid-1) iy_hi=0;
+  if(ix==0) ix_lo=par->n_grid-1;
+  if(ix==par->n_grid-1) ix_hi=0;
+  iz_0*=ngx*par->n_grid;
+  iz_lo*=ngx*par->n_grid;
+  iz_hi*=ngx*par->n_grid;
+  iy_0*=ngx;
+  iy_lo*=ngx;
+  iy_hi*=ngx;
 
-#ifdef _HAVE_OMP
-#pragma omp for
-#endif //_HAVE_OMP
-    for(iz=0;iz<par->nz_here;iz++) {
-      int iy;
-      lint iz_hi=iz+1;
-      lint iz_lo=iz-1;
-      lint iz_0=iz;
-      double z=dx*(iz+par->iz0_here+0.5)-par->pos_obs[2];
-      if(iz==0) iz_lo=par->n_grid-1;
-      if(iz==par->n_grid-1) iz_hi=0;
-      iz_hi*=ngx*par->n_grid;
-      iz_lo*=ngx*par->n_grid;
-      iz_0*=ngx*par->n_grid;
-      for(iy=0;iy<par->n_grid;iy++) {
-	int ix;
-	lint iy_hi=iy+1;
-	lint iy_lo=iy-1;
-	lint iy_0=iy;
-	double y=dx*(iy+0.5)-par->pos_obs[1];
-	if(iy==0) iy_lo=par->n_grid-1;
-	if(iy==par->n_grid-1) iy_hi=0;
-	iy_hi*=ngx;
-	iy_lo*=ngx;
-	iy_0*=ngx;
-	for(ix=0;ix<par->n_grid;ix++) {
-	  lint ix_hi=ix+1;
-	  lint ix_lo=ix-1;
-	  lint ix_0=ix;
-	  double x=dx*(ix+0.5)-par->pos_obs[0];
-	  if(ix==0) ix_lo=par->n_grid-1;
-	  if(ix==par->n_grid-1) ix_hi=0;
-	  if(cpy_task==CPY_TASK_DENS) {
-	    par->grid_dumm[ix_0+iy_0+iz_0]=par->grid_dens[ix_0+iy_0+iz_0];
-	  }
-	  else if(cpy_task==CPY_TASK_VRAD) {
-	    double vel[3];
-	    double irr=1./sqrt(x*x+y*y+z*z);
+  //Get density
+  *d=par->grid_dens[ix_0+iy_0+iz_0];
 
-	    vel[0]=par->grid_npot[ix_hi+iy_0+iz_0]-par->grid_npot[ix_lo+iy_0+iz_0];
-	    vel[1]=par->grid_npot[ix_0+iy_hi+iz_0]-par->grid_npot[ix_0+iy_lo+iz_0];
-	    if(iz==0)
-	      vel[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->slice_left[ix_0+iy_0];
-	    else if(iz==par->nz_here-1)
-	      vel[2]=par->slice_right[ix_0+iy_0]-par->grid_npot[ix_0+iy_0+iz_lo];
-	    else
-	      vel[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
-
-	    par->grid_dumm[ix_0+iy_0+iz_0]=factor_vel*0.5*idx*irr*(vel[0]*x+vel[1]*y+vel[2]*z);
-	  }
-	  else if((cpy_task==CPY_TASK_P_XX) || (cpy_task==CPY_TASK_P_XY) || (cpy_task==CPY_TASK_P_YY)) {
-	    double cth,sth,cph,sph;
-	    double r=sqrt(x*x+y*y+z*z);
-	    double txx,txy,txz,tyy,tyz,tzz;
-
-	    //Set rotation matrix
-	    if(r==0) {
-	      cth=1; cph=1; sph=0; sth=0;
-	    }
-	    else {
-	      cth=z/r;
-	      sth=sqrt(1-cth*cth);
-	      if(sth==0) {
-		cph=1;
-		sph=0;
-	      }
-	      else {
-		cph=x/(r*sth);
-		sph=y/(r*sth);
-	      }
-	    }
-	    gsl_matrix_set(mat_basis,0,0,sth*cph);
-	    gsl_matrix_set(mat_basis,0,1,sth*sph);
-	    gsl_matrix_set(mat_basis,0,2,cth);
-	    gsl_matrix_set(mat_basis,1,0,cth*cph);
-	    gsl_matrix_set(mat_basis,1,1,cth*sph);
-	    gsl_matrix_set(mat_basis,1,2,-sth);
-	    gsl_matrix_set(mat_basis,2,0,-sph);
-	    gsl_matrix_set(mat_basis,2,1,cph);
-	    gsl_matrix_set(mat_basis,2,2,0);
-
-	    //Set tidal tensor
-	    txx=(par->grid_npot[ix_hi+iy_0+iz_0]+par->grid_npot[ix_lo+iy_0+iz_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
-	    tyy=(par->grid_npot[ix_0+iy_hi+iz_0]+par->grid_npot[ix_0+iy_lo+iz_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
-	    txy=0.25*(par->grid_npot[ix_hi+iy_hi+iz_0]+par->grid_npot[ix_lo+iy_lo+iz_0]-
-		      par->grid_npot[ix_hi+iy_lo+iz_0]-par->grid_npot[ix_lo+iy_hi+iz_0]);
-	    if(iz==0) {
-	      tzz=(par->grid_npot[ix_0+iy_0+iz_hi]+par->slice_left[ix_0+iy_0]-2*par->grid_npot[ix_0+iy_0+iz_0]);
-	      txz=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->slice_left[ix_lo+iy_0]-
-			par->slice_left[ix_hi+iy_0]-par->grid_npot[ix_lo+iy_0+iz_hi]);
-	      tyz=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->slice_left[ix_0+iy_lo]-
-			par->slice_left[ix_0+iy_hi]-par->grid_npot[ix_0+iy_lo+iz_hi]);
-	    }
-	    else if(iz==par->nz_here-1) {
-	      tzz=(par->slice_right[ix_0+iy_0]+par->grid_npot[ix_0+iy_0+iz_lo]-2*par->grid_npot[ix_0+iy_0+iz_0]);
-	      txz=0.25*(par->slice_right[ix_hi+iy_0]+par->grid_npot[ix_lo+iy_0+iz_lo]-
-			par->grid_npot[ix_hi+iy_0+iz_lo]-par->slice_right[ix_lo+iy_0]);
-	      tyz=0.25*(par->slice_right[ix_0+iy_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
-			par->grid_npot[ix_0+iy_hi+iz_lo]-par->slice_right[ix_0+iy_lo]);
-	    }
-	    else {
-	      tzz=(par->grid_npot[ix_0+iy_0+iz_hi]+par->grid_npot[ix_0+iy_0+iz_lo]-2*par->grid_npot[ix_0+iy_0+iz_0]);
-	      txz=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->grid_npot[ix_lo+iy_0+iz_lo]-
-			par->grid_npot[ix_hi+iy_0+iz_lo]-par->grid_npot[ix_lo+iy_0+iz_hi]);
-	      tyz=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
-			par->grid_npot[ix_0+iy_hi+iz_lo]-par->grid_npot[ix_0+iy_lo+iz_hi]);
-	    }
-	    gsl_matrix_set(mat_tij,0,0,txx);
-	    gsl_matrix_set(mat_tij,0,1,txy);
-	    gsl_matrix_set(mat_tij,0,2,txz);
-	    gsl_matrix_set(mat_tij,1,0,txy);
-	    gsl_matrix_set(mat_tij,1,1,tyy);
-	    gsl_matrix_set(mat_tij,1,2,tyz);
-	    gsl_matrix_set(mat_tij,2,0,txz);
-	    gsl_matrix_set(mat_tij,2,1,tyz);
-	    gsl_matrix_set(mat_tij,2,2,tzz);
-
-	    //Rotate to spherical coordinates
-	    gsl_blas_dgemm(CblasNoTrans,CblasTrans  ,1.,mat_tij  ,mat_basis,0,mat_dum);
-	    gsl_blas_dgemm(CblasNoTrans,CblasNoTrans,1.,mat_basis,mat_dum  ,0,mat_tij);
-
-	    if(cpy_task==CPY_TASK_P_XX)
-	      par->grid_dumm[ix_0+iy_0+iz_0]=idx*idx*gsl_matrix_get(mat_tij,1,1);
-	    if(cpy_task==CPY_TASK_P_XY)
-	      par->grid_dumm[ix_0+iy_0+iz_0]=idx*idx*gsl_matrix_get(mat_tij,1,2);
-	    if(cpy_task==CPY_TASK_P_YY)
-	      par->grid_dumm[ix_0+iy_0+iz_0]=idx*idx*gsl_matrix_get(mat_tij,2,2);
-	  }
-	  else
-	    report_error(1,"Wrong task %d\n",cpy_task);
-	}
-      }
-    } // end omp for
-    if((cpy_task==CPY_TASK_P_XX) || (cpy_task==CPY_TASK_P_XY) || (cpy_task==CPY_TASK_P_YY)) {
-      gsl_matrix_free(mat_tij);
-      gsl_matrix_free(mat_basis);
-      gsl_matrix_free(mat_dum);
-    }    
-  } // end omp parallel
-#ifdef _DEBUG
-  if(NodeThis==0) timer(2);
-#endif //_DEBUG
-}
-
-static void interpolate_to_slice(ParamCoLoRe *par,OnionInfo *oi,flouble *grid,flouble **slices)
-{
-#ifdef _DEBUG
-  print_info("Interpolating to slices\n");
-  if(NodeThis==0) timer(0);
-#endif //_DEBUG
-
-#ifdef _HAVE_OMP
-#pragma omp parallel default(none) \
-  shared(par,oi,grid,slices)
-#endif //_HAVE_OMP
-  {
-    int ir;
-    flouble idx=par->n_grid/par->l_box;
-    lint ngx=2*(par->n_grid/2+1);
-
-#ifdef _HAVE_OMP
-#pragma omp for schedule(dynamic)
-#endif //_HAVE_OMP
-    for(ir=0;ir<oi->nr;ir++) {
-      if(oi->num_pix[ir]>0) {
-	int icth;
-	flouble dr=oi->rf_arr[ir]-oi->r0_arr[ir];
-#if PIXTYPE==PT_CEA
-	flouble dcth=2.0/oi->nside_arr[ir];
-	flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
-#elif PIXTYPE==PT_CAR
-	flouble dth=M_PI/oi->nside_arr[ir];
-#endif //PIXTYPE
-	flouble dphi=M_PI/oi->nside_arr[ir];
-	flouble dr_sub=dr/FAC_CART2SPH_NSUB;
-	flouble dphi_sub=dphi/FAC_CART2SPH_NSUB;
-	int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
-	int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
-	flouble r0=oi->r0_arr[ir];
-
-	for(icth=0;icth<ncth;icth++) {
-	  int iphi;
-	  int index_cth=nphi*icth;
-#if PIXTYPE==PT_CEA
-	  flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dcth);
-#elif PIXTYPE==PT_CAR
-	  flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dth);
-	  flouble dcth=get_cosine(oi->icth0_arr[ir]+icth+1.0,dth)-cth0;
-	  flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
-#endif //PIXTYPE
-	  for(iphi=0;iphi<nphi;iphi++) {
-	    int ir2;
-	    flouble phi0=(oi->iphi0_arr[ir]+iphi)*dphi;
-	    int index=index_cth+iphi;
-	    flouble arr_add=0;
-
-	    //Make sub-voxels
-	    for(ir2=0;ir2<FAC_CART2SPH_NSUB;ir2++) {
-	      int icth2;
-	      flouble r=r0+(ir2+0.5)*dr_sub;
-	      for(icth2=0;icth2<FAC_CART2SPH_NSUB;icth2++) {
-		int iphi2;
-		flouble cth=cth0+(icth2+0.5)*dcth_sub;
-		flouble sth=sqrt(1-cth*cth);
-		for(iphi2=0;iphi2<FAC_CART2SPH_NSUB;iphi2++) {
-		  int ax;
-		  lint ix1[3],ix0[3];
-		  flouble x[3],h0x[3],h1x[3];
-		  flouble phi=phi0+(iphi2+0.5)*dphi_sub;
-		  x[0]=r*sth*cos(phi);
-		  x[1]=r*sth*sin(phi);
-		  x[2]=r*cth;
-
-		  //Trilinear interpolation
-		  for(ax=0;ax<3;ax++) {
-		    x[ax]+=par->pos_obs[ax];
-		    ix0[ax]=(int)(x[ax]*idx);
-		    h0x[ax]=x[ax]*idx-ix0[ax];
-		    h1x[ax]=1-h0x[ax];
-		    ix1[ax]=ix0[ax]+1;
-		    if(ix0[ax]>=par->n_grid)
-		      ix0[ax]-=par->n_grid;
-		    else if(ix0[ax]<0)
-		      ix0[ax]+=par->n_grid;
-		    if(ix1[ax]>=par->n_grid)
-		      ix1[ax]-=par->n_grid;
-		    else if(ix1[ax]<0)
-		      ix1[ax]+=par->n_grid;
-		  }
-		  ix0[2]-=par->iz0_here;
-		  ix1[2]-=par->iz0_here;
-		  if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-		    arr_add+=
-		      grid[ix0[2]*ngx*par->n_grid+ix0[1]*ngx+ix0[0]]*h1x[2]*h1x[1]*h1x[0]+
-		      grid[ix0[2]*ngx*par->n_grid+ix0[1]*ngx+ix1[0]]*h1x[2]*h1x[1]*h0x[0]+
-		      grid[ix0[2]*ngx*par->n_grid+ix1[1]*ngx+ix0[0]]*h1x[2]*h0x[1]*h1x[0]+
-		      grid[ix0[2]*ngx*par->n_grid+ix1[1]*ngx+ix1[0]]*h1x[2]*h0x[1]*h0x[0];
-		  }
-		  if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
-		    arr_add+=
-		      grid[ix1[2]*ngx*par->n_grid+ix0[1]*ngx+ix0[0]]*h0x[2]*h1x[1]*h1x[0]+
-		      grid[ix1[2]*ngx*par->n_grid+ix0[1]*ngx+ix1[0]]*h0x[2]*h1x[1]*h0x[0]+
-		      grid[ix1[2]*ngx*par->n_grid+ix1[1]*ngx+ix0[0]]*h0x[2]*h0x[1]*h1x[0]+
-		      grid[ix1[2]*ngx*par->n_grid+ix1[1]*ngx+ix1[0]]*h0x[2]*h0x[1]*h0x[0];
-		  }
-		}
-	      }
-	    }
-	    slices[ir][index]+=arr_add/(FAC_CART2SPH_NSUB*FAC_CART2SPH_NSUB*FAC_CART2SPH_NSUB);
-	  }
-	}
-      }
-    } //end omp for
-  } //end omp parallel
-#ifdef _DEBUG
-  if(NodeThis==0) timer(2);
-#endif //_DEBUG
-}
-
-static void compute_slices(ParamCoLoRe *par,int task)
-{
-  copy_to_dum(par,task);
-  if(task==CPY_TASK_DENS)
-    interpolate_to_slice(par,par->oi_slices,par->grid_dumm,par->dens_slices);
-  else if(task==CPY_TASK_VRAD)
-    interpolate_to_slice(par,par->oi_slices,par->grid_dumm,par->vrad_slices);
-  else if(task==CPY_TASK_P_XX)
-    interpolate_to_slice(par,par->oi_slices,par->grid_dumm,par->p_xx_slices);
-  else if(task==CPY_TASK_P_XY)
-    interpolate_to_slice(par,par->oi_slices,par->grid_dumm,par->p_xy_slices);
-  else if(task==CPY_TASK_P_YY)
-    interpolate_to_slice(par,par->oi_slices,par->grid_dumm,par->p_yy_slices);
+  //Get velocity
+  v[0]=par->grid_npot[ix_hi+iy_0+iz_0]-par->grid_npot[ix_lo+iy_0+iz_0];
+  v[1]=par->grid_npot[ix_0+iy_hi+iz_0]-par->grid_npot[ix_0+iy_lo+iz_0];
+  if(iz==0)
+    v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->slice_left[ix_0+iy_0];
+  else if(iz==par->nz_here-1)
+    v[2]=par->slice_right[ix_0+iy_0]-par->grid_npot[ix_0+iy_0+iz_lo];
   else
-    report_error(1,"Wrong task %d\n",task);
-}
+    v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
 
-#ifdef _HAVE_MPI
-static void communicate_onion_slices(OnionInfo *oi_send,OnionInfo *oi_recv,MPI_Status *stat)
-{
-  MPI_Sendrecv(oi_send->iphi0_arr,oi_send->nr,MPI_INT,NodeRight,1,
-	       oi_recv->iphi0_arr,oi_send->nr,MPI_INT,NodeLeft ,1,
-	       MPI_COMM_WORLD,stat);
-  MPI_Sendrecv(oi_send->iphif_arr,oi_send->nr,MPI_INT,NodeRight,2,
-	       oi_recv->iphif_arr,oi_send->nr,MPI_INT,NodeLeft ,2,
-	       MPI_COMM_WORLD,stat);
-  MPI_Sendrecv(oi_send->icth0_arr,oi_send->nr,MPI_INT,NodeRight,3,
-	       oi_recv->icth0_arr,oi_send->nr,MPI_INT,NodeLeft ,3,
-	       MPI_COMM_WORLD,stat);
-  MPI_Sendrecv(oi_send->icthf_arr,oi_send->nr,MPI_INT,NodeRight,4,
-	       oi_recv->icthf_arr,oi_send->nr,MPI_INT,NodeLeft ,4,
-	       MPI_COMM_WORLD,stat);
-  MPI_Sendrecv(oi_send->num_pix,oi_send->nr,MPI_INT,NodeRight,5,
-	       oi_recv->num_pix,oi_send->nr,MPI_INT,NodeLeft ,5,
-	       MPI_COMM_WORLD,stat);
-}
-#endif //_HAVE_MPI
-
-static void slices2beams(ParamCoLoRe *par,int task)
-{
-  flouble ***beams=NULL;
-  flouble **slices=NULL;
-  int ir;
-
-#ifdef _DEBUG
-  print_info("Slices to beams\n");
-  if(NodeThis==0) timer(0);
-#endif //_DEBUG
-
-  if(task==CPY_TASK_DENS) {
-    beams=par->dens_beams;
-    slices=par->dens_slices;
-  }
-  else if(task==CPY_TASK_VRAD) {
-    beams=par->vrad_beams;
-    slices=par->vrad_slices;
-  }
-  else if(task==CPY_TASK_P_XX) {
-    beams=par->p_xx_beams;
-    slices=par->p_xx_slices;
-  }
-  else if(task==CPY_TASK_P_XY) {
-    beams=par->p_xy_beams;
-    slices=par->p_xy_slices;
-  }
-  else if(task==CPY_TASK_P_YY) {
-    beams=par->p_yy_beams;
-    slices=par->p_yy_slices;
-  }
-  else
-    report_error(1,"Wrong task %d\n",task);
-
-  int inode;
-#ifdef _HAVE_MPI
-  MPI_Status stat;
-#endif //_HAVE_MPI
-
-  for(inode=0;inode<NNodes;inode++) {
-    //Receive onion_slices from left into onion_sl_dum
-#ifdef _HAVE_MPI
-    communicate_onion_slices(par->oi_slices,par->oi_sl_dum,&stat);
-#endif //_HAVE_MPI
-    for(ir=0;ir<par->oi_slices->nr;ir++) {
-      int ib;
-      //cth range
-      int icth0_sl=par->oi_sl_dum->icth0_arr[ir];
-      int icthf_sl=par->oi_sl_dum->icthf_arr[ir];
-      int nphi_sl=2*par->oi_slices->nside_arr[ir];
-
-      //Receive slices from left into dum_slices
-      flouble *dum_slice=my_malloc(par->oi_sl_dum->num_pix[ir]*sizeof(flouble));
-#ifdef _HAVE_MPI
-      MPI_Sendrecv(slices[ir],par->oi_slices->num_pix[ir],FLOUBLE_MPI,NodeRight,ir,
-      		   dum_slice,par->oi_sl_dum->num_pix[ir],FLOUBLE_MPI,NodeLeft,ir,
-		   MPI_COMM_WORLD,&stat);
-#else //_HAVE_MPI
-      memcpy(dum_slice,slices[ir],par->oi_slices->num_pix[ir]*sizeof(flouble));
-#endif //_HAVE_MPI
-
-      //Add dum_slice into beams
-      if(par->oi_sl_dum->num_pix[ir]>0) {
-	for(ib=0;ib<par->n_beams_here;ib++) {
-	  int icth;
-	  int icth0_bm=par->oi_beams[ib]->icth0_arr[ir];
-	  int icthf_bm=par->oi_beams[ib]->icthf_arr[ir];
-	  int iphi0_bm=par->oi_beams[ib]->iphi0_arr[ir];
-	  int nphi_bm=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
-	  int icth0=MAX(icth0_bm,icth0_sl);
-	  int icthf=MIN(icthf_bm,icthf_sl);
-	  for(icth=icth0;icth<=icthf;icth++) {
-	    int iphi;
-	    int ind_cth_bm=(icth-icth0_bm)*nphi_bm;
-	    int ind_cth_sl=(icth-icth0_sl)*nphi_sl;
-	    for(iphi=0;iphi<nphi_bm;iphi++) {
-	      beams[ib][ir][ind_cth_bm+iphi]+=dum_slice[ind_cth_sl+iphi0_bm+iphi];
-	    }
-	  }
-	}
-      }
-
-      //Copy dum_slices into current slices
-      free(slices[ir]);
-      slices[ir]=my_malloc(par->oi_sl_dum->num_pix[ir]*sizeof(flouble));
-      memcpy(slices[ir],dum_slice,par->oi_sl_dum->num_pix[ir]*sizeof(flouble));
-      free(dum_slice);
+  //Get tidal tensor
+  if(par->do_lensing) {
+    t[IND_XX]=(par->grid_npot[ix_hi+iy_0+iz_0]+par->grid_npot[ix_lo+iy_0+iz_0]-
+	       2*par->grid_npot[ix_0+iy_0+iz_0]);
+    t[IND_YY]=(par->grid_npot[ix_0+iy_hi+iz_0]+par->grid_npot[ix_0+iy_lo+iz_0]-
+	       2*par->grid_npot[ix_0+iy_0+iz_0]);
+    t[IND_XY]=0.25*(par->grid_npot[ix_hi+iy_hi+iz_0]+par->grid_npot[ix_lo+iy_lo+iz_0]-
+		    par->grid_npot[ix_hi+iy_lo+iz_0]-par->grid_npot[ix_lo+iy_hi+iz_0]);
+    if(iz==0) {
+      t[IND_ZZ]=(par->grid_npot[ix_0+iy_0+iz_hi]+par->slice_left[ix_0+iy_0]-
+		 2*par->grid_npot[ix_0+iy_0+iz_0]);
+      t[IND_XZ]=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->slice_left[ix_lo+iy_0]-
+		      par->slice_left[ix_hi+iy_0]-par->grid_npot[ix_lo+iy_0+iz_hi]);
+      t[IND_YZ]=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->slice_left[ix_0+iy_lo]-
+		      par->slice_left[ix_0+iy_hi]-par->grid_npot[ix_0+iy_lo+iz_hi]);
     }
-    //Copy onion_sl_dum into onion_slices
-    memcpy(par->oi_slices->iphi0_arr,par->oi_sl_dum->iphi0_arr,par->oi_slices->nr*sizeof(int));
-    memcpy(par->oi_slices->iphif_arr,par->oi_sl_dum->iphif_arr,par->oi_slices->nr*sizeof(int));
-    memcpy(par->oi_slices->icth0_arr,par->oi_sl_dum->icth0_arr,par->oi_slices->nr*sizeof(int));
-    memcpy(par->oi_slices->icthf_arr,par->oi_sl_dum->icthf_arr,par->oi_slices->nr*sizeof(int));
-    memcpy(par->oi_slices->num_pix,par->oi_sl_dum->num_pix,par->oi_slices->nr*sizeof(int));
+    else if(iz==par->nz_here-1) {
+      t[IND_ZZ]=(par->slice_right[ix_0+iy_0]+par->grid_npot[ix_0+iy_0+iz_lo]-
+		 2*par->grid_npot[ix_0+iy_0+iz_0]);
+      t[IND_XZ]=0.25*(par->slice_right[ix_hi+iy_0]+par->grid_npot[ix_lo+iy_0+iz_lo]-
+		      par->grid_npot[ix_hi+iy_0+iz_lo]-par->slice_right[ix_lo+iy_0]);
+      t[IND_YZ]=0.25*(par->slice_right[ix_0+iy_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
+		      par->grid_npot[ix_0+iy_hi+iz_lo]-par->slice_right[ix_0+iy_lo]);
+    }
+    else {
+      t[IND_ZZ]=(par->grid_npot[ix_0+iy_0+iz_hi]+par->grid_npot[ix_0+iy_0+iz_lo]-
+		 2*par->grid_npot[ix_0+iy_0+iz_0]);
+      t[IND_ZZ]=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->grid_npot[ix_lo+iy_0+iz_lo]-
+		      par->grid_npot[ix_hi+iy_0+iz_lo]-par->grid_npot[ix_lo+iy_0+iz_hi]);
+      t[IND_ZZ]=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
+		      par->grid_npot[ix_0+iy_hi+iz_lo]-par->grid_npot[ix_0+iy_lo+iz_hi]);
+    }
   }
-
-#ifdef _DEBUG
-  if(NodeThis==0) timer(2);
-#endif //_DEBUG
-}
-
-static void get_element(ParamCoLoRe *par,int task,int ix,int iy,int iz,
-			flouble *txx,flouble *txy,flouble *txz,
-			flouble *tyy,flouble *tyz,flouble *tzz)
-{
-  if(task==CPY_TASK_DENS) {
-    par->grid_dens[ix+2*(par->n_grid/2+1)*(iy+//HERE
-}
+}  
 
 void pixelize(ParamCoLoRe *par)
 {
+  print_info("*** Pixelizing cartesian grids\n");
+  if(NodeThis==0) timer(0);
+
   int i;
+#ifdef _HAVE_MPI
   MPI_Status stat;
-  lint size_slice=(par->nz_max+2)*((lint)(2*par->n_grid*(par->n_grid/2+1)));
+#endif //_HAVE_MPI
+  lint size_slice_npot=(par->nz_max+2)*((lint)(2*par->n_grid*(par->n_grid/2+1)));
+  lint size_slice_dens=par->nz_max*((lint)(2*par->n_grid*(par->n_grid/2+1)));
+
   for(i=0;i<NNodes;i++) {
     int ib;
-    int node_i_am_now=(NodeThis+i)%NNodes;
-    MPI_Sendrecv(par->grid_npot,size_slice,FLOUBLE_MPI,NodeRight,i,
-		 par->grid_npot,size_slice,FLOUBLE_MPI,NodeLeft,i,
+    int node_i_am_now=(NodeThis-i-1+NNodes)%NNodes;
+#ifdef _HAVE_MPI
+#ifdef _DEBUG
+    print_info("Communication %d, Node %d is now Node %d\n",i,NodeThis,node_i_am_now);
+#endif //_DEBUG
+    MPI_Sendrecv(par->grid_npot,size_slice_npot,FLOUBLE_MPI,NodeRight,i,
+		 par->grid_npot,size_slice_npot,FLOUBLE_MPI,NodeLeft,i,
 		 MPI_COMM_WORLD,&stat);
-    MPI_Sendrecv(par->grid_dens,size_slice,FLOUBLE_MPI,NodeRight,i,
-		 par->grid_dens,size_slice,FLOUBLE_MPI,NodeLeft,i,
+    MPI_Sendrecv(par->grid_dens,size_slice_dens,FLOUBLE_MPI,NodeRight,i,
+		 par->grid_dens,size_slice_dens,FLOUBLE_MPI,NodeLeft,i,
 		 MPI_COMM_WORLD,&stat);
+#endif //_HAVE_MPI
+    par->nz_here=par->nz_all[node_i_am_now];
+    par->iz0_here=par->iz0_all[node_i_am_now];
 
     for(ib=0;ib<par->n_beams_here;ib++) {
-      int ir;
       OnionInfo *oi=par->oi_beams[ib];
-      flouble prefac_cart2sph_nsub=1./(FAC_CART2SPH_SUB*FAC_CART2SPH_SUB*FAC_CART2SPH_SUB);
-      for(ir=0;ir<par->oi_beams[ib]->nr;ir++) {
-	int icth;
-	double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
+
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) shared(par,oi,ib)
+#endif //_HAVE_OMP
+      {
+	int ir;
+	flouble idx=par->n_grid/par->l_box;
+	double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
+
+#ifdef _HAVE_OMP
+#pragma omp for nowait schedule(dynamic)
+#endif //_HAVE_OMP
+	for(ir=0;ir<oi->nr;ir++) {
+	  int icth;
+	  double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
 #if PIXTYPE==PT_CEA
-	flouble dcth=2.0/oi->nside_arr[ir];
-	flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
-#elif PIXTYPE==PT_CAR
-	flouble dth=M_PI/oi->nside_arr[ir];
-#endif //PIXTYPE
-	flouble dphi=M_PI/oi->nside_arr[ir];
-	flouble dr_sub=dr/FAC_CART2SPH_NSUB;
-	flouble dphi_sub=dphi/FAC_CART2SPH_NSUB;
-	int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
-	int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
-	flouble r0=oi->r0_arr[ir];
-	for(icth=0;icth<ncth;icth++) {
-	  int iphi;
-	  int index_cth=nphi*icth;
-#if PIXTYPE==PT_CEA
-	  flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dcth);
-#elif PIXTYPE==PT_CAR
-	  flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dth);
-	  flouble dcth=get_cosine(oi->icth0_arr[ir]+icth+1.0,dth)-cth0;
+	  flouble dcth=2.0/oi->nside_arr[ir];
 	  flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
+#elif PIXTYPE==PT_CAR
+	  flouble dth=M_PI/oi->nside_arr[ir];
 #endif //PIXTYPE
-	  for(iphi=0;iphi<nphi;iphi++) {
-	    int ir2;
-	    flouble phi0=(oi->iphi0_arr[ir]+iphi)*dphi;
-	    int index=index_cth+iphi;
-	    flouble arr_add=0;
+	  flouble dphi=M_PI/oi->nside_arr[ir];
+	  flouble dr_sub=dr/FAC_CART2SPH_NSUB;
+	  flouble dphi_sub=dphi/FAC_CART2SPH_NSUB;
+	  int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
+	  int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
+	  flouble r0=oi->r0_arr[ir];
+	  for(icth=0;icth<ncth;icth++) {
+	    int iphi;
+	    int index_cth=nphi*icth;
+#if PIXTYPE==PT_CEA
+	    flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dcth);
+#elif PIXTYPE==PT_CAR
+	    flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dth);
+	    flouble dcth=get_cosine(oi->icth0_arr[ir]+icth+1.0,dth)-cth0;
+	    flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
+#endif //PIXTYPE
+	    flouble cth_h=cth0+dcth*0.5;
+	    flouble sth_h=sqrt(1-cth_h*cth_h);
+	    for(iphi=0;iphi<nphi;iphi++) {
+	      int ir2;
+	      flouble u[3];
+	      int added_anything=0;
+	      int index=index_cth+iphi;
+	      flouble phi0=(oi->iphi0_arr[ir]+iphi)*dphi;
+	      flouble phi_h=phi0+dphi*0.5;
+	      flouble cph_h=cos(phi_h),sph_h=sin(phi_h);
+	      flouble d=0,v[3]={0,0,0},t[6]={0,0,0,0,0,0};
+	      u[0]=sth_h*cph_h; u[1]=sth_h*sph_h; u[2]=cth_h;
 
-	    //Make sub-voxels
-	    for(ir2=0;ir2<FAC_CART2SPH_NSUB;ir2++) {
-	      int icth2;
-	      flouble r=r0+(ir2+0.5)*dr_sub;
-	      for(icth2=0;icth2<FAC_CART2SPH_NSUB;icth2++) {
-		int iphi2;
-		flouble cth=cth0+(icth2+0.5)*dcth_sub;
-		flouble sth=sqrt(1-cth*cth);
-		for(iphi2=0;iphi2<FAC_CART2SPH_NSUB;iphi2++) {
-		  int ax;
-		  lint ix1[3],ix0[3];
-		  flouble x[3],h0x[3],h1x[3];
-		  flouble phi=phi0+(iphi2+0.5)*dphi_sub;
-		  x[0]=r*sth*cos(phi);
-		  x[1]=r*sth*sin(phi);
-		  x[2]=r*cth;
+	      //Make sub-voxels
+	      for(ir2=0;ir2<FAC_CART2SPH_NSUB;ir2++) {
+		int icth2;
+		flouble r=r0+(ir2+0.5)*dr_sub;
+		for(icth2=0;icth2<FAC_CART2SPH_NSUB;icth2++) {
+		  int iphi2;
+		  flouble cth=cth0+(icth2+0.5)*dcth_sub;
+		  flouble sth=sqrt(1-cth*cth);
+		  for(iphi2=0;iphi2<FAC_CART2SPH_NSUB;iphi2++) {
+		    flouble phi=phi0+(iphi2+0.5)*dphi_sub;
+		    int ax;
+		    lint ix0[3];
+		    flouble x[3],h0x[3];
+		    x[0]=r*sth*cos(phi); x[1]=r*sth*sin(phi); x[2]=r*cth;
+#if INTERP_TYPE==INTERP_NGP
+		    //Trilinear interpolation
+		    for(ax=0;ax<3;ax++) {
+		      x[ax]+=par->pos_obs[ax];
+		      ix0[ax]=(int)(x[ax]*idx+0.5);
+		      if(ix0[ax]>=par->n_grid)
+			ix0[ax]-=par->n_grid;
+		      else if(ix0[ax]<0)
+			ix0[ax]+=par->n_grid;
+		      h0x[ax]=1./FAC_CART2SPH_NSUB;
+		    }
+		    ix0[2]-=par->iz0_here;
+		    
+		    if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
+		      flouble d_000,v_000[3],t_000[6];
+		      flouble w_000=h0x[2]*h0x[1]*h0x[0];
+		      
+		      added_anything=1;
+		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000);
+		      d+=d_000*w_000;
+		      for(ax=0;ax<3;ax++)
+			v[ax]+=v_000[ax]*w_000;
+		      if(par->do_lensing) {
+			for(ax=0;ax<6;ax++)
+			  t[ax]+=t_000[ax]*w_000;
+		      }
+		    }
+#elif INTERP_TYPE==INTERP_CIC
+		    lint ix1[3];
+		    flouble h1x[3];
 
-		  //Trilinear interpolation
-		  for(ax=0;ax<3;ax++) {
-		    x[ax]+=par->pos_obs[ax];
-		    ix0[ax]=(int)(x[ax]*idx);
-		    h0x[ax]=x[ax]*idx-ix0[ax];
-		    h1x[ax]=1-h0x[ax];
-		    ix1[ax]=ix0[ax]+1;
-		    if(ix0[ax]>=par->n_grid)
-		      ix0[ax]-=par->n_grid;
-		    else if(ix0[ax]<0)
-		      ix0[ax]+=par->n_grid;
-		    if(ix1[ax]>=par->n_grid)
-		      ix1[ax]-=par->n_grid;
-		    else if(ix1[ax]<0)
-		      ix1[ax]+=par->n_grid;
-		    h0x[ax]/=FAC_CART2SPH_SUB;
-		    h1x[ax]/=FAC_CART2SPH_SUB;
+		    //Trilinear interpolation
+		    for(ax=0;ax<3;ax++) {
+		      x[ax]+=par->pos_obs[ax];
+		      ix0[ax]=(int)(x[ax]*idx);
+		      h0x[ax]=x[ax]*idx-ix0[ax];
+		      h1x[ax]=1-h0x[ax];
+		      ix1[ax]=ix0[ax]+1;
+		      if(ix0[ax]>=par->n_grid)
+			ix0[ax]-=par->n_grid;
+		      else if(ix0[ax]<0)
+			ix0[ax]+=par->n_grid;
+		      if(ix1[ax]>=par->n_grid)
+			ix1[ax]-=par->n_grid;
+		      else if(ix1[ax]<0)
+			ix1[ax]+=par->n_grid;
+		      h0x[ax]/=FAC_CART2SPH_NSUB;
+		      h1x[ax]/=FAC_CART2SPH_NSUB;
+		    }
+		    ix0[2]-=par->iz0_here;
+		    ix1[2]-=par->iz0_here;
+		    
+		    if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
+		      flouble d_000,v_000[3],t_000[6];
+		      flouble d_001,v_001[3],t_001[6];
+		      flouble d_010,v_010[3],t_010[6];
+		      flouble d_011,v_011[3],t_011[6];
+		      flouble w_000=h1x[2]*h1x[1]*h1x[0];
+		      flouble w_001=h1x[2]*h1x[1]*h0x[0];
+		      flouble w_010=h1x[2]*h0x[1]*h1x[0];
+		      flouble w_011=h1x[2]*h0x[1]*h0x[0];
+		      
+		      added_anything=1;
+		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000);
+		      printf("%lE\n",t_000[0]);
+		      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001);
+		      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010);
+		      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011);
+		      d+=(d_000*w_000+d_001*w_001+d_010*w_010+d_011*w_011);
+		      for(ax=0;ax<3;ax++)
+			v[ax]+=(v_000[ax]*w_000+v_001[ax]*w_001+v_010[ax]*w_010+v_011[ax]*w_011);
+		      if(par->do_lensing) {
+			for(ax=0;ax<6;ax++)
+			  t[ax]+=(t_000[ax]*w_000+t_001[ax]*w_001+t_010[ax]*w_010+t_011[ax]*w_011);
+		      }
+		    }
+		    if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
+		      flouble d_100,v_100[3],t_100[6];
+		      flouble d_101,v_101[3],t_101[6];
+		      flouble d_110,v_110[3],t_110[6];
+		      flouble d_111,v_111[3],t_111[6];
+		      flouble w_100=h0x[2]*h1x[1]*h1x[0];
+		      flouble w_101=h0x[2]*h1x[1]*h0x[0];
+		      flouble w_110=h0x[2]*h0x[1]*h1x[0];
+		      flouble w_111=h0x[2]*h0x[1]*h0x[0];
+		      
+		      added_anything=1;
+		      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100);
+		      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101);
+		      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110);
+		      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111);
+		      d+=(d_100*w_100+d_101*w_101+d_110*w_110+d_111*w_111);
+		      for(ax=0;ax<3;ax++)
+			v[ax]+=(v_100[ax]*w_100+v_101[ax]*w_101+v_110[ax]*w_110+v_111[ax]*w_111);
+		      if(par->do_lensing) {
+			for(ax=0;ax<6;ax++)
+			  t[ax]+=(t_100[ax]*w_100+t_101[ax]*w_101+t_110[ax]*w_110+t_111[ax]*w_111);
+		      }
+		    }
+#endif //INTERP_TYPE
 		  }
-		  ix0[2]-=par->iz0_here;
-		  ix1[2]-=par->iz0_here;
-	  
-		  if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-		    flouble g_000,g_001,g_010,g_011;
+		}
+	      }
 
-		    par->dens_beams[ib][ir][index]+=(g_000*h1x[2]*h1x[1]*h1x[0]+g_001*h1x[2]*h1x[1]*h0x[0]+
-						     g_010*h1x[2]*h0x[1]*h1x[0]+g_011*h1x[2]*h0x[1]*h0x[0]);
-		  }
-		  if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
-		    flouble g_100,g_101,g_110,g_111;
-		    arr_add+=(g_100*h0x[2]*h1x[1]*h1x[0]+g_101*h0x[2]*h1x[1]*h0x[0]+
-			      g_110*h0x[2]*h0x[1]*h1x[0]+g_111*h0x[2]*h0x[1]*h0x[0])*prefac_cart2sph_nsub;
-		  }
-
-    //Copy to beams dens
-    //Copy to beams vr
-    //Copy to beams pxx
-    //Copy to beams pyy
-    //Copy to beams pzz
+	      if(added_anything) {
+		par->dens_beams[ib][ir][index]+=d;
+		par->vrad_beams[ib][ir][index]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+		if(par->do_lensing) {
+		  par->p_xx_beams[ib][ir][index]+=idx*idx*
+		    (cth_h*cth_h*(t[IND_XX]*cph_h*cph_h*+2*t[IND_XY]*cph_h*sph_h+t[IND_YY]*sph_h*sph_h)+
+		     t[IND_ZZ]*sth_h*sth_h-2*cth_h*sth_h*(t[IND_XZ]*cph_h+t[IND_YZ]*sph_h));
+		  par->p_xy_beams[ib][ir][index]+=idx*idx*
+		    (2*t[IND_XY]*sph_h*cph_h*cth_h+t[IND_XZ]*sph_h*sth_h-
+		     cph_h*((t[IND_XX]-t[IND_YY])*cth_h*sph_h+t[IND_YZ]*sth_h));
+		  par->p_yy_beams[ib][ir][index]+=idx*idx*
+		    (t[IND_XX]*sph_h*sph_h+t[IND_YY]*cph_h*cph_h-2*t[IND_XY]*cph_h*sph_h);
+		}
+	      }
+	    }
+	  }
+	} //end omp for
+      } //end omp parallel
+    }
   }
 
+  if(NodeThis==0) timer(2);
   end_fftw(par);
-
-  //Communicate into beams
-  alloc_beams(par);
-  slices2beams(par,CPY_TASK_DENS);
-  slices2beams(par,CPY_TASK_VRAD);
-  if(par->do_lensing) {
-    slices2beams(par,CPY_TASK_P_XX);
-    slices2beams(par,CPY_TASK_P_XY);
-    slices2beams(par,CPY_TASK_P_YY);
-  }
-
-  free_slices(par);
+  print_info("\n");
 }

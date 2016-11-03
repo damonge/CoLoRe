@@ -339,68 +339,6 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
   return oi;
 }
 
-/*
-OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par)
-{
-  int ir;
-  double dx=par->l_box/par->n_grid;
-  double z0_node=dx*par->iz0_here-par->pos_obs[2];
-  double zf_node=dx*(par->iz0_here+par->nz_here)-par->pos_obs[2];
-  OnionInfo *oi=alloc_onion_empty(par,par->nside_base);
-
-  for(ir=0;ir<oi->nr;ir++) {
-    int icth0,icthf;
-    double cth0,cthf;
-    double r0=oi->r0_arr[ir];
-    double rf=oi->rf_arr[ir];
-    double rm=0.5*(r0+rf);
-    long npix=2*oi->nside_arr[ir]*oi->nside_arr[ir];
-    flouble dr_trans=rm*get_res(oi->nside_arr[ir]);
-    double dz_additional=dr_trans+dx;
-    double z0_here=z0_node-dz_additional;
-    double zf_here=zf_node+dz_additional;
-    
-    //Select phi bounds
-    //Pick the whole ring in this case
-    oi->iphi0_arr[ir]=0;
-    oi->iphif_arr[ir]=2*oi->nside_arr[ir]-1;
-    
-    //Select cth bounds
-    if(r0>0) {
-      cth0=MIN(z0_here/rf,z0_here/r0);
-      cthf=MAX(zf_here/rf,zf_here/r0);
-    }
-    else {
-      cth0=z0_here/rf;
-      cthf=zf_here/rf;
-    }
-    icth0=(int)(get_lat_index(oi->nside_arr[ir],cth0)-1);
-    icthf=(int)(get_lat_index(oi->nside_arr[ir],cthf)+1);
-    icth0=CLAMP(icth0,0,oi->nside_arr[ir]-1);
-    icthf=CLAMP(icthf,0,oi->nside_arr[ir]-1);
-    oi->icth0_arr[ir]=icth0;
-    oi->icthf_arr[ir]=icthf;
-
-    if(((oi->icth0_arr[ir]==oi->nside_arr[ir]-1) &&
-	(oi->icthf_arr[ir]==oi->nside_arr[ir]-1) &&
-	(z0_here>rf)) ||
-       ((oi->icth0_arr[ir]==0) && (oi->icthf_arr[ir]==0) && (zf_here<-rf)))
-      oi->num_pix[ir]=0;
-    else
-      oi->num_pix[ir]=2*oi->nside_arr[ir]*(icthf-icth0+1);
-
-#ifdef _DEBUG
-    int nside_here=oi->nside_arr[ir];
-    fprintf(par->f_dbg,
-	    "  Shell %d, r=%lf, nside=%d, angular resolution %lf Mpc/h, cell size %lf, %d pixels\n",
-	    ir,rm,nside_here,rm*get_res(nside_here),dx,oi->num_pix[ir]);
-#endif //_DEBUG
-  }
-
-  return oi;
-}
-*/
-
 OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
 {
   int i_base,ir,i_base_here,icth;
@@ -476,51 +414,6 @@ void free_onion_info(OnionInfo *oi)
   }
   free(oi);
 }
-
-/*
-void free_slices(ParamCoLoRe *par)
-{
-  int ii;
-  for(ii=0;ii<par->oi_slices->nr;ii++) {
-    free(par->dens_slices[ii]);
-    free(par->vrad_slices[ii]);
-    if(par->do_lensing) {
-      free(par->p_xx_slices[ii]);
-      free(par->p_xy_slices[ii]);
-      free(par->p_yy_slices[ii]);
-    }
-  }
-  free(par->dens_slices);
-  free(par->vrad_slices);
-  if(par->do_lensing) {
-    free(par->p_xx_slices);
-    free(par->p_xy_slices);
-    free(par->p_yy_slices);
-  }
-}
-
-void alloc_slices(ParamCoLoRe *par)
-{
-  int ii;
-
-  par->dens_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *)); 
-  par->vrad_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *));
-  if(par->do_lensing) {
-    par->p_xx_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *));
-    par->p_xy_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *));
-    par->p_yy_slices=my_malloc(par->oi_slices->nr*sizeof(flouble *));
-  }
-  for(ii=0;ii<par->oi_slices->nr;ii++) {
-    par->dens_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
-    par->vrad_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
-    if(par->do_lensing) {
-      par->p_xx_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
-      par->p_xy_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
-      par->p_yy_slices[ii]=my_calloc(par->oi_slices->num_pix[ii],sizeof(flouble));
-    }
-  }
-}
-*/
 
 void free_beams(ParamCoLoRe *par)
 {

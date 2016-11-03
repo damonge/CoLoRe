@@ -29,8 +29,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/users/damonge/include
-GSL_LIB = -L/users/damonge/lib
+GSL_INC = -I/home/damonge/include
+GSL_LIB = -L/home/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
