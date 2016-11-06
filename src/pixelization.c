@@ -161,8 +161,6 @@ void pixelize(ParamCoLoRe *par)
 	  int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
 	  int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
 	  flouble r0=oi->r0_arr[ir];
-	  //	  printf("%d %d %d %d\n",ib,ir,ncth,nphi);
-
 	  for(icth=0;icth<ncth;icth++) {
 	    int iphi;
 	    int index_cth=nphi*icth;

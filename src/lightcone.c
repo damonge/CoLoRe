@@ -638,5 +638,5 @@ void get_kappa(ParamCoLoRe *par)
   } //end omp parallel
 
   if(NodeThis==0) timer(2);
-  printf("\n");
+  print_info("\n");
 }
