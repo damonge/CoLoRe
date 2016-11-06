@@ -51,7 +51,7 @@ void write_predictions(ParamCoLoRe *par) {
   for (int ipop=0; ipop<par->n_srcs; ipop++)
     fprintf(fg,"%d-bg_%d(z) ",ipop+4,ipop+1);	
   for (int ipop=0; ipop<par->n_imap; ipop++)
-    fprintf(fg,"%d-bi_%d(z) ",ipop+4+par->n_srcs,ipop+);
+    fprintf(fg,"%d-bi_%d(z) ",ipop+4+par->n_srcs,ipop+1);
   fprintf(fg,"\n");
 
   // outter loop is over redshifts
