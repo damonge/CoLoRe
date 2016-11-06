@@ -24,7 +24,7 @@
 #define INTERP_NGP 0
 #define INTERP_CIC 1
 #ifndef INTERP_TYPE
-#define INTERP_TYPE INTERP_CIC
+#define INTERP_TYPE INTERP_NGP
 #endif //INTERP_TYPE
 
 #define IND_XX 0
@@ -101,9 +101,9 @@ static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
     else {
       t[IND_ZZ]=(par->grid_npot[ix_0+iy_0+iz_hi]+par->grid_npot[ix_0+iy_0+iz_lo]-
 		 2*par->grid_npot[ix_0+iy_0+iz_0]);
-      t[IND_ZZ]=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->grid_npot[ix_lo+iy_0+iz_lo]-
+      t[IND_XZ]=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->grid_npot[ix_lo+iy_0+iz_lo]-
 		      par->grid_npot[ix_hi+iy_0+iz_lo]-par->grid_npot[ix_lo+iy_0+iz_hi]);
-      t[IND_ZZ]=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
+      t[IND_YZ]=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
 		      par->grid_npot[ix_0+iy_hi+iz_lo]-par->grid_npot[ix_0+iy_lo+iz_hi]);
     }
   }
@@ -135,7 +135,6 @@ void pixelize(ParamCoLoRe *par)
 
     for(ib=0;ib<par->n_beams_here;ib++) {
       OnionInfo *oi=par->oi_beams[ib];
-
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none) shared(par,oi,ib)
 #endif //_HAVE_OMP
@@ -162,6 +161,8 @@ void pixelize(ParamCoLoRe *par)
 	  int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
 	  int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
 	  flouble r0=oi->r0_arr[ir];
+	  //	  printf("%d %d %d %d\n",ib,ir,ncth,nphi);
+
 	  for(icth=0;icth<ncth;icth++) {
 	    int iphi;
 	    int index_cth=nphi*icth;
@@ -307,10 +308,10 @@ void pixelize(ParamCoLoRe *par)
 		par->vrad_beams[ib][ir][index]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
 		if(par->do_lensing) {
 		  par->p_xx_beams[ib][ir][index]+=idx*idx*
-		    (cth_h*cth_h*(t[IND_XX]*cph_h*cph_h*+2*t[IND_XY]*cph_h*sph_h+t[IND_YY]*sph_h*sph_h)+
+		    (cth_h*cth_h*(t[IND_XX]*cph_h*cph_h+2*t[IND_XY]*cph_h*sph_h+t[IND_YY]*sph_h*sph_h)+
 		     t[IND_ZZ]*sth_h*sth_h-2*cth_h*sth_h*(t[IND_XZ]*cph_h+t[IND_YZ]*sph_h));
 		  par->p_xy_beams[ib][ir][index]+=idx*idx*
-		    (2*t[IND_XY]*sph_h*cph_h*cth_h+t[IND_XZ]*sph_h*sth_h-
+		    (t[IND_XY]*(cph_h*cph_h-sph_h*sph_h)*cth_h+t[IND_XZ]*sph_h*sth_h-
 		     cph_h*((t[IND_XX]-t[IND_YY])*cth_h*sph_h+t[IND_YZ]*sth_h));
 		  par->p_yy_beams[ib][ir][index]+=idx*idx*
 		    (t[IND_XX]*sph_h*sph_h+t[IND_YY]*cph_h*cph_h-2*t[IND_XY]*cph_h*sph_h);

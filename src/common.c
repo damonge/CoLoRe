@@ -284,13 +284,13 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
 static inline flouble get_res(int nside)
 {
 #if PIXTYPE == PT_CEA
-  return acos(1-2.0/nside);
+  //  return acos(1-2.0/nside);
+  return sqrt(2*M_PI)/nside;
 #elif PIXTYPE == PT_CAR
   return M_PI/nside;
 #else
-  return acos(1-2.0/nside);
+  return sqrt(2*M_PI)/nside;
 #endif //PIXTYPE
-  //  return sqrt(2*M_PI)/nside;
 }
 
 static inline flouble get_lat_index(int nside,flouble cth)

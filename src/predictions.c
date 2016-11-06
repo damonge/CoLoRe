@@ -23,7 +23,8 @@
 #include "common.h"
 #include "fftlog.h"
 
-void write_predictions(ParamCoLoRe *par) {
+void write_predictions(ParamCoLoRe *par)
+{
   if ((!par->do_sources) && (!par->do_imap)) return;
   if (NodeThis!=0) return;
   print_info("*** Writing predictions (ASCII) \n");
@@ -45,7 +46,7 @@ void write_predictions(ParamCoLoRe *par) {
   for (int i=0; i<Nk; i++) ka[i]=kmin*pow((kmax/kmin),i*1.0/(Nk-1));
   FILE *fpk, *fxi, *fg;
   char fnamepk[256], fnamexi[256], gbiasfn[256];
-  sprintf(gbiasfn,"%s_gbias.dat",par->prefixOut);
+  sprintf(gbiasfn,"%s_gbias.txt",par->prefixOut);
   fg=fopen(gbiasfn,"w");
   fprintf (fg,"#1-z 2-r(z) 3-g(z) ");
   for (int ipop=0; ipop<par->n_srcs; ipop++)
@@ -74,15 +75,15 @@ void write_predictions(ParamCoLoRe *par) {
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
 	xi2pk(Nk,ra,xi,ka,pk);
 	// now open the files
-	sprintf(fnamepk,"%s_pk_srcs_pop%i_z%g.dat",par->prefixOut,ipop,z);
-	sprintf(fnamexi,"%s_xi_srcs_pop%i_z%g.dat",par->prefixOut,ipop,z);
+	sprintf(fnamepk,"%s_pk_srcs_pop%i_z%g.txt",par->prefixOut,ipop,z);
+	sprintf(fnamexi,"%s_xi_srcs_pop%i_z%g.txt",par->prefixOut,ipop,z);
 	fpk=fopen(fnamepk,"w");
 	fprintf (fpk, "# k[h/Mpc] P_tt P_tl P_ll\n");
 	fxi=fopen(fnamexi,"w");
-	fprintf (fpk, "# k[h/Mpc] xi_tt xi_ll*b^2 xi_ll\n");
+	fprintf (fxi, "# r[Mpc/h] xi_tt xi_ll*b^2 xi_ll\n");
 	for (int i=0; i<Nk; i++) {
 	  if ((ka[i]>=kminout) && (ka[i]<=kmaxout))
-	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias, pklin[i]);
+	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias*exp(-par->r2_smooth*ka[i]*ka[i]), pklin[i]*exp(-par->r2_smooth*ka[i]*ka[i]));
 	  if ((ra[i]>=rminout) && (ra[i]<=rmaxout))
 	    fprintf (fxi,"%g %g %g %g\n",ra[i],xi[i], xilin[i]*bias*bias, xilin[i]);
 	}
@@ -100,12 +101,12 @@ void write_predictions(ParamCoLoRe *par) {
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
 	xi2pk(Nk,ra,xi,ka,pk);
 	// now open the files
-	sprintf(fnamepk,"%s_pk_imap_pop%i_z%g.dat",par->prefixOut,ipop,z);
-	sprintf(fnamexi,"%s_xi_imap_pop%i_z%g.dat",par->prefixOut,ipop,z);
+	sprintf(fnamepk,"%s_pk_imap_pop%i_z%g.txt",par->prefixOut,ipop,z);
+	sprintf(fnamexi,"%s_xi_imap_pop%i_z%g.txt",par->prefixOut,ipop,z);
 	fpk=fopen(fnamepk,"w");
 	fprintf (fpk, "# k[h/Mpc] P_tt P_tl P_ll\n");
 	fxi=fopen(fnamexi,"w");
-	fprintf (fpk, "# k[h/Mpc] xi_tt xi_ll*b^2 xi_ll\n");
+	fprintf (fxi, "# k[Mpc/h] xi_tt xi_ll*b^2 xi_ll\n");
 	for (int i=0; i<Nk; i++) {
 	  if ((ka[i]>=kminout) && (ka[i]<=kmaxout))
 	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias, pklin[i]);

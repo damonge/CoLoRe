@@ -100,7 +100,7 @@ double ihub_of_r(ParamCoLoRe *par,double r)
 double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
-    return 0;
+    return 1.;
   else
     return gsl_spline_eval(par->spline_srcs_bz[ipop],z,par->intacc_srcs[ipop]);
 }
@@ -108,7 +108,7 @@ double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop)
 double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
-    return 0;
+    return 1.;
   else
     return gsl_spline_eval(par->spline_imap_bz[ipop],z,par->intacc_imap[ipop]);
 }
