@@ -64,10 +64,18 @@
 #define PT_CEA 0
 #define PT_CAR 1
 
+#define INTERP_NGP 0
+#define INTERP_CIC 1
+
 //Pixelization type
 #ifndef PIXTYPE
 #define PIXTYPE PT_CAR
 #endif //PIXTYPE
+
+//Interpolation type
+#ifndef INTERP_TYPE
+#define INTERP_TYPE INTERP_CIC
+#endif //INTERP_TYPE
 
 //Resolution parameter for nearest onion shell
 #ifndef NSIDE_ONION_BASE
@@ -215,6 +223,9 @@ typedef struct {
   double l_box; //Box size for the cartesian grid
   int nz_here; //Number of cells in the z-direction stored in this node
   int iz0_here; //index of the first cell in the z-direction stored in this node
+  int nz_max;
+  int *nz_all;
+  int *iz0_all;
 
   char prefixOut[256]; //Output prefix
   int output_format; //0-> ASCII, 1-> FITS, 2-> HDF5
@@ -225,7 +236,6 @@ typedef struct {
   flouble *grid_dens; //Real-space grid for the density field
   dftw_complex *grid_npot_f; //Fourier-space grid for the Newtonian potential
   flouble *grid_npot; //Real-space grid for the Newtonian potential
-  flouble *grid_dumm; //Dummy array used to interpolate into shells
   flouble *slice_left; //Dummy array to store grid cells coming from the left node
   flouble *slice_right; //Dummy array to store grid cells coming from the right node
   double sigma2_gauss; //Variance of the cartesian density field
@@ -233,18 +243,18 @@ typedef struct {
   int do_lensing; //Do we need to compute the lensing potential?
   int nside_base; //Minimum n_side used in the pixelization
   int n_beams_here; //Number of beams stored in this node for the lightcone
-  OnionInfo *oi_slices; //Slices of the onion shells stored in this node
-  OnionInfo *oi_sl_dum; //Dummy onion slices used to communicate slices into beams
+  //  OnionInfo *oi_slices; //Slices of the onion shells stored in this node
+  //  OnionInfo *oi_sl_dum; //Dummy onion slices used to communicate slices into beams
   OnionInfo **oi_beams; //Onion beams stored in this node
-  flouble **dens_slices; //Density slices
+  //  flouble **dens_slices; //Density slices
   flouble ***dens_beams; //Density beams
-  flouble **vrad_slices; //v_r slices
+  //  flouble **vrad_slices; //v_r slices
   flouble ***vrad_beams; //v_r beams
-  flouble **p_xx_slices; //phi_xx slices
+  //  flouble **p_xx_slices; //phi_xx slices
   flouble ***p_xx_beams; //phi_xx beams
-  flouble **p_xy_slices; //phi_xy slices
+  //  flouble **p_xy_slices; //phi_xy slices
   flouble ***p_xy_beams; //phi_xy beams
-  flouble **p_yy_slices; //phi_yy slices
+  //  flouble **p_yy_slices; //phi_yy slices
   flouble ***p_yy_beams; //phi_yy beams
   int ***nsrc_beams; //Beams with total number of sources
 
@@ -304,11 +314,11 @@ void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
 void rng_gauss(gsl_rng *rng,double *r1,double *r2);
 void end_rng(gsl_rng *rng);
-OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par);
+//OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par);
 OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
 void free_onion_info(OnionInfo *oi);
-void alloc_slices(ParamCoLoRe *par);
-void free_slices(ParamCoLoRe *par);
+//void alloc_slices(ParamCoLoRe *par);
+//void free_slices(ParamCoLoRe *par);
 void alloc_beams(ParamCoLoRe *par);
 void free_beams(ParamCoLoRe *par);
 

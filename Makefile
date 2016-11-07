@@ -27,8 +27,10 @@ USE_MPI = yes
 ###If two or more of the dependencies reside in the same paths, only
 ###one instance is necessary.
 #GSL
-GSL_INC = -I/add/path
-GSL_LIB = -L/add/path
+#GSL_INC = -I/add/path
+#GSL_LIB = -L/add/path
+GSL_INC = -I/home/damonge/include
+GSL_LIB = -L/home/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =

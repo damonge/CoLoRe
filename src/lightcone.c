@@ -564,7 +564,7 @@ void get_kappa(ParamCoLoRe *par)
   shared(par)
 #endif //_HAVE_OMP
   {
-    int ir,ipx;
+    int ir;
     double inv_hpix_area=he_nside2npix(par->kmap->nside)/(4*M_PI);
 
     //Maybe OMP this
@@ -638,5 +638,5 @@ void get_kappa(ParamCoLoRe *par)
   } //end omp parallel
 
   if(NodeThis==0) timer(2);
-  printf("\n");
+  print_info("\n");
 }
