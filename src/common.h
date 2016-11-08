@@ -240,6 +240,7 @@ typedef struct {
   flouble *slice_right; //Dummy array to store grid cells coming from the right node
   double sigma2_gauss; //Variance of the cartesian density field
 
+  int need_onions; //Do we need spherical voxels at all?
   int do_lensing; //Do we need to compute the lensing potential?
   int nside_base; //Minimum n_side used in the pixelization
   int n_beams_here; //Number of beams stored in this node for the lightcone

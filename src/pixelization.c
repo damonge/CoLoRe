@@ -21,12 +21,6 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-#define INTERP_NGP 0
-#define INTERP_CIC 1
-#ifndef INTERP_TYPE
-#define INTERP_TYPE INTERP_NGP
-#endif //INTERP_TYPE
-
 #define IND_XX 0
 #define IND_XY 1
 #define IND_XZ 2
@@ -323,6 +317,5 @@ void pixelize(ParamCoLoRe *par)
   }
 
   if(NodeThis==0) timer(2);
-  end_fftw(par);
   print_info("\n");
 }

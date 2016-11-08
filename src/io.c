@@ -351,12 +351,12 @@ ParamCoLoRe *read_run_params(char *fname)
   while(2*par->nside_base*par->nside_base<NNodes)
     par->nside_base*=2;
 
-  //  par->oi_slices=alloc_onion_info_slices(par);
-  //  par->oi_sl_dum=alloc_onion_info_slices(par);
-  par->oi_beams=alloc_onion_info_beams(par);
-  par->nside_base=par->oi_beams[0]->nside_arr[0];
-  //  alloc_slices(par);
-  alloc_beams(par);
+  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa;
+  if(par->need_onions) {
+    par->oi_beams=alloc_onion_info_beams(par);
+    par->nside_base=par->oi_beams[0]->nside_arr[0];
+    alloc_beams(par);
+  }
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");
@@ -378,6 +378,8 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  %d lensing source planes\n",par->n_kappa);
   if(par->do_lensing)
     print_info("  Will include lensing shear\n");
+  if(!par->need_onions)
+    print_info("  Will NOT use voxels in spherical coordinates\n");
   print_info("\n");
   
   return par;
@@ -708,12 +710,12 @@ void param_colore_free(ParamCoLoRe *par)
   free(par->logkarr);
   free(par->pkarr);
 
-  free_beams(par);
-  //  free_onion_info(par->oi_slices);
-  //  free_onion_info(par->oi_sl_dum);
-  for(ii=0;ii<par->n_beams_here;ii++)
-    free_onion_info(par->oi_beams[ii]);
-  free(par->oi_beams);
+  if(par->need_onions) {
+    free_beams(par);
+    for(ii=0;ii<par->n_beams_here;ii++)
+      free_onion_info(par->oi_beams[ii]);
+    free(par->oi_beams);
+  }
 
   if(par->do_sources) {
     for(ii=0;ii<par->n_srcs;ii++) {

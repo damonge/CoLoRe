@@ -48,8 +48,11 @@ int main(int argc,char **argv)
   //Create Gaussian density and radial velocity fields
   create_cartesian_fields(par);
 
-  //Interpolate into beams
-  pixelize(par);
+  if(par->need_onions) {
+    //Interpolate into beams
+    pixelize(par);
+    end_fftw(par);
+  }
 
   //Precompute lensing if needed
   if(par->do_lensing)
@@ -80,6 +83,8 @@ int main(int argc,char **argv)
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
 
+  if(!(par->need_onions))
+    end_fftw(par);
   param_colore_free(par);
 
   if(NodeThis==0) timer(5);
