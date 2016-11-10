@@ -3,17 +3,17 @@
 ###Compiler and compilation options
 COMP_SER = gcc
 COMP_MPI = mpicc
-OPTIONS = -Wall -O3
+OPTIONS = -Wall -O3 -std=c99
 #
 ### Behavioural flags
 #Use double precision integer (enable in general)
 DEFINEFLAGS += -D_LONGIDS
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
-#DEFINEFLAGS += -D_OLD_IM
-#DEFINEFLAGS += -D_IM_3D22D
 #Use double precision floating point? Set to "yes" or "no"
 USE_SINGLE_PRECISION = yes
+#Add random perturbations to kappa from redshifts outside the box
+ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
 USE_HDF5 = yes
 #Compile with FITS capability? Set to "yes" or "no"
@@ -27,10 +27,10 @@ USE_MPI = yes
 ###If two or more of the dependencies reside in the same paths, only
 ###one instance is necessary.
 #GSL
-GSL_INC = -I/home/damonge/include
-GSL_LIB = -L/home/damonge/lib
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
+GSL_INC = -I/home/damonge/include
+GSL_LIB = -L/home/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
@@ -41,10 +41,18 @@ FITS_LIB =
 HDF5_INC =
 HDF5_LIB =
 #libconfig
-CONF_INC =
+CONF_INC = 
 CONF_LIB =
+#healpix
+HPIX_INC =
+HPIX_LIB =
+#libsharp
+SHT_INC =
+SHT_LIB =
 #
 ########## End of user-definable ##########
+
+DEFINEFLAGS += -DHAVE_INLINE -DGSL_RANGE_CHECK_OFF 
 
 ifeq ($(strip $(USE_OMP)),yes)
 OPTIONS += -fopenmp
@@ -75,24 +83,30 @@ ifeq ($(strip $(USE_OMP)),yes)
 LIB_FFTW += -lfftw3_omp
 endif #OMP
 ifeq ($(strip $(USE_MPI)),yes)
-LIB_FFTW += -lfftw3_mpi
+LIB_FFTW += -lfftw3_mpi 
 endif #MPI
-LIB_FFTW += -lfftw3
 
 endif #SINGLE_PRECISION
+LIB_FFTW += -lfftw3
 
+# for fftlog
+LIB_FFTW += -lfftw3
 
 OPTIONS += $(DEFINEFLAGS)
 
-INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC)
-LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW)
+INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC) $(SHT_INC) $(HPIX_INC)
+LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) $(SHT_LIB) $(HPIX_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW) -lcfitsio -lchealpix
+ifeq ($(strip $(ADD_EXTRA_KAPPA)),yes)
+DEFINEFLAGS += -D_ADD_EXTRA_KAPPA -D_WITH_SHT
+LIB_ALL += -lsharp -lfftpack -lc_utils
+endif #EXTRA_KAPPA
 ifeq ($(strip $(USE_HDF5)),yes)
 DEFINEFLAGS += -D_HAVE_HDF5
 LIB_ALL += -lhdf5 -lhdf5_hl -lz
 endif #HDF5
 ifeq ($(strip $(USE_FITS)),yes)
 DEFINEFLAGS += -D_HAVE_FITS
-LIB_ALL += -lcfitsio
+#LIB_ALL += -lcfitsio
 endif #FITS
 LIB_ALL += -lm
 
@@ -100,10 +114,14 @@ COMMONO = src/common.o
 COSMOMADO = src/cosmo_mad.o
 COSMOO = src/cosmo.o
 FOURIERO = src/fourier.o
-GRIDO = src/grid_tools.o
+LCO = src/lightcone.o
 IOO = src/io.o
+HPIXO = src/healpix_extra.o
+PIXO = src/pixelization.o
+PREDICTO = src/predictions.o
+FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(GRIDO) $(IOO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe
 

@@ -101,6 +101,10 @@ static void fftw_wrap(int ng,dftw_complex *pin,flouble *pout)
 void init_fftw(ParamCoLoRe *par)
 {
   ptrdiff_t dsize;
+
+  par->nz_all =my_calloc(NNodes,sizeof(int));
+  par->iz0_all=my_calloc(NNodes,sizeof(int));
+
 #ifdef _HAVE_MPI
   ptrdiff_t nz,iz0;
 
@@ -147,9 +151,14 @@ void init_fftw(ParamCoLoRe *par)
   par->nz_here=nz;
   par->iz0_here=iz0;
 
+  MPI_Allreduce(&(par->nz_here),&(par->nz_max),1,MPI_INT,MPI_MAX,MPI_COMM_WORLD);
+  MPI_Allgather(&(par->nz_here),1,MPI_INT,par->nz_all,1,MPI_INT,MPI_COMM_WORLD);
+  MPI_Allgather(&(par->iz0_here),1,MPI_INT,par->iz0_all,1,MPI_INT,MPI_COMM_WORLD);
+
 #else //_HAVE_MPI
-  int stat;
+
 #ifdef _HAVE_OMP
+  int stat;
 #ifdef _SPREC
   stat=fftwf_init_threads();
 #else //_SPREC
@@ -166,10 +175,13 @@ void init_fftw(ParamCoLoRe *par)
 #endif //_SPREC
 #endif //_HAVE_OMP
 
-  dsize=(par->n_grid/2+1)*((lint)(par->n_grid*par->n_grid));
   par->nz_here=par->n_grid;
   par->iz0_here=0;
+  par->nz_max=par->nz_here;
+  par->nz_all[0]=par->nz_here;
+  par->iz0_all[0]=par->iz0_here;
 #endif //_HAVE_MPI
+  dsize=par->nz_max*((lint)(par->n_grid*(par->n_grid/2+1)));
 
 #ifdef _SPREC
   par->grid_dens_f=fftwf_alloc_complex(dsize);
@@ -181,24 +193,39 @@ void init_fftw(ParamCoLoRe *par)
   par->grid_dens=(flouble *)(par->grid_dens_f);
 
 #ifdef _SPREC
-  par->grid_vpot_f=fftwf_alloc_complex(dsize);
+  par->grid_npot_f=fftwf_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
 #else //_SPREC
-  par->grid_vpot_f=fftw_alloc_complex(dsize);
+  par->grid_npot_f= fftw_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
 #endif //_SPREC
-  if(par->grid_vpot_f==NULL)
+  if(par->grid_npot_f==NULL)
     report_error(1,"Ran out of memory\n");
-  par->grid_vpot=(flouble *)(par->grid_vpot_f);
+  par->grid_npot=(flouble *)(par->grid_npot_f);
 
-  par->grid_rvel=my_malloc(2*dsize*sizeof(flouble));
 #ifdef _HAVE_MPI
-  par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
-  par->slice_right=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
+  //  par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
+  //  par->slice_right=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
+  par->slice_left =&(par->grid_npot[2*dsize]);
+  par->slice_right=&(par->grid_npot[2*(dsize+par->n_grid*(par->n_grid/2+1))]);
 #endif //_HAVE_MPI
 }
 
-void end_fftw(void)
+void end_fftw(ParamCoLoRe *par)
 {
+#ifdef _SPREC
+  if(par->grid_dens_f!=NULL)
+    fftwf_free(par->grid_dens_f);
+  if(par->grid_npot_f!=NULL)
+    fftwf_free(par->grid_npot_f);
+#else //_SPREC
+  if(par->grid_dens_f!=NULL)
+    fftw_free(par->grid_dens_f);
+  if(par->grid_npot_f!=NULL)
+    fftw_free(par->grid_npot_f);
+#endif //_SPREC
+
 #ifdef _HAVE_MPI
+  //  free(par->slice_left);
+  //  free(par->slice_right);
 
 #ifdef _HAVE_OMP
   if(MPIThreadsOK) {
@@ -229,7 +256,7 @@ void end_fftw(void)
 #endif //_HAVE_MPI
 }
 
-static void create_density_and_velpot_fourier(ParamCoLoRe *par)
+static void create_grids_fourier(ParamCoLoRe *par)
 {
   //////
   // Generates a random realization of the delta_k
@@ -250,7 +277,7 @@ static void create_density_and_velpot_fourier(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     unsigned int seed_thr=par->seed_rng+IThread0+ithr;
     gsl_rng *rng_thr=init_rng(seed_thr);
-    double factor=par->fgrowth_0*par->hubble_0;
+    double factor_p=-1.5*par->hubble_0*par->hubble_0*par->OmegaM;
     
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -284,16 +311,20 @@ static void create_density_and_velpot_fourier(ParamCoLoRe *par)
 	  
 	  if(k_mod2<=0) {
 	    par->grid_dens_f[index]=0;
-	    par->grid_vpot_f[index]=0;
+	    par->grid_npot_f[index]=0;
 	  }
 	  else {
 	    double lgk=0.5*log10(k_mod2);
 	    double sigma2=pk_linear0(par,lgk)*idk3;
-	    if(par->do_smoothing)
-	      sigma2*=exp(-par->r2_smooth*k_mod2);
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
-	    par->grid_vpot_f[index]=par->grid_dens_f[index]*factor/k_mod2;
+	    par->grid_npot_f[index]=factor_p*par->grid_dens_f[index]/k_mod2;
+	    if(par->do_smoothing) {
+	      double sm=exp(-0.5*par->r2_smooth*k_mod2);
+	      par->grid_dens_f[index]*=sm;
+	      if(par->smooth_potential)
+		par->grid_npot_f[index]*=sm;
+	    }
 	  }
 	}
       }
@@ -302,75 +333,7 @@ static void create_density_and_velpot_fourier(ParamCoLoRe *par)
   }
 }
 
-static void radial_velocity_from_potential(ParamCoLoRe *par)
-{
-#ifdef _HAVE_OMP
-#pragma omp parallel default(none)		\
-  shared(par)
-#endif //_HAVE_OMP
-  {
-    double dx=par->l_box/par->n_grid;
-    double idx=1./dx;
-    int iz;
-    int ngx=2*(par->n_grid/2+1);
-    
-#ifdef _HAVE_OMP
-#pragma omp for
-#endif //_HAVE_OMP
-    for(iz=0;iz<par->nz_here;iz++) {
-      int iy;
-      lint iz_hi=iz+1;
-      lint iz_lo=iz-1;
-      lint iz_0=iz;
-      double z=dx*(iz+par->iz0_here+0.5)-par->pos_obs[2];
-      if(iz==0) iz_lo=par->n_grid-1;
-      if(iz==par->n_grid-1) iz_hi=0;
-      iz_hi*=ngx*par->n_grid;
-      iz_lo*=ngx*par->n_grid;
-      iz_0*=ngx*par->n_grid;
-      for(iy=0;iy<par->n_grid;iy++) {
-	int ix;
-	lint iy_hi=iy+1;
-	lint iy_lo=iy-1;
-	lint iy_0=iy;
-	double y=dx*(iy+0.5)-par->pos_obs[1];
-	if(iy==0) iy_lo=par->n_grid-1;
-	if(iy==par->n_grid-1) iy_hi=0;
-	iy_hi*=ngx;
-	iy_lo*=ngx;
-	iy_0*=ngx;
-	for(ix=0;ix<par->n_grid;ix++) {
-	  double vel[3];
-	  double ur[3];
-	  lint ix_hi=ix+1;
-	  lint ix_lo=ix-1;
-	  lint ix_0=ix;
-	  double x=dx*(ix+0.5)-par->pos_obs[0];
-	  double irr=1./sqrt(x*x+y*y+z*z);
-	  if(ix==0) ix_lo=par->n_grid-1;
-	  if(ix==par->n_grid-1) ix_hi=0;
-	  
-	  ur[0]=x*irr;
-	  ur[1]=y*irr;
-	  ur[2]=z*irr;
-	  
-	  vel[0]=0.5*idx*(par->grid_vpot[ix_hi+iy_0+iz_0]-par->grid_vpot[ix_lo+iy_0+iz_0]);
-	  vel[1]=0.5*idx*(par->grid_vpot[ix_0+iy_hi+iz_0]-par->grid_vpot[ix_0+iy_lo+iz_0]);
-	  if(iz==0)
-	    vel[2]=0.5*idx*(par->grid_vpot[ix_0+iy_0+iz_hi]-par->slice_left[ix_0+iy_0]);
-	  else if(iz==par->nz_here-1)
-	    vel[2]=0.5*idx*(par->slice_right[ix_0+iy_0]-par->grid_vpot[ix_0+iy_0+iz_lo]);
-	  else
-	    vel[2]=0.5*idx*(par->grid_vpot[ix_0+iy_0+iz_hi]-par->grid_vpot[ix_0+iy_0+iz_lo]);
-
-	  par->grid_rvel[ix_0+iy_0+iz_0]=vel[0]*ur[0]+vel[1]*ur[1]+vel[2]*ur[2];
-	}
-      }
-    } // end omp for
-  } // end omp parallel
-}
-
-void create_d_and_vr_fields(ParamCoLoRe *par)
+void create_cartesian_fields(ParamCoLoRe *par)
 {
   //////
   // Creates a realization of the gaussian density
@@ -379,18 +342,18 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
   lint n_grid_tot=2*(par->n_grid/2+1)*((lint)(par->n_grid*par->nz_here));
   print_info("*** Creating Gaussian density field \n");
 
-  print_info("Creating Fourier-space density and velocity potential \n");
+  print_info("Creating Fourier-space density and Newtonian potential \n");
   if(NodeThis==0) timer(0);
-  create_density_and_velpot_fourier(par);
+  create_grids_fourier(par);
   if(NodeThis==0) timer(2);
 
-  print_info("Transforming density and velocity potential\n");
+  print_info("Transforming density and Newtonian potential\n");
   if(NodeThis==0) timer(0);
   fftw_wrap(par->n_grid,par->grid_dens_f,par->grid_dens);
-  fftw_wrap(par->n_grid,par->grid_vpot_f,par->grid_vpot);
+  fftw_wrap(par->n_grid,par->grid_npot_f,par->grid_npot);
   if(NodeThis==0) timer(2);
 
-  print_info("Normalizing density and velocity potential \n");
+  print_info("Normalizing density and Newtonian potential \n");
   if(NodeThis==0) timer(0);
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none)				\
@@ -405,7 +368,7 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(ii=0;ii<n_grid_tot;ii++) {
       par->grid_dens[ii]*=norm;
-      par->grid_vpot[ii]*=norm;
+      par->grid_npot[ii]*=norm;
     }
   }//end omp parallel
   if(NodeThis==0) timer(2);
@@ -415,20 +378,15 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
   MPI_Status stat;
 
   //Pass rightmost slice to right node and receive left slice from left node
-  MPI_Sendrecv(&(par->grid_vpot[(par->nz_here-1)*slice_size]),slice_size,FLOUBLE_MPI,NodeRight,1,
+  MPI_Sendrecv(&(par->grid_npot[(par->nz_here-1)*slice_size]),slice_size,FLOUBLE_MPI,NodeRight,1,
 	       par->slice_left,slice_size,FLOUBLE_MPI,NodeLeft,1,MPI_COMM_WORLD,&stat);
   //Pass leftmost slice to left node and receive right slice from right node
-  MPI_Sendrecv(par->grid_vpot,slice_size,FLOUBLE_MPI,NodeLeft,2,
+  MPI_Sendrecv(par->grid_npot,slice_size,FLOUBLE_MPI,NodeLeft,2,
 	       par->slice_right,slice_size,FLOUBLE_MPI,NodeRight,2,MPI_COMM_WORLD,&stat);
 #else //_HAVE_MPI
-  par->slice_left=&(par->grid_vpot[(par->n_grid-1)*slice_size]);
-  par->slice_right=par->grid_vpot;
+  par->slice_left=&(par->grid_npot[(par->n_grid-1)*slice_size]);
+  par->slice_right=par->grid_npot;
 #endif //_HAVE_MPI
-
-  print_info("Calculating radial velocity \n");
-  if(NodeThis==0) timer(0);
-  radial_velocity_from_potential(par);
-  if(NodeThis==0) timer(2);
 
   compute_sigma_dens(par);
 
@@ -436,5 +394,5 @@ void create_d_and_vr_fields(ParamCoLoRe *par)
 
   //Output density field if necessary
   if(par->output_density)
-    write_grid(par);
+    write_grids(par);
 }

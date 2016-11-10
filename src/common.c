@@ -168,6 +168,14 @@ void rng_delta_gauss(double *module,double *phase,
   *module=sqrt(-sigma2*log(1-u));
 }
 
+void rng_gauss(gsl_rng *rng,double *r1,double *r2)
+{
+  double phase=2*M_PI*rng_01(rng);
+  double u=sqrt(-2*log(1-rng_01(rng)));
+  *r1=u*cos(phase);
+  *r2=u*sin(phase);
+}
+
 void end_rng(gsl_rng *rng)
 {
   gsl_rng_free(rng);
@@ -181,7 +189,7 @@ void mpi_init(int* p_argc,char*** p_argv)
 #ifdef _HAVE_OMP
   int provided;
   MPI_Init_thread(p_argc,p_argv,MPI_THREAD_FUNNELED,&provided);
-  MPIThreadsOK = provided >= MPI_THREAD_FUNNELED;
+  MPIThreadsOK=provided>=MPI_THREAD_FUNNELED;
 #else //_HAVE_OMP
   MPI_Init(p_argc,p_argv);
   MPIThreadsOK=0;
@@ -226,6 +234,7 @@ void mpi_init(int* p_argc,char*** p_argv)
   MPIThreadsOK=0;
 #endif //_HAVE_OMP
 #endif //_HAVE_MPI
+
 #ifdef _DEBUG
   printf("Node %d, thread count starts at %d\n",NodeThis,IThread0);
   print_info(" Threads = %d\n",MPIThreadsOK);
@@ -270,4 +279,248 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
     report_error(1,"Error fwriting\n");
 
   return nmemb;
+}
+
+static inline flouble get_res(int nside)
+{
+#if PIXTYPE == PT_CEA
+  //  return acos(1-2.0/nside);
+  return sqrt(2*M_PI)/nside;
+#elif PIXTYPE == PT_CAR
+  return M_PI/nside;
+#else
+  return sqrt(2*M_PI)/nside;
+#endif //PIXTYPE
+}
+
+static inline flouble get_lat_index(int nside,flouble cth)
+{
+#if PIXTYPE == PT_CEA
+  return 0.5*(cth+1)*nside;
+#elif PIXTYPE == PT_CAR
+  return (1-acos(CLAMP(cth,-1,1))/M_PI)*nside;
+#else
+  return 0.5*(cth+1)*nside;
+#endif //PIXTYPE
+}
+
+OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
+{
+  int ir;
+  OnionInfo *oi=my_malloc(sizeof(OnionInfo));
+  double dx=par->l_box/par->n_grid;
+  double dr=FAC_CART2SPH_VOL*dx;
+
+  oi->nr=(int)(par->r_max/dr+1);
+  dr=par->r_max/oi->nr; //Redefine radial interval
+  oi->r0_arr=my_malloc(oi->nr*sizeof(flouble));
+  oi->rf_arr=my_malloc(oi->nr*sizeof(flouble));
+  oi->nside_arr=my_malloc(oi->nr*sizeof(int));
+  oi->iphi0_arr=my_malloc(oi->nr*sizeof(int));
+  oi->iphif_arr=my_malloc(oi->nr*sizeof(int));
+  oi->icth0_arr=my_malloc(oi->nr*sizeof(int));
+  oi->icthf_arr=my_malloc(oi->nr*sizeof(int));
+  oi->num_pix=my_malloc(oi->nr*sizeof(int));
+
+  for(ir=0;ir<oi->nr;ir++) {
+    int nside_here=nside_base;
+    flouble rm=(ir+0.5)*dr;
+    flouble dr_trans=rm*get_res(nside_here);
+    oi->r0_arr[ir]=ir*dr;
+    oi->rf_arr[ir]=(ir+1)*dr;
+
+    while(dr_trans>FAC_CART2SPH_VOL*dx) {
+      nside_here*=2;
+      dr_trans=rm*get_res(nside_here);
+    }
+    oi->nside_arr[ir]=nside_here;
+  }
+
+  return oi;
+}
+
+OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
+{
+  int i_base,ir,i_base_here,icth;
+  OnionInfo **oi;
+  OnionInfo *oi_dum=alloc_onion_empty(par,par->nside_base);
+  int nside_base=oi_dum->nside_arr[0];
+  int npix_base=2*nside_base*nside_base;
+  int nbase_per_node=npix_base/NNodes;
+  int nbase_extra=npix_base%NNodes;
+  int nbase_here=nbase_per_node;
+  if(NodeThis<nbase_extra)
+    nbase_here++;
+  free_onion_info(oi_dum);
+
+  par->n_beams_here=nbase_here;
+
+  oi=my_malloc(nbase_here*sizeof(OnionInfo *));
+  for(i_base=0;i_base<nbase_here;i_base++)
+    oi[i_base]=alloc_onion_empty(par,nside_base);
+
+  i_base=0; i_base_here=0;
+  for(icth=0;icth<nside_base;icth++) {
+    int iphi;
+    for(iphi=0;iphi<2*nside_base;iphi++) {
+      if(i_base%NNodes==NodeThis) {
+	for(ir=0;ir<oi[i_base_here]->nr;ir++) {
+	  int nside_ratio=oi[i_base_here]->nside_arr[ir]/nside_base;
+	  oi[i_base_here]->iphi0_arr[ir]=iphi*nside_ratio;
+	  oi[i_base_here]->iphif_arr[ir]=(iphi+1)*nside_ratio-1;
+	  oi[i_base_here]->icth0_arr[ir]=icth*nside_ratio;
+	  oi[i_base_here]->icthf_arr[ir]=(icth+1)*nside_ratio-1;
+	  oi[i_base_here]->num_pix[ir]=nside_ratio*nside_ratio;
+	}
+	i_base_here++;
+      }
+      i_base++;
+    }
+  }
+
+#ifdef _DEBUG
+  double dx=par->l_box/par->n_grid;
+  fprintf(par->f_dbg,"Beams: %d\n",par->n_beams_here);
+  for(ir=0;ir<oi[0]->nr;ir++) {
+    int ib;
+    double r0=oi[0]->r0_arr[ir];
+    double rf=oi[0]->rf_arr[ir];
+    double rm=0.5*(r0+rf);
+    int nside_here=oi[0]->nside_arr[ir];
+    fprintf(par->f_dbg,
+	    "  Shell %d, r=%lf, nside=%d, angular resolution %lf Mpc/h, cell size %lf",
+	    ir,rm,nside_here,rm*get_res(nside_here),dx);
+    fprintf(par->f_dbg,"[ ");
+    for(ib=0;ib<par->n_beams_here;ib++)
+      fprintf(par->f_dbg,"%d ",oi[ib]->num_pix[ir]);
+    fprintf(par->f_dbg,"]\n");
+  }
+#endif //_DEBUG
+
+  return oi;
+}
+
+void free_onion_info(OnionInfo *oi)
+{
+  if(oi->nr>0) {
+    free(oi->r0_arr);
+    free(oi->rf_arr);
+    free(oi->nside_arr);
+    free(oi->iphi0_arr);
+    free(oi->iphif_arr);
+    free(oi->icth0_arr);
+    free(oi->icthf_arr);
+    free(oi->num_pix);
+  }
+  free(oi);
+}
+
+void free_beams(ParamCoLoRe *par)
+{
+  int ib;
+
+  for(ib=0;ib<par->n_beams_here;ib++) {
+    int ii;
+    for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
+      free(par->dens_beams[ib][ii]);
+      free(par->vrad_beams[ib][ii]);
+      if(par->do_lensing) {
+	free(par->p_xx_beams[ib][ii]);
+	free(par->p_xy_beams[ib][ii]);
+	free(par->p_yy_beams[ib][ii]);
+      }
+      if(par->do_isw) {
+	free(par->pdot_beams[ib][ii]);
+      }
+      free(par->nsrc_beams[ib][ii]);
+    }
+    free(par->dens_beams[ib]);
+    free(par->vrad_beams[ib]);
+    if(par->do_lensing) {
+      free(par->p_xx_beams[ib]);
+      free(par->p_xy_beams[ib]);
+      free(par->p_yy_beams[ib]);
+    }
+    if(par->do_isw) {
+      free(par->pdot_beams[ib]);
+    }
+    free(par->nsrc_beams[ib]);
+  }
+  free(par->dens_beams);
+  free(par->vrad_beams);
+  if(par->do_lensing) {
+    free(par->p_xx_beams);
+    free(par->p_xy_beams);
+    free(par->p_yy_beams);
+  }
+  if(par->do_isw) {
+    free(par->pdot_beams);
+  }
+  free(par->nsrc_beams);
+}
+
+void alloc_beams(ParamCoLoRe *par)
+{
+  int ib;
+
+  par->dens_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+  par->vrad_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+  if(par->do_lensing) {
+    par->p_xx_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+    par->p_xy_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+    par->p_yy_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+  }
+  if(par->do_isw) {
+    par->pdot_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+  }
+  par->nsrc_beams=my_malloc(par->n_beams_here*sizeof(int **));
+  for(ib=0;ib<par->n_beams_here;ib++) {
+    int ii;
+    par->dens_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+    par->vrad_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+    if(par->do_lensing) {
+      par->p_xx_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+      par->p_xy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+      par->p_yy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+    }
+    if(par->do_isw) {
+      par->pdot_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+    }
+    par->nsrc_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(int *));
+    for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
+      par->dens_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+      par->vrad_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+      if(par->do_lensing) {
+	par->p_xx_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+	par->p_xy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+	par->p_yy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+      }
+      if(par->do_isw) {
+	par->pdot_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+      }
+      par->nsrc_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(int));
+    }
+  }
+}
+
+void free_hp_shell(HealpixShells *shell)
+{
+  free(shell->listpix);
+  free(shell->r0);
+  free(shell->rf);
+  free(shell->data);
+  free(shell->nadd);
+}
+
+HealpixShells *new_hp_shell(int nside,int nr)
+{
+  HealpixShells *shell=my_malloc(sizeof(HealpixShells));
+  shell->nside=nside;
+
+  //Figure out radial shells
+  shell->nr=nr;
+  shell->r0=my_malloc(shell->nr*sizeof(flouble));
+  shell->rf=my_malloc(shell->nr*sizeof(flouble));
+
+  return shell;
 }

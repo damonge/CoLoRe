@@ -22,29 +22,32 @@
 #include "common.h"
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_errno.h>
-#include "cosmo_mad.h"
 
-static double z_of_r_provisional(ParamCoLoRe *par,double r)
+#define CL_TYPE_KAPPA 0
+#define CL_TYPE_ISW 1
+
+static double a_of_r_provisional(ParamCoLoRe *par,double r)
 {
-  if(r<=0) return 0;
-  else if(r>=par->r_arr_z2r[NZ-1]) return par->z_arr_z2r[NZ-1];
+  if(r<=0) return 1.;
+  else if(r>=par->r_arr_a2r[0]) return 1E-6;
   else {
-    int iz=0;
-    while(r>=par->r_arr_z2r[iz])
-      iz++;
-    return par->z_arr_z2r[iz-1]+(par->z_arr_z2r[iz]-par->z_arr_z2r[iz-1])*
-      (r-par->r_arr_z2r[iz-1])/(par->r_arr_z2r[iz]-par->r_arr_z2r[iz-1]);
+    int ia=0;
+    while(r<=par->r_arr_a2r[ia])
+      ia++;
+    return  par->a_arr_a2r[ia-1]+(par->a_arr_a2r[ia]-par->a_arr_a2r[ia-1])*
+      (r-par->r_arr_a2r[ia-1])/(par->r_arr_a2r[ia]-par->r_arr_a2r[ia-1]);
   }
 }
 
 double r_of_z(ParamCoLoRe *par,double z)
 {
-  if(z<=0) return 0;
-  else if(z>=par->z_arr_z2r[NZ-1]) return par->r_arr_z2r[NZ-1];
+  double a=1./(1+z);
+  if(a>=1) return 0;
+  else if(a<=0) return par->r_arr_a2r[0];
   else {
-    int iz=(int)(z/DZ);
-    double r=par->r_arr_z2r[iz]+(par->r_arr_z2r[iz+1]-par->r_arr_z2r[iz])*
-      (z-par->z_arr_z2r[iz])/DZ;
+    int ia=(int)(a*(NA-1));
+    double r=par->r_arr_a2r[ia]+(par->r_arr_a2r[ia+1]-par->r_arr_a2r[ia])*
+      (a-par->a_arr_a2r[ia])*(NA-1.);
     return r;
   }
 }
@@ -52,7 +55,7 @@ double r_of_z(ParamCoLoRe *par,double z)
 double z_of_r(ParamCoLoRe *par,double r)
 {
   if(r<=0) return 0;
-  else if(r>=par->r_arr_r2z[NZ-1]) return par->z_arr_r2z[NZ-1];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->z_arr_r2z[NA-1];
   else {
     int ir=(int)(r*par->glob_idr);
     double z=par->z_arr_r2z[ir]+(par->z_arr_r2z[ir+1]-par->z_arr_r2z[ir])*
@@ -64,7 +67,7 @@ double z_of_r(ParamCoLoRe *par,double r)
 double dgrowth_of_r(ParamCoLoRe *par,double r)
 {
   if(r<=0) return 1;
-  else if(r>=par->r_arr_r2z[NZ-1]) return par->growth_d_arr[NZ-1];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_d_arr[NA-1];
   else {
     int ir=(int)(r*par->glob_idr);
     double gd=par->growth_d_arr[ir]+(par->growth_d_arr[ir+1]-par->growth_d_arr[ir])*
@@ -75,8 +78,8 @@ double dgrowth_of_r(ParamCoLoRe *par,double r)
 
 double vgrowth_of_r(ParamCoLoRe *par,double r)
 {
-  if(r<=0) return 1;
-  else if(r>=par->r_arr_r2z[NZ-1]) return par->growth_v_arr[NZ-1];
+  if(r<=0) return par->growth_v_arr[0];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_v_arr[NA-1];
   else {
     int ir=(int)(r*par->glob_idr);
     double gv=par->growth_v_arr[ir]+(par->growth_v_arr[ir+1]-par->growth_v_arr[ir])*
@@ -85,10 +88,22 @@ double vgrowth_of_r(ParamCoLoRe *par,double r)
   }
 }
 
+double pdgrowth_of_r(ParamCoLoRe *par,double r)
+{
+  if(r<=0) return par->growth_pd_arr[0];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_pd_arr[NA-1];
+  else {
+    int ir=(int)(r*par->glob_idr);
+    double gpd=par->growth_pd_arr[ir]+(par->growth_pd_arr[ir+1]-par->growth_pd_arr[ir])*
+      (r-par->r_arr_r2z[ir])*par->glob_idr;
+    return gpd;
+  }
+}
+
 double ihub_of_r(ParamCoLoRe *par,double r)
 {
-  if(r<=0) return 1;
-  else if(r>=par->r_arr_r2z[NZ-1]) return par->ihub_arr[NZ-1];
+  if(r<=0) return par->ihub_arr[NA-1];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->ihub_arr[NA-1];
   else {
     int ir=(int)(r*par->glob_idr);
     double gv=par->ihub_arr[ir]+(par->ihub_arr[ir+1]-par->ihub_arr[ir])*
@@ -97,22 +112,131 @@ double ihub_of_r(ParamCoLoRe *par,double r)
   }
 }
 
-double bias_of_z_gals(ParamCoLoRe *par,double z,int ipop)
+double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop)
+{
+  if((z<par->z_min) || (z>par->z_max))
+    return 1.;
+  else
+    return gsl_spline_eval(par->spline_srcs_bz[ipop],z,par->intacc_srcs[ipop]);
+}
+
+double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop)
+{
+  if((z<par->z_min) || (z>par->z_max))
+    return 1.;
+  else
+    return gsl_spline_eval(par->spline_imap_bz[ipop],z,par->intacc_imap[ipop]);
+}
+
+double ndens_of_z_srcs(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
     return 0;
   else
-    return gsl_spline_eval(par->spline_gals_bz[ipop],z,par->intacc_gals[ipop]);
+    return gsl_spline_eval(par->spline_srcs_nz[ipop],z,par->intacc_srcs[ipop]);
 }
 
-double ndens_of_z_gals(ParamCoLoRe *par,double z,int ipop)
+double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop)
 {
   if((z<par->z_min) || (z>par->z_max))
     return 0;
   else
-    return gsl_spline_eval(par->spline_gals_nz[ipop],z,par->intacc_gals[ipop]);
+    return gsl_spline_eval(par->spline_imap_tz[ipop],z,par->intacc_imap[ipop]);
 }
 
+typedef struct {
+  ParamCoLoRe *par;
+  int l;
+  double chi_0_a;
+  double chi_f_a;
+  double chi_0_b;
+  double chi_f_b;
+  double chi_s;
+  int cl_type;
+} ClParams;
+
+static double window_kappa_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
+{
+  double chi_l=(l+0.5)/k;
+
+  if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
+    return 0;
+  else {
+    double gf=dgrowth_of_r(par,chi_l);
+    double aa=1/(1+z_of_r(par,chi_l));
+  
+    return par->prefac_lensing*l*(l+1.)*gf*(chi_s-chi_l)/(k*k*chi_s*chi_l*aa);
+  }
+}
+
+static double window_isw_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
+{
+  double chi_l=(l+0.5)/k;
+
+  if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
+    return 0;
+  else
+    return 2*par->prefac_lensing*pdgrowth_of_r(par,chi_l)/(k*k);
+}
+
+static double cl_integrand(double lk,void *params)
+{
+  ClParams *p=(ClParams *)params;
+  double k=pow(10.,lk);
+  double pk=pk_linear0(p->par,lk);
+  double wa=0,wb=0;
+  if(p->cl_type==CL_TYPE_KAPPA) {
+    wa=window_kappa_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
+    wb=window_kappa_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
+  }
+  else if(p->cl_type==CL_TYPE_ISW) {
+    wa=window_isw_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
+    wb=window_isw_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
+  }
+  if((p->par->do_smoothing) && (p->par->smooth_potential))
+    pk*=exp(-k*k*p->par->r2_smooth);
+
+  return k*wa*wb*pk;
+}
+
+static double compute_cl(ParamCoLoRe *par,int l,
+			 double chi_0_a,double chi_f_a,
+			 double chi_0_b,double chi_f_b,
+			 double chi_s,int cl_type)
+{
+  ClParams p;
+  gsl_function F;
+  double lkmin,lkmax,eresult,result=0,chi_min=1E16,chi_max=-1;
+  gsl_integration_workspace *w=gsl_integration_workspace_alloc(1000);
+  p.par=par;
+  p.l=l;
+  p.chi_0_a=chi_0_a;
+  p.chi_f_a=chi_f_a;
+  p.chi_0_b=chi_0_b;
+  p.chi_f_b=chi_f_b;
+  p.chi_s=chi_s;
+  p.cl_type=cl_type;
+  F.function=&cl_integrand;
+  F.params=&p;
+
+  if(chi_0_a<chi_min) chi_min=chi_0_a;
+  if(chi_0_b<chi_min) chi_min=chi_0_b;
+  if(chi_f_a<chi_min) chi_min=chi_f_a;
+  if(chi_f_b<chi_min) chi_min=chi_f_b;
+  if(chi_0_a>chi_max) chi_max=chi_0_a;
+  if(chi_0_b>chi_max) chi_max=chi_0_b;
+  if(chi_f_a>chi_max) chi_max=chi_f_a;
+  if(chi_f_b>chi_max) chi_max=chi_f_b;
+  if(chi_min<=0) lkmax=2.;
+  else lkmax=log10((l+1/2)/chi_min);
+  if(chi_max<=0) lkmin=-5.;
+  else lkmin=log10((l+1/2)/chi_max);
+
+  gsl_integration_qag(&F,lkmin,lkmax,0,1E-4,1000,GSL_INTEG_GAUSS41,w,&result,&eresult);
+  gsl_integration_workspace_free(w);
+
+  return M_LN10*result/(l+0.5);
+}
 
 static void int_error_handle(int status,double result,
                              double error)
@@ -359,6 +483,7 @@ static void pk_linear_set(ParamCoLoRe *par)
   par->logkmax=par->logkarr[par->numk-1];
   par->idlogk=(par->numk-1)/(par->logkmax-par->logkmin);
 
+  //Re-interpolate just in case the file is not equi-spaced in log10(k)
   gsl_interp_accel *intacc=gsl_interp_accel_alloc();
   gsl_spline *spline=gsl_spline_alloc(gsl_interp_cspline,par->numk);
   gsl_spline_init(spline,par->logkarr,par->pkarr,par->numk);
@@ -382,7 +507,25 @@ static void pk_linear_set(ParamCoLoRe *par)
   print_info("  Sigma_Gauss should be %lf\n",
 	     sqrt(sigL2(par,r_effective,r_effective,"Gauss","Gauss")));
 #endif //_DEBUG
+}
 
+static void compute_hp_shell_distances_imap(HealpixShells *shell,flouble nu_rest,
+					    char *fname_nutable,Csm_params *pars)
+{
+  int ii;
+  FILE *fi;
+
+  //Figure out radial shells
+  fi=fopen(fname_nutable,"r");
+  if(fi==NULL) error_open_file(fname_nutable);
+  for(ii=0;ii<shell->nr;ii++) {
+    double nu0,nuf;
+    int stat=fscanf(fi,"%lf %lf",&nu0,&nuf);
+    if(stat!=2) error_read_line(fname_nutable,ii+1);
+    shell->r0[ii]=csm_radial_comoving_distance(pars,nuf/nu_rest);
+    shell->rf[ii]=csm_radial_comoving_distance(pars,nu0/nu_rest);
+  }
+  fclose(fi);
 }
 
 void cosmo_set(ParamCoLoRe *par)
@@ -405,37 +548,39 @@ void cosmo_set(ParamCoLoRe *par)
   par->r_min=csm_radial_comoving_distance(pars,1/(1+par->z_min));
   par->r_max=csm_radial_comoving_distance(pars,1/(1+par->z_max));
 
+  par->prefac_lensing=1.5*par->hubble_0*par->hubble_0*par->OmegaM;
+
   par->l_box=2*par->r_max*(1+2./par->n_grid);
   par->pos_obs[0]=0.5*par->l_box;
   par->pos_obs[1]=0.5*par->l_box;
   par->pos_obs[2]=0.5*par->l_box;
 
-  for(ipop=0;ipop<par->n_gals;ipop++) {
-    fi=fopen(par->fnameBzGals[ipop],"r");
-    if(fi==NULL) error_open_file(par->fnameBzGals[ipop]);
+  for(ipop=0;ipop<par->n_srcs;ipop++) {
+    fi=fopen(par->fnameBzSrcs[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameBzSrcs[ipop]);
     nz=linecount(fi); rewind(fi);
     zarr=my_malloc(nz*sizeof(double));
     fzarr=my_malloc(nz*sizeof(double));
     for(ii=0;ii<nz;ii++) {
       int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-      if(stat!=2) error_read_line(par->fnameBzGals[ipop],ii+1);
+      if(stat!=2) error_read_line(par->fnameBzSrcs[ipop],ii+1);
     }
     if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
       report_error(1,"Bias z-range is too small\n");
-    par->spline_gals_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_gals_bz[ipop],zarr,fzarr,nz);
+    par->spline_srcs_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_srcs_bz[ipop],zarr,fzarr,nz);
     free(zarr); free(fzarr);
     fclose(fi);
 
-    fi=fopen(par->fnameNzGals[ipop],"r");
-    if(fi==NULL) error_open_file(par->fnameNzGals[ipop]);
+    fi=fopen(par->fnameNzSrcs[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameNzSrcs[ipop]);
     nz=linecount(fi); rewind(fi);
     zarr=my_malloc(nz*sizeof(double));
     fzarr=my_malloc(nz*sizeof(double));
     for(ii=0;ii<nz;ii++) {
       double rz,hz,a;
       int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-      if(stat!=2) error_read_line(par->fnameNzGals[ipop],ii+1);
+      if(stat!=2) error_read_line(par->fnameNzSrcs[ipop],ii+1);
       a=1./(1+zarr[ii]);
       hz=csm_hubble(pars,a);
       rz=csm_radial_comoving_distance(pars,a);
@@ -446,46 +591,151 @@ void cosmo_set(ParamCoLoRe *par)
       fzarr[0]=fzarr[1];
     if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
       report_error(1,"N(z) z-range is too small\n");
-    par->spline_gals_nz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_gals_nz[ipop],zarr,fzarr,nz);
-
-    par->intacc_gals[ipop]=gsl_interp_accel_alloc();
+    par->spline_srcs_nz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_srcs_nz[ipop],zarr,fzarr,nz);
     free(zarr); free(fzarr);
     fclose(fi);
+
+    par->intacc_srcs[ipop]=gsl_interp_accel_alloc();
+  }
+
+  for(ipop=0;ipop<par->n_imap;ipop++) {
+    fi=fopen(par->fnameBzImap[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameBzImap[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameBzImap[ipop],ii+1);
+    }
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"Bias z-range is too small\n");
+    par->spline_imap_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_imap_bz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
+
+    fi=fopen(par->fnameTzImap[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameTzImap[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameTzImap[ipop],ii+1);
+    }
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"T(z) z-range is too small\n");
+    par->spline_imap_tz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_imap_tz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
+
+    par->intacc_imap[ipop]=gsl_interp_accel_alloc();
+
+    compute_hp_shell_distances_imap(par->imap[ipop],par->nu0_imap[ipop],
+				    par->fnameNuImap[ipop],pars);
   }
 
   //Set z-dependent functions
-  for(ii=0;ii<NZ;ii++) {
-    double z=((double)ii)*DZ;
-    double a=1/(1+z);
-    double rz=csm_radial_comoving_distance(pars,a);
-    par->z_arr_z2r[ii]=z;
-    par->r_arr_z2r[ii]=rz;
+  for(ii=0;ii<NA;ii++) {
+    double a=((double)ii)/(NA-1);
+    double ra=csm_radial_comoving_distance(pars,a);
+    par->a_arr_a2r[ii]=a;
+    par->r_arr_a2r[ii]=ra;
   }
-  if((par->z_arr_z2r[NZ-1]<=par->z_max)||(par->r_arr_z2r[NZ-1]<=par->r_max))
-    report_error(1,"OMG!\n");
-  
-  double growth0=csm_growth_factor(pars,1);
-  par->glob_idr=(NZ-1)/(par->r_arr_z2r[NZ-1]-par->r_arr_z2r[0]);
-  for(ii=0;ii<NZ;ii++) {
-    double r=ii/par->glob_idr;
-    double z=z_of_r_provisional(par,r);
-    double a=1/(1+z);
-    par->z_arr_r2z[ii]=z;
-    par->r_arr_r2z[ii]=r;
 
+  double growth0=csm_growth_factor(pars,1);
+  par->glob_idr=(NA-1)/par->r_arr_a2r[0];
+  for(ii=0;ii<NA;ii++) {
+    double r=ii/par->glob_idr;
+    double a=a_of_r_provisional(par,r);
+    double z=1./a-1;
     double gz=csm_growth_factor(pars,a)/growth0;
     double fz=csm_f_growth(pars,a);
     double hhz=csm_hubble(pars,a);
+    par->z_arr_r2z[ii]=z;
+    par->r_arr_r2z[ii]=r;
     par->growth_d_arr[ii]=gz;
-    //This is for the comoving velocity
-    par->growth_v_arr[ii]=(gz*hhz*fz)/(par->fgrowth_0*par->hubble_0);
+    par->growth_v_arr[ii]=(gz*hhz*fz)/(par->fgrowth_0*par->hubble_0); //This is for the comoving velocity
+    par->growth_pd_arr[ii]=gz*hhz*(fz-1);
     par->ihub_arr[ii]=1./hhz;
   }
-  if((par->z_arr_r2z[NZ-1]<=par->z_max)||(par->r_arr_r2z[NZ-1]<=par->r_max))
-    report_error(1,"OMG!\n");
-
-  csm_params_free(pars);
 
   pk_linear_set(par);
+
+  if(par->do_kappa) {
+    for(ii=0;ii<par->n_kappa;ii++) {
+      double z=par->z_kappa_out[ii];
+      if(z>par->z_max) {
+#ifdef _ADD_EXTRA_KAPPA
+	int l,nl=3*par->kmap->nside;
+	double chi_here=r_of_z(par,z);
+	if(NodeThis==0)
+	  fprintf(par->f_dbg,"Power spectra for extra kappa, shell %d (z=%.3lf)\n",ii+1,z);
+	par->need_extra_kappa[ii]=1;
+	par->fl_mean_extra_kappa[ii]=my_malloc(nl*sizeof(flouble));
+	par->cl_extra_kappa[ii]=my_malloc(nl*sizeof(flouble));
+	for(l=0;l<nl;l++) {
+	  flouble cl_k_11=compute_cl(par,l,0.        ,par->r_max,0.        ,par->r_max,chi_here,CL_TYPE_KAPPA);
+	  flouble cl_k_12=compute_cl(par,l,0.        ,par->r_max,par->r_max,chi_here  ,chi_here,CL_TYPE_KAPPA);
+	  flouble cl_k_22=compute_cl(par,l,par->r_max,chi_here  ,par->r_max,chi_here  ,chi_here,CL_TYPE_KAPPA);
+	  par->fl_mean_extra_kappa[ii][l]=cl_k_12/cl_k_11;
+	  par->cl_extra_kappa[ii][l]=cl_k_22-cl_k_12*cl_k_12/cl_k_11;
+	  if(l==0) {
+	    par->fl_mean_extra_kappa[ii][l]=0;
+	    par->cl_extra_kappa[ii][l]=0;
+	  }
+	  if(NodeThis==0)
+	    fprintf(par->f_dbg,"%d %lE %lE \n",l,par->fl_mean_extra_kappa[ii][l],par->cl_extra_kappa[ii][l]);
+	}
+	if(NodeThis==0)
+	  fprintf(par->f_dbg,"\n");
+#else //_ADD_EXTRA_KAPPA
+	report_error(1,"Source plane %d outside redshift range\n",ii+1);
+#endif //_ADD_EXTRA_KAPPA
+      }
+      par->kmap->r0[ii]  =csm_radial_comoving_distance(pars,1./(1+z));
+      par->kmap->rf[ii]  =csm_radial_comoving_distance(pars,1./(1+z));
+    }
+  }
+
+  if(par->do_isw) {
+    for(ii=0;ii<par->n_isw;ii++) {
+      double z=par->z_isw_out[ii];
+      if(z>par->z_max) {
+#ifdef _ADD_EXTRA_ISW
+	int l,nl=3*par->pd_map->nside;
+	double chi_here=r_of_z(par,z);
+	if(NodeThis==0)
+	  fprintf(par->f_dbg,"Power spectra for extra isw, shell %d (z=%.3lf)\n",ii+1,z);
+	par->need_extra_isw[ii]=1;
+	par->fl_mean_extra_isw[ii]=my_malloc(nl*sizeof(flouble));
+	par->cl_extra_isw[ii]=my_malloc(nl*sizeof(flouble));
+	for(l=0;l<nl;l++) {
+	  flouble cl_i_11=compute_cl(par,l,0.        ,par->r_max,0.        ,par->r_max,chi_here,CL_TYPE_ISW);
+	  flouble cl_i_12=compute_cl(par,l,0.        ,par->r_max,par->r_max,chi_here  ,chi_here,CL_TYPE_ISW);
+	  flouble cl_i_22=compute_cl(par,l,par->r_max,chi_here  ,par->r_max,chi_here  ,chi_here,CL_TYPE_ISW);
+	  par->fl_mean_extra_isw[ii][l]=cl_i_12/cl_i_11;
+	  par->cl_extra_isw[ii][l]=cl_i_22-cl_i_12*cl_i_12/cl_i_11;
+	  if(l==0) {
+	    par->fl_mean_extra_isw[ii][l]=0;
+	    par->cl_extra_isw[ii][l]=0;
+	  }
+	  if(NodeThis==0)
+	    fprintf(par->f_dbg,"%d %lE %lE \n",l,par->fl_mean_extra_isw[ii][l],par->cl_extra_isw[ii][l]);
+	}
+	if(NodeThis==0)
+	  fprintf(par->f_dbg,"\n");
+#else //_ADD_EXTRA_ISW
+	report_error(1,"Source plane %d outside redshift range\n",ii+1);
+#endif //_ADD_EXTRA_ISW
+      }
+      par->pd_map->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->pd_map->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+    }
+  }
+
+  csm_params_free(pars);
 }
