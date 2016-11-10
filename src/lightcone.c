@@ -460,6 +460,56 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 //////
 // Integrates the Newtonian potential along the line of sight
 // with the lensing kernel.
+void integrate_isw(ParamCoLoRe *par)
+{
+  int ib;
+
+#ifdef _DEBUG
+  print_info("*** Integrating ISW\n");
+  if(NodeThis==0) timer(0);
+#endif //_DEBUG
+  for(ib=0;ib<par->n_beams_here;ib++) {
+    int ir;
+    int nside_old=par->oi_beams[ib]->nside_arr[0];
+    double *pdot_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
+    double *pdot_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
+    for(ir=0;ir<par->oi_beams[ib]->nr;ir++) {
+      int icth;
+      int nside_new=par->oi_beams[ib]->nside_arr[ir];
+      int nside_ratio=nside_new/nside_old;
+      int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir]+1;
+      int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
+      int nphi_old=nphi/nside_ratio;
+      double r0=par->oi_beams[ib]->r0_arr[ir];
+      double rf=par->oi_beams[ib]->rf_arr[ir];
+      double rm=0.5*(r0+rf),dr=rf-r0;
+      double g_phi=2*dr*pdgrowth_of_r(par,rm);
+      if(ncth*nphi!=par->oi_beams[ib]->num_pix[ir])
+	report_error(1,"WTF\n");
+      for(icth=0;icth<ncth;icth++) {
+	int iphi;
+	int icth_old=icth/nside_ratio;
+	for(iphi=0;iphi<nphi;iphi++) {
+	  int iphi_old=iphi/nside_ratio;
+	  int index_new=iphi+nphi*icth;
+	  int index_old=iphi_old+nphi_old*icth_old;
+	  pdot_new[index_new]=pdot_old[index_old]+g_phi*par->pdot_beams[ib][ir][index_new];
+	  par->pdot_beams[ib][ir][index_new]=pdot_new[index_new];
+	}
+      }
+      nside_old=nside_new;
+      memcpy(pdot_old,pdot_new,par->oi_beams[ib]->num_pix[ir]*sizeof(double));
+    }
+    free(pdot_new); free(pdot_old);
+  }
+#ifdef _DEBUG
+  if(NodeThis==0) timer(2);
+#endif //_DEBUG
+}
+
+//////
+// Integrates the Newtonian potential along the line of sight
+// with the lensing kernel.
 void integrate_lensing(ParamCoLoRe *par)
 {
   int ib;
@@ -493,6 +543,7 @@ void integrate_lensing(ParamCoLoRe *par)
       double r0=par->oi_beams[ib]->r0_arr[ir];
       double rf=par->oi_beams[ib]->rf_arr[ir];
       double rm=0.5*(r0+rf),dr=rf-r0;
+      
       double redshift=z_of_r(par,rm);
       double g_phi=dgrowth_of_r(par,rm)*(1+redshift);
       //      double integ1=g_phi*0.5*(rf*rf-r0*r0);
@@ -852,6 +903,93 @@ void get_kappa(ParamCoLoRe *par)
 		  report_error(1,"NOOO %lE, %lE\n",cth,phi/M_PI);
 		par->kmap->data[irad_t+pix_id]+=kappa;
 		par->kmap->nadd[irad_t+pix_id]++;
+	      }
+	    }
+	  }
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+void get_isw(ParamCoLoRe *par)
+{
+
+  print_info("*** Getting isw maps\n");
+  if(NodeThis==0) timer(0);
+  find_shell_pixels(par,par->pd_map);
+
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) \
+  shared(par)
+#endif //_HAVE_OMP
+  {
+    int ir;
+    double inv_hpix_area=he_nside2npix(par->pd_map->nside)/(4*M_PI);
+
+    //Maybe OMP this
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(ir=0;ir<par->n_isw;ir++) {
+      int ib,irb=0;
+      double r=par->pd_map->r0[ir];
+      long irad_t=ir*par->pd_map->num_pix;
+      while(irb<par->oi_beams[0]->nr) {
+	if((r>=par->oi_beams[0]->r0_arr[irb]) &&
+	   (r<=par->oi_beams[0]->rf_arr[irb]))
+	  break;
+	else
+	  irb++;
+      }
+      if(irb>=par->oi_beams[0]->nr) {
+	irb=par->oi_beams[0]->nr-1;
+	print_info("Source plane %d is outside range\n",ir+1);
+      }
+
+      for(ib=0;ib<par->n_beams_here;ib++) {
+	int ind_cth;
+	int icth0=par->oi_beams[ib]->icth0_arr[irb];
+	int iphi0=par->oi_beams[ib]->iphi0_arr[irb];
+	int ncth=par->oi_beams[ib]->icthf_arr[irb]-par->oi_beams[ib]->icth0_arr[irb]+1;
+	int nphi=par->oi_beams[ib]->iphif_arr[irb]-par->oi_beams[ib]->iphi0_arr[irb]+1;
+	int nside=par->oi_beams[ib]->nside_arr[irb];
+	double dphi=M_PI/nside;
+#if PIXTYPE==PT_CEA
+	double dcth=2./nside;
+#elif PIXTYPE==PT_CAR
+	double dth=M_PI/nside;
+#endif //PIXTYPE
+	for(ind_cth=0;ind_cth<ncth;ind_cth++) {
+	  int ind_phi;
+	  int ind_cth_t=ind_cth*nphi;
+#if PIXTYPE==PT_CEA
+	  double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
+#elif PIXTYPE==PT_CAR
+	  double cth0=get_cosine(ind_cth+icth0+0.0,dth);
+	  double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
+#endif //PIXTYPE
+	  int nsub_perside=(int)(sqrt(dcth*dphi*inv_hpix_area)+1);
+	  double dcth_sub=dcth/nsub_perside;
+	  double dphi_sub=dphi/nsub_perside;
+	  for(ind_phi=0;ind_phi<nphi;ind_phi++) {
+	    int icth_sub;
+	    double phi0=(ind_phi+iphi0)*dphi;
+	    double isw=par->pdot_beams[ib][irb][ind_cth_t+ind_phi];
+	    for(icth_sub=0;icth_sub<nsub_perside;icth_sub++) {
+	      int iphi_sub;
+	      double cth=cth0+(icth_sub+0.5)*dcth_sub;
+	      for(iphi_sub=0;iphi_sub<nsub_perside;iphi_sub++) {
+		double phi=phi0+(iphi_sub+0.5)*dphi_sub;
+		long ipix=he_ang2pix(par->pd_map->nside,cth,phi);
+		long pix_id=par->pd_map->listpix[ipix];
+		if(pix_id<0)
+		  report_error(1,"NOOO %lE, %lE\n",cth,phi/M_PI);
+		par->pd_map->data[irad_t+pix_id]+=isw;
+		par->pd_map->nadd[irad_t+pix_id]++;
 	      }
 	    }
 	  }

@@ -429,6 +429,9 @@ void free_beams(ParamCoLoRe *par)
 	free(par->p_xy_beams[ib][ii]);
 	free(par->p_yy_beams[ib][ii]);
       }
+      if(par->do_isw) {
+	free(par->pdot_beams[ib][ii]);
+      }
       free(par->nsrc_beams[ib][ii]);
     }
     free(par->dens_beams[ib]);
@@ -438,6 +441,9 @@ void free_beams(ParamCoLoRe *par)
       free(par->p_xy_beams[ib]);
       free(par->p_yy_beams[ib]);
     }
+    if(par->do_isw) {
+      free(par->pdot_beams[ib]);
+    }
     free(par->nsrc_beams[ib]);
   }
   free(par->dens_beams);
@@ -446,6 +452,9 @@ void free_beams(ParamCoLoRe *par)
     free(par->p_xx_beams);
     free(par->p_xy_beams);
     free(par->p_yy_beams);
+  }
+  if(par->do_isw) {
+    free(par->pdot_beams);
   }
   free(par->nsrc_beams);
 }
@@ -461,6 +470,9 @@ void alloc_beams(ParamCoLoRe *par)
     par->p_xy_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
     par->p_yy_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
   }
+  if(par->do_isw) {
+    par->pdot_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
+  }
   par->nsrc_beams=my_malloc(par->n_beams_here*sizeof(int **));
   for(ib=0;ib<par->n_beams_here;ib++) {
     int ii;
@@ -471,6 +483,9 @@ void alloc_beams(ParamCoLoRe *par)
       par->p_xy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
       par->p_yy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
     }
+    if(par->do_isw) {
+      par->pdot_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
+    }
     par->nsrc_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(int *));
     for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
       par->dens_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
@@ -479,6 +494,9 @@ void alloc_beams(ParamCoLoRe *par)
 	par->p_xx_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
 	par->p_xy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
 	par->p_yy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+      }
+      if(par->do_isw) {
+	par->pdot_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
       }
       par->nsrc_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(int));
     }

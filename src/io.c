@@ -74,31 +74,29 @@ static ParamCoLoRe *param_colore_new(void)
   par->sigma2_gauss=0;
 
   par->do_lensing=0;
+  par->do_isw=0;
   par->nside_base=-1;
   par->n_beams_here=-1;
-  //  par->oi_slices=NULL;
   par->oi_beams=NULL;
-  //  par->oi_sl_dum=NULL;
-  //  par->dens_slices=NULL;
-  //  par->vrad_slices=NULL;
-  //  par->p_xx_slices=NULL;
-  //  par->p_xy_slices=NULL;
-  //  par->p_yy_slices=NULL;
   par->dens_beams=NULL;
   par->vrad_beams=NULL;
   par->p_xx_beams=NULL;
   par->p_xy_beams=NULL;
   par->p_yy_beams=NULL;
+  par->pdot_beams=NULL;
   par->nsrc_beams=NULL;
 
   par->do_sources=0;
   par->do_imap=0;
   par->do_kappa=0;
+  par->do_isw=0;
   par->do_pred=0;
   par->n_srcs=-1;
   par->n_imap=-1;
   par->n_kappa=-1;
+  par->n_isw=-1;
   par->nside_kappa=-1;
+  par->nside_isw=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzSrcs[ii],"default");
     sprintf(par->fnameNzSrcs[ii],"default");
@@ -114,11 +112,13 @@ static ParamCoLoRe *param_colore_new(void)
     par->intacc_imap[ii]=NULL;
     par->nside_imap[ii]=-1;
     par->z_kappa_out[ii]=-1;
+    par->z_isw_out[ii]=-1;
     par->nu0_imap[ii]=-1;
   }
   par->srcs=NULL;
   par->imap=NULL;
   par->kmap=NULL;
+  par->pd_map=NULL;
   par->nsources_this=NULL;
 
   return par;
@@ -301,6 +301,13 @@ ParamCoLoRe *read_run_params(char *fname)
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
 
+  cset=config_lookup(conf,"isw");
+  if(cset!=NULL) {
+    par->do_isw=1;
+    conf_read_double_array(conf,"isw","z_out",par->z_isw_out,&(par->n_isw),NPOP_MAX);
+    conf_read_int(conf,"isw","nside",&(par->nside_isw));
+  }
+
   if(par->do_sources) {
     par->srcs=my_malloc(par->n_srcs*sizeof(Src *));
     par->nsources_this=my_malloc(par->n_srcs*sizeof(lint));
@@ -323,6 +330,15 @@ ParamCoLoRe *read_run_params(char *fname)
     par->fl_mean_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
     par->cl_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
 #endif //_ADD_EXTRA_KAPPA
+  }
+
+  if(par->do_isw) {
+    par->pd_map=new_hp_shell(par->nside_isw,par->n_isw);
+#ifdef _ADD_EXTRA_ISW
+    par->need_extra_isw=my_calloc(par->nside_isw,sizeof(int));
+    par->fl_mean_extra_isw=my_malloc(par->nside_isw*sizeof(flouble));
+    par->cl_extra_isw=my_malloc(par->nside_isw*sizeof(flouble));
+#endif //_ADD_EXTRA_ISW
   }
 
 #ifdef _DEBUG
@@ -351,7 +367,7 @@ ParamCoLoRe *read_run_params(char *fname)
   while(2*par->nside_base*par->nside_base<NNodes)
     par->nside_base*=2;
 
-  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa;
+  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
   if(par->need_onions) {
     par->oi_beams=alloc_onion_info_beams(par);
     par->nside_base=par->oi_beams[0]->nside_arr[0];
@@ -376,6 +392,8 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  %d intensity mapping species\n",par->n_imap);
   if(par->do_kappa)
     print_info("  %d lensing source planes\n",par->n_kappa);
+  if(par->do_isw)
+    print_info("  %d ISW source planes\n",par->n_isw);
   if(par->do_lensing)
     print_info("  Will include lensing shear\n");
   if(!par->need_onions)
@@ -541,6 +559,81 @@ void write_kappa(ParamCoLoRe *par)
       //Write dummy map
       if(NodeThis==0)
 	he_write_healpix_map(&map_write,1,par->nside_kappa,fname);
+    }
+    free(map_write);
+    free(map_nadd);
+    if(NodeThis==0) timer(2);
+    print_info("\n");
+  }
+}
+
+void write_isw(ParamCoLoRe *par)
+{
+  if(par->do_isw) {
+    int ir;
+    char fname[256];
+    long npx=he_nside2npix(par->nside_isw);
+    flouble *map_write=my_malloc(npx*sizeof(flouble));
+    int *map_nadd=my_malloc(npx*sizeof(int));
+    if(NodeThis==0) timer(0);
+    print_info("*** Writing isw source maps\n");
+    for(ir=0;ir<par->pd_map->nr;ir++) {
+      long ip;
+      long ir_t=ir*par->pd_map->num_pix;
+      
+      //Write local pixels to dummy map
+      memset(map_write,0,npx*sizeof(flouble));
+      memset(map_nadd,0,npx*sizeof(int));
+      sprintf(fname,"!%s_isw_z%03d.fits",par->prefixOut,ir);
+      for(ip=0;ip<npx;ip++) {
+	int id_pix=par->pd_map->listpix[ip];
+	if(id_pix>0) {
+	  map_write[ip]+=par->pd_map->data[ir_t+id_pix];
+	  map_nadd[ip]+=par->pd_map->nadd[ir_t+id_pix];
+	}
+      }
+
+      //Collect all dummy maps
+#ifdef _HAVE_MPI
+      if(NodeThis==0)
+	MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+      else
+	MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+      if(NodeThis==0)
+	MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+      else
+	MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+
+      for(ip=0;ip<npx;ip++) {
+	if(map_nadd[ip]>0)
+	  map_write[ip]/=map_nadd[ip];
+      }
+
+#ifdef _ADD_EXTRA_ISW
+      if(par->need_extra_isw[ir]) {
+	if(NodeThis==0) {
+	  int lmax=3*par->pd_map->nside;
+	  flouble *map_extra;
+	  flouble *map_mean=my_calloc(npx,sizeof(flouble));
+	  //	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
+	  print_info("Adding perturbations to isw shell #%d\n",ir+1);
+	  //	  he_map2alm(par->pd_map->nside,lmax,1,&map_write,&alm);
+	  //	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_isw[ir]);
+	  //	  he_alm2map(par->pd_map->nside,lmax,1,&map_mean,&alm);
+	  //	  free(alm);
+	  map_extra=he_synfast(par->cl_extra_isw[ir],par->pd_map->nside,lmax,par->seed_rng);
+	  for(ip=0;ip<npx;ip++)
+	    map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
+	  free(map_extra);
+	  free(map_mean);
+	}
+      }
+#endif //_ADD_EXTRA_ISW
+
+      //Write dummy map
+      if(NodeThis==0)
+	he_write_healpix_map(&map_write,1,par->nside_isw,fname);
     }
     free(map_write);
     free(map_nadd);
@@ -754,6 +847,21 @@ void param_colore_free(ParamCoLoRe *par)
     free(par->fl_mean_extra_kappa);
     free(par->cl_extra_kappa);
 #endif //_ADD_EXTRA_KAPPA
+  }
+
+  if(par->do_isw) {
+    free_hp_shell(par->pd_map);
+#ifdef _ADD_EXTRA_ISW
+    for(ii=0;ii<par->n_isw;ii++) {
+      if(par->need_extra_isw[ii]) {
+	free(par->fl_mean_extra_isw[ii]);
+	free(par->cl_extra_isw[ii]);
+      }
+    }
+    free(par->need_extra_isw);
+    free(par->fl_mean_extra_isw);
+    free(par->cl_extra_isw);
+#endif //_ADD_EXTRA_ISW
   }
 
 #ifdef _DEBUG

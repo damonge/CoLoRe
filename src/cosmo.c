@@ -23,6 +23,9 @@
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_errno.h>
 
+#define CL_TYPE_KAPPA 0
+#define CL_TYPE_ISW 1
+
 static double a_of_r_provisional(ParamCoLoRe *par,double r)
 {
   if(r<=0) return 1.;
@@ -85,6 +88,18 @@ double vgrowth_of_r(ParamCoLoRe *par,double r)
   }
 }
 
+double pdgrowth_of_r(ParamCoLoRe *par,double r)
+{
+  if(r<=0) return par->growth_pd_arr[0];
+  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_pd_arr[NA-1];
+  else {
+    int ir=(int)(r*par->glob_idr);
+    double gpd=par->growth_pd_arr[ir]+(par->growth_pd_arr[ir+1]-par->growth_pd_arr[ir])*
+      (r-par->r_arr_r2z[ir])*par->glob_idr;
+    return gpd;
+  }
+}
+
 double ihub_of_r(ParamCoLoRe *par,double r)
 {
   if(r<=0) return par->ihub_arr[NA-1];
@@ -137,6 +152,7 @@ typedef struct {
   double chi_0_b;
   double chi_f_b;
   double chi_s;
+  int cl_type;
 } ClParams;
 
 static double window_kappa_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
@@ -153,27 +169,44 @@ static double window_kappa_limber(ParamCoLoRe *par,int l,double k,double chi_0,d
   }
 }
 
+static double window_isw_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
+{
+  double chi_l=(l+0.5)/k;
+
+  if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
+    return 0;
+  else
+    return 2*par->prefac_lensing*pdgrowth_of_r(par,chi_l)/(k*k);
+}
+
 static double cl_integrand(double lk,void *params)
 {
   ClParams *p=(ClParams *)params;
   double k=pow(10.,lk);
   double pk=pk_linear0(p->par,lk);
-  double wa=window_kappa_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
-  double wb=window_kappa_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
+  double wa=0,wb=0;
+  if(p->cl_type==CL_TYPE_KAPPA) {
+    wa=window_kappa_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
+    wb=window_kappa_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
+  }
+  else if(p->cl_type==CL_TYPE_ISW) {
+    wa=window_isw_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
+    wb=window_isw_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
+  }
   if((p->par->do_smoothing) && (p->par->smooth_potential))
     pk*=exp(-k*k*p->par->r2_smooth);
 
   return k*wa*wb*pk;
 }
 
-static double compute_cl_kappa(ParamCoLoRe *par,int l,
-			       double chi_0_a,double chi_f_a,
-			       double chi_0_b,double chi_f_b,
-			       double chi_s)
+static double compute_cl(ParamCoLoRe *par,int l,
+			 double chi_0_a,double chi_f_a,
+			 double chi_0_b,double chi_f_b,
+			 double chi_s,int cl_type)
 {
   ClParams p;
-  double result=0,eresult;
   gsl_function F;
+  double lkmin,lkmax,eresult,result=0,chi_min=1E16,chi_max=-1;
   gsl_integration_workspace *w=gsl_integration_workspace_alloc(1000);
   p.par=par;
   p.l=l;
@@ -182,9 +215,24 @@ static double compute_cl_kappa(ParamCoLoRe *par,int l,
   p.chi_0_b=chi_0_b;
   p.chi_f_b=chi_f_b;
   p.chi_s=chi_s;
+  p.cl_type=cl_type;
   F.function=&cl_integrand;
   F.params=&p;
-  gsl_integration_qag(&F,-5.,2.,0,1E-4,1000,GSL_INTEG_GAUSS41,w,&result,&eresult);
+
+  if(chi_0_a<chi_min) chi_min=chi_0_a;
+  if(chi_0_b<chi_min) chi_min=chi_0_b;
+  if(chi_f_a<chi_min) chi_min=chi_f_a;
+  if(chi_f_b<chi_min) chi_min=chi_f_b;
+  if(chi_0_a>chi_max) chi_max=chi_0_a;
+  if(chi_0_b>chi_max) chi_max=chi_0_b;
+  if(chi_f_a>chi_max) chi_max=chi_f_a;
+  if(chi_f_b>chi_max) chi_max=chi_f_b;
+  if(chi_min<=0) lkmax=2.;
+  else lkmax=log10((l+1/2)/chi_min);
+  if(chi_max<=0) lkmin=-5.;
+  else lkmin=log10((l+1/2)/chi_max);
+
+  gsl_integration_qag(&F,lkmin,lkmax,0,1E-4,1000,GSL_INTEG_GAUSS41,w,&result,&eresult);
   gsl_integration_workspace_free(w);
 
   return M_LN10*result/(l+0.5);
@@ -611,6 +659,7 @@ void cosmo_set(ParamCoLoRe *par)
     par->r_arr_r2z[ii]=r;
     par->growth_d_arr[ii]=gz;
     par->growth_v_arr[ii]=(gz*hhz*fz)/(par->fgrowth_0*par->hubble_0); //This is for the comoving velocity
+    par->growth_pd_arr[ii]=gz*hhz*(fz-1);
     par->ihub_arr[ii]=1./hhz;
   }
 
@@ -629,19 +678,17 @@ void cosmo_set(ParamCoLoRe *par)
 	par->fl_mean_extra_kappa[ii]=my_malloc(nl*sizeof(flouble));
 	par->cl_extra_kappa[ii]=my_malloc(nl*sizeof(flouble));
 	for(l=0;l<nl;l++) {
-	  flouble cl_11=compute_cl_kappa(par,l,0.        ,par->r_max,0.        ,par->r_max,chi_here);
-	  flouble cl_12=compute_cl_kappa(par,l,0.        ,par->r_max,par->r_max,chi_here  ,chi_here);
-	  flouble cl_22=compute_cl_kappa(par,l,par->r_max,chi_here  ,par->r_max,chi_here  ,chi_here);
-	  par->fl_mean_extra_kappa[ii][l]=cl_12/cl_11;
-	  par->cl_extra_kappa[ii][l]=cl_22-cl_12*cl_12/cl_11;
-	  //	  par->fl_mean_extra_kappa[ii][l]=0;
-	  //	  par->cl_extra_kappa[ii][l]=cl_22+cl_11+2*cl_12;
+	  flouble cl_k_11=compute_cl(par,l,0.        ,par->r_max,0.        ,par->r_max,chi_here,CL_TYPE_KAPPA);
+	  flouble cl_k_12=compute_cl(par,l,0.        ,par->r_max,par->r_max,chi_here  ,chi_here,CL_TYPE_KAPPA);
+	  flouble cl_k_22=compute_cl(par,l,par->r_max,chi_here  ,par->r_max,chi_here  ,chi_here,CL_TYPE_KAPPA);
+	  par->fl_mean_extra_kappa[ii][l]=cl_k_12/cl_k_11;
+	  par->cl_extra_kappa[ii][l]=cl_k_22-cl_k_12*cl_k_12/cl_k_11;
 	  if(l==0) {
 	    par->fl_mean_extra_kappa[ii][l]=0;
 	    par->cl_extra_kappa[ii][l]=0;
 	  }
 	  if(NodeThis==0)
-	    fprintf(par->f_dbg,"%d %lE %lE\n",l,par->fl_mean_extra_kappa[ii][l],par->cl_extra_kappa[ii][l]);
+	    fprintf(par->f_dbg,"%d %lE %lE \n",l,par->fl_mean_extra_kappa[ii][l],par->cl_extra_kappa[ii][l]);
 	}
 	if(NodeThis==0)
 	  fprintf(par->f_dbg,"\n");
@@ -649,8 +696,44 @@ void cosmo_set(ParamCoLoRe *par)
 	report_error(1,"Source plane %d outside redshift range\n",ii+1);
 #endif //_ADD_EXTRA_KAPPA
       }
-      par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
-      par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->kmap->r0[ii]  =csm_radial_comoving_distance(pars,1./(1+z));
+      par->kmap->rf[ii]  =csm_radial_comoving_distance(pars,1./(1+z));
+    }
+  }
+
+  if(par->do_isw) {
+    for(ii=0;ii<par->n_isw;ii++) {
+      double z=par->z_isw_out[ii];
+      if(z>par->z_max) {
+#ifdef _ADD_EXTRA_ISW
+	int l,nl=3*par->pd_map->nside;
+	double chi_here=r_of_z(par,z);
+	if(NodeThis==0)
+	  fprintf(par->f_dbg,"Power spectra for extra isw, shell %d (z=%.3lf)\n",ii+1,z);
+	par->need_extra_isw[ii]=1;
+	par->fl_mean_extra_isw[ii]=my_malloc(nl*sizeof(flouble));
+	par->cl_extra_isw[ii]=my_malloc(nl*sizeof(flouble));
+	for(l=0;l<nl;l++) {
+	  flouble cl_i_11=compute_cl(par,l,0.        ,par->r_max,0.        ,par->r_max,chi_here,CL_TYPE_ISW);
+	  flouble cl_i_12=compute_cl(par,l,0.        ,par->r_max,par->r_max,chi_here  ,chi_here,CL_TYPE_ISW);
+	  flouble cl_i_22=compute_cl(par,l,par->r_max,chi_here  ,par->r_max,chi_here  ,chi_here,CL_TYPE_ISW);
+	  par->fl_mean_extra_isw[ii][l]=cl_i_12/cl_i_11;
+	  par->cl_extra_isw[ii][l]=cl_i_22-cl_i_12*cl_i_12/cl_i_11;
+	  if(l==0) {
+	    par->fl_mean_extra_isw[ii][l]=0;
+	    par->cl_extra_isw[ii][l]=0;
+	  }
+	  if(NodeThis==0)
+	    fprintf(par->f_dbg,"%d %lE %lE \n",l,par->fl_mean_extra_isw[ii][l],par->cl_extra_isw[ii][l]);
+	}
+	if(NodeThis==0)
+	  fprintf(par->f_dbg,"\n");
+#else //_ADD_EXTRA_ISW
+	report_error(1,"Source plane %d outside redshift range\n",ii+1);
+#endif //_ADD_EXTRA_ISW
+      }
+      par->pd_map->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->pd_map->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
     }
   }
 

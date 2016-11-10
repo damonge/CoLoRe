@@ -214,6 +214,7 @@ typedef struct {
   double r_arr_r2z[NA]; //Array of comoving distances used to compute z(r), D_d(r), D_v(r), 1/H(z)
   double growth_d_arr[NA]; //Array of density growth factors used to compute D_d(r)
   double growth_v_arr[NA]; //Array of velocity growth factors used to compute D_v(r)
+  double growth_pd_arr[NA]; //Array of potential derivative factors used to compute \dot{\phi}
   double ihub_arr[NA]; //Array of 1/H(z)
   double glob_idr; //1/dr, where dr is the radial comoving distance interval used in the arrays above
 
@@ -244,19 +245,13 @@ typedef struct {
   int do_lensing; //Do we need to compute the lensing potential?
   int nside_base; //Minimum n_side used in the pixelization
   int n_beams_here; //Number of beams stored in this node for the lightcone
-  //  OnionInfo *oi_slices; //Slices of the onion shells stored in this node
-  //  OnionInfo *oi_sl_dum; //Dummy onion slices used to communicate slices into beams
   OnionInfo **oi_beams; //Onion beams stored in this node
-  //  flouble **dens_slices; //Density slices
   flouble ***dens_beams; //Density beams
-  //  flouble **vrad_slices; //v_r slices
   flouble ***vrad_beams; //v_r beams
-  //  flouble **p_xx_slices; //phi_xx slices
   flouble ***p_xx_beams; //phi_xx beams
-  //  flouble **p_xy_slices; //phi_xy slices
   flouble ***p_xy_beams; //phi_xy beams
-  //  flouble **p_yy_slices; //phi_yy slices
   flouble ***p_yy_beams; //phi_yy beams
+  flouble ***pdot_beams; //phi_t beams
   int ***nsrc_beams; //Beams with total number of sources
 
   int do_sources; //Do we include sources
@@ -294,6 +289,17 @@ typedef struct {
   flouble **cl_extra_kappa;
 #endif //_ADD_EXTRA_KAPPA
 
+  int do_isw; //Do you want to output isw maps?
+  int n_isw; //How many maps?
+  double z_isw_out[NPOP_MAX]; //Array of source plane redshifts
+  int nside_isw;
+  HealpixShells *pd_map; //Isw maps at each redshift
+#ifdef _ADD_EXTRA_ISW
+  int *need_extra_isw;
+  flouble **fl_mean_extra_isw;
+  flouble **cl_extra_isw;
+#endif //_ADD_EXTRA_ISW
+
   int do_pred;
   double pred_dz;
 } ParamCoLoRe;
@@ -315,11 +321,8 @@ void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
 void rng_gauss(gsl_rng *rng,double *r1,double *r2);
 void end_rng(gsl_rng *rng);
-//OnionInfo *alloc_onion_info_slices(ParamCoLoRe *par);
 OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
 void free_onion_info(OnionInfo *oi);
-//void alloc_slices(ParamCoLoRe *par);
-//void free_slices(ParamCoLoRe *par);
 void alloc_beams(ParamCoLoRe *par);
 void free_beams(ParamCoLoRe *par);
 
@@ -332,6 +335,7 @@ double r_of_z(ParamCoLoRe *par,double z);
 double z_of_r(ParamCoLoRe *par,double r);
 double dgrowth_of_r(ParamCoLoRe *par,double r);
 double vgrowth_of_r(ParamCoLoRe *par,double r);
+double pdgrowth_of_r(ParamCoLoRe *par,double r);
 double ihub_of_r(ParamCoLoRe *par,double r);
 double ndens_of_z_srcs(ParamCoLoRe *par,double z,int ipop);
 double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop);
@@ -347,6 +351,7 @@ ParamCoLoRe *read_run_params(char *fname);
 void write_catalog(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
+void write_isw(ParamCoLoRe *par);
 void write_grids(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
@@ -371,9 +376,11 @@ void pixelize(ParamCoLoRe *par);
 //////
 // Functions defined in grid_tools.c
 void integrate_lensing(ParamCoLoRe *par);
+void integrate_isw(ParamCoLoRe *par);
 void get_sources(ParamCoLoRe *par);
 void get_imap(ParamCoLoRe *par);
 void get_kappa(ParamCoLoRe *par);
+void get_isw(ParamCoLoRe *par);
 
 
 //////

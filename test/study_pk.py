@@ -32,10 +32,12 @@ mp_d=(nmap+0.0)/np.mean(nmap+0.0)-1
 mp_db,mp_E,mp_B=hp.alm2map(hp.map2alm(np.array([mp_d,mp_e1,mp_e2]),pol=True),pol=False,nside=nside)
 
 lt,cls_dd=np.loadtxt('test/outlj_cl_dd.txt',unpack=True);
-lt,clt_kd=np.loadtxt('test/outlj_cl_dc.txt',unpack=True);
-lt,clt_kk=np.loadtxt('test/outlj_cl_cc.txt',unpack=True);
 lt,clt_dl=np.loadtxt('test/outlj_cl_d1l2.txt',unpack=True);
 lt,clt_ll=np.loadtxt('test/outlj_cl_ll.txt',unpack=True);
+lt,clt_kd=np.loadtxt('test/outlj_cl_dc.txt',unpack=True);
+lt,clt_kk=np.loadtxt('test/outlj_cl_cc.txt',unpack=True);
+lt,clt_id=np.loadtxt('test/outlj_cl_di.txt',unpack=True);
+lt,clt_ii=np.loadtxt('test/outlj_cl_ii.txt',unpack=True);
 cln_dd=np.ones_like(lt)/ndens
 clt_dd=cls_dd+cln_dd
 cld_dd,cld_ee,cld_bb,cld_de,cld_eb,cld_db=hp.anafast(np.array([mp_d,mp_e1,mp_e2]),pol=True);
@@ -46,6 +48,11 @@ mp_k=hp.read_map("test/out_kappa_z000.fits")
 cld_kk=hp.anafast(mp_k); ld=np.arange(len(cld_kk))
 cld_kd=hp.anafast(mp_k,map2=mp_d)
 
+#Analyze ISW
+mp_i=hp.read_map("test/out_isw_z000.fits")
+cld_ii=hp.anafast(mp_i); ld=np.arange(len(cld_ii))
+cld_id=hp.anafast(mp_i,map2=mp_d)
+
 #Plots
 hp.mollview(mp_d);
 hp.mollview(mp_E);
@@ -53,6 +60,7 @@ hp.mollview(mp_B);
 hp.mollview(mp_e1);
 hp.mollview(mp_e2);
 hp.mollview(mp_k)
+hp.mollview(mp_i)
 plt.figure()
 plt.hist(mp_e1,bins=100,histtype='step');
 plt.hist(mp_e2,bins=100,histtype='step');
@@ -65,11 +73,15 @@ plt.plot(ld,cld_eb,'m',linestyle='dashed',label='$\\gamma^E_g\\times\\gamma^B_g$
 plt.plot(ld,cld_db,'m',linestyle='dotted',label='$\\gamma^B_g\\times\\delta_g$',lw=2)
 plt.plot(ld,cld_kd,'g-',label='$\\kappa-\\delta_g$',lw=2)
 plt.plot(ld,cld_kk,'b-',label='$\\kappa-\\kappa$',lw=2)
+plt.plot(ld,cld_id,'r-',label='$\\dot{\\phi}-\\delta_g$',lw=2)
+plt.plot(ld,cld_ii,'y-',label='$\\dot{\\phi}-\\dot{\\phi}$',lw=2)
 plt.plot(lt,clt_dd,'k-',lw=2)
 plt.plot(lt,2*clt_dl,'k-',lw=2)
 plt.plot(lt,4*clt_ll,'k-',lw=2)
 plt.plot(lt,clt_kd,'k-',lw=2)
 plt.plot(lt,clt_kk,'k-',lw=2)
+plt.plot(lt,clt_id,'k--',lw=2)
+plt.plot(lt,clt_ii,'k--',lw=2)
 plt.loglog()
 plt.xlabel('$\\ell$',fontsize=16)
 plt.ylabel('$C_\\ell$',fontsize=16)

@@ -38,7 +38,7 @@ static inline double get_cosine(double index,double dx)
 }
 
 static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
-			flouble *d,flouble v[3],flouble t[6])
+			flouble *d,flouble v[3],flouble t[6],flouble *pdot)
 {
   int ngx=2*(par->n_grid/2+1);
   lint iz_hi=iz+1,iz_lo=iz-1,iz_0=iz;
@@ -67,6 +67,9 @@ static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
     v[2]=par->slice_right[ix_0+iy_0]-par->grid_npot[ix_0+iy_0+iz_lo];
   else
     v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
+
+  if(par->do_isw)
+    *pdot=par->grid_npot[ix_0+iy_0+iz_0];
 
   //Get tidal tensor
   if(par->do_lensing) {
@@ -175,7 +178,7 @@ void pixelize(ParamCoLoRe *par)
 	      flouble phi0=(oi->iphi0_arr[ir]+iphi)*dphi;
 	      flouble phi_h=phi0+dphi*0.5;
 	      flouble cph_h=cos(phi_h),sph_h=sin(phi_h);
-	      flouble d=0,v[3]={0,0,0},t[6]={0,0,0,0,0,0};
+	      flouble d=0,v[3]={0,0,0},t[6]={0,0,0,0,0,0},pd=0;
 	      u[0]=sth_h*cph_h; u[1]=sth_h*sph_h; u[2]=cth_h;
 
 	      //Make sub-voxels
@@ -206,14 +209,16 @@ void pixelize(ParamCoLoRe *par)
 		    ix0[2]-=par->iz0_here;
 		    
 		    if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-		      flouble d_000,v_000[3],t_000[6];
+		      flouble d_000,v_000[3],t_000[6],pd_000;
 		      flouble w_000=h0x[2]*h0x[1]*h0x[0];
 		      
 		      added_anything=1;
-		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000);
+		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000);
 		      d+=d_000*w_000;
 		      for(ax=0;ax<3;ax++)
 			v[ax]+=v_000[ax]*w_000;
+		      if(par->do_isw) {
+			pd+=pd_000*w_000;
 		      if(par->do_lensing) {
 			for(ax=0;ax<6;ax++)
 			  t[ax]+=t_000[ax]*w_000;
@@ -245,20 +250,20 @@ void pixelize(ParamCoLoRe *par)
 		    ix1[2]-=par->iz0_here;
 		    
 		    if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-		      flouble d_000,v_000[3],t_000[6];
-		      flouble d_001,v_001[3],t_001[6];
-		      flouble d_010,v_010[3],t_010[6];
-		      flouble d_011,v_011[3],t_011[6];
+		      flouble d_000,v_000[3],t_000[6],pd_000;
+		      flouble d_001,v_001[3],t_001[6],pd_001;
+		      flouble d_010,v_010[3],t_010[6],pd_010;
+		      flouble d_011,v_011[3],t_011[6],pd_011;
 		      flouble w_000=h1x[2]*h1x[1]*h1x[0];
 		      flouble w_001=h1x[2]*h1x[1]*h0x[0];
 		      flouble w_010=h1x[2]*h0x[1]*h1x[0];
 		      flouble w_011=h1x[2]*h0x[1]*h0x[0];
 		      
 		      added_anything=1;
-		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000);
-		      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001);
-		      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010);
-		      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011);
+		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000);
+		      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001,&pd_001);
+		      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010,&pd_010);
+		      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011,&pd_011);
 		      d+=(d_000*w_000+d_001*w_001+d_010*w_010+d_011*w_011);
 		      for(ax=0;ax<3;ax++)
 			v[ax]+=(v_000[ax]*w_000+v_001[ax]*w_001+v_010[ax]*w_010+v_011[ax]*w_011);
@@ -266,22 +271,24 @@ void pixelize(ParamCoLoRe *par)
 			for(ax=0;ax<6;ax++)
 			  t[ax]+=(t_000[ax]*w_000+t_001[ax]*w_001+t_010[ax]*w_010+t_011[ax]*w_011);
 		      }
+		      if(par->do_isw)
+			pd+=(pd_000*w_000+pd_001*w_001+pd_010*w_010+pd_011*w_011);
 		    }
 		    if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
-		      flouble d_100,v_100[3],t_100[6];
-		      flouble d_101,v_101[3],t_101[6];
-		      flouble d_110,v_110[3],t_110[6];
-		      flouble d_111,v_111[3],t_111[6];
+		      flouble d_100,v_100[3],t_100[6],pd_100;
+		      flouble d_101,v_101[3],t_101[6],pd_101;
+		      flouble d_110,v_110[3],t_110[6],pd_110;
+		      flouble d_111,v_111[3],t_111[6],pd_111;
 		      flouble w_100=h0x[2]*h1x[1]*h1x[0];
 		      flouble w_101=h0x[2]*h1x[1]*h0x[0];
 		      flouble w_110=h0x[2]*h0x[1]*h1x[0];
 		      flouble w_111=h0x[2]*h0x[1]*h0x[0];
 		      
 		      added_anything=1;
-		      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100);
-		      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101);
-		      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110);
-		      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111);
+		      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100,&pd_100);
+		      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101,&pd_101);
+		      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110,&pd_110);
+		      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111,&pd_111);
 		      d+=(d_100*w_100+d_101*w_101+d_110*w_110+d_111*w_111);
 		      for(ax=0;ax<3;ax++)
 			v[ax]+=(v_100[ax]*w_100+v_101[ax]*w_101+v_110[ax]*w_110+v_111[ax]*w_111);
@@ -289,6 +296,8 @@ void pixelize(ParamCoLoRe *par)
 			for(ax=0;ax<6;ax++)
 			  t[ax]+=(t_100[ax]*w_100+t_101[ax]*w_101+t_110[ax]*w_110+t_111[ax]*w_111);
 		      }
+		      if(par->do_isw)
+			pd+=(pd_100*w_100+pd_101*w_101+pd_110*w_110+pd_111*w_111);
 		    }
 #endif //INTERP_TYPE
 		  }
@@ -298,6 +307,8 @@ void pixelize(ParamCoLoRe *par)
 	      if(added_anything) {
 		par->dens_beams[ib][ir][index]+=d;
 		par->vrad_beams[ib][ir][index]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+		if(par->do_isw)
+		  par->pdot_beams[ib][ir][index]+=pd;
 		if(par->do_lensing) {
 		  par->p_xx_beams[ib][ir][index]+=idx*idx*
 		    (cth_h*cth_h*(t[IND_XX]*cph_h*cph_h+2*t[IND_XY]*cph_h*sph_h+t[IND_YY]*sph_h*sph_h)+

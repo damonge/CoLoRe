@@ -58,6 +58,10 @@ int main(int argc,char **argv)
   if(par->do_lensing)
     integrate_lensing(par);
 
+  //Precompute isw if needed
+  if(par->do_isw)
+    integrate_isw(par);
+
   //Poisson-sample the galaxies
   if(par->do_sources)
     get_sources(par);
@@ -70,6 +74,10 @@ int main(int argc,char **argv)
   if(par->do_kappa)
     get_kappa(par);
 
+  //Generate isw maps
+  if(par->do_isw)
+    get_isw(par);
+
   //Write output
   if(par->do_sources)
     write_catalog(par);
@@ -77,6 +85,8 @@ int main(int argc,char **argv)
     write_imap(par);
   if(par->do_kappa)
     write_kappa(par);
+  if(par->do_isw)
+    write_isw(par);
   if(par->do_pred)
     write_predictions(par);
 
