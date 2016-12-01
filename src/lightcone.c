@@ -690,7 +690,6 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
   shell->nadd=my_calloc(shell->nr*shell->num_pix,sizeof(int));
 }
 
-#define N_SUBVOL 10
 static void get_imap_single(ParamCoLoRe *par,int ipop)
 {
   int nthr;
@@ -718,8 +717,8 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 #endif //_HAVE_OMP
     unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_imap*IThread0);
     gsl_rng *rng_thr=init_rng(seed_thr);
-    double *disp=my_calloc(3*N_SUBVOL,sizeof(double));
-    for(ir=0;ir<3*N_SUBVOL;ir++)
+    double *disp=my_calloc(3*N_RAN_IMAP,sizeof(double));
+    for(ir=0;ir<3*N_RAN_IMAP;ir++)
       disp[ir]=rng_01(rng_thr);
     end_rng(rng_thr);
 
@@ -740,7 +739,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	double dphi=M_PI/nside;
 #if PIXTYPE==PT_CEA
 	double dcth=2./nside;
-	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_SUBVOL;
+	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_RAN_IMAP;
 #elif PIXTYPE==PT_CAR
 	double dth=M_PI/nside;
 #endif //PIXTYPE
@@ -763,14 +762,14 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 #elif PIXTYPE==PT_CAR
 	    double cth0=get_cosine(ind_cth+icth0+0.0,dth);
 	    double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
-	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_SUBVOL;
+	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_RAN_IMAP;
 #endif //PIXTYPE
 	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
 	      int ip;
 	      double phi0=(ind_phi+iphi0)*dphi;
 	      double temp=tmean*cell_vol*exp(gfb*(dens_slice[ind_cth_t+ind_phi]-0.5*gfb*par->sigma2_gauss));
 	      double dr_rsd=prefac_rsd*vrad_slice[ind_cth_t+ind_phi];
-	      for(ip=0;ip<N_SUBVOL;ip++) {
+	      for(ip=0;ip<N_RAN_IMAP;ip++) {
 		double r=r0+dr_rsd+dr*disp[3*ip+0];
 		irad=get_r_index_imap(par->imap[ipop],r,irad);
 		if((irad>=0) && (irad<par->imap[ipop]->nr)) {

@@ -61,6 +61,8 @@
 #endif //_WITH_SHT
 #include "cosmo_mad.h"
 
+/////////
+// Interpolation parameters
 #define PT_CEA 0
 #define PT_CAR 1
 
@@ -82,15 +84,33 @@
 #define NSIDE_ONION_BASE 2
 #endif //NSIDE_ONION_BASE
 
-//How much larger than the cartesian cells should the onion voxels be?
-#ifndef FAC_CART2SPH_VOL
-#define FAC_CART2SPH_VOL 1.
-#endif //FAC_CART2SPH_VOL
+//dr_par = FAC_CART2SPH_PAR * dx
+#ifndef FAC_CART2SPH_PAR
+#define FAC_CART2SPH_PAR 1.
+#endif //FAC_CART2SPH_PAR
 
-//When interpolating from cartesian to onion, how many sub-voxels do we integrate over?
-#ifndef FAC_CART2SPH_NSUB
-#define FAC_CART2SPH_NSUB 1
-#endif //FAC_CART2SPH_NSUB
+//dr_perp = FAC_CART2SPH_PERP * dx
+#ifndef FAC_CART2SPH_PERP
+#define FAC_CART2SPH_PERP 1.
+#endif //FAC_CART2SPH_PERP
+
+//#sub-voxel divisions in r
+#ifndef NSUB_PAR
+#define NSUB_PAR 1
+#endif //NSUB_PAR
+
+//#sub-voxel divisions in r
+#ifndef NSUB_PERP
+#define NSUB_PERP 1
+#endif //NSUB_PERP
+
+//#random points per voxel for IM
+#ifndef N_RAN_IMAP
+#define N_RAN_IMAP 10
+#endif //N_RAN_IMAP
+
+// End of interpolation parameters
+/////////
 
 #define DYNAMIC_SIZE 1
 #define RTOD 57.2957795

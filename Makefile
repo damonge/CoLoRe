@@ -15,7 +15,7 @@ USE_SINGLE_PRECISION = yes
 #Add random perturbations to kappa from redshifts outside the box
 ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
-USE_HDF5 = yes
+USE_HDF5 = no
 #Compile with FITS capability? Set to "yes" or "no"
 USE_FITS = yes
 #Use OMP parallelization? Set to "yes" or "no"
@@ -29,8 +29,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/home/damonge/include
-GSL_LIB = -L/home/damonge/lib
+GSL_INC = -I/users/damonge/include
+GSL_LIB = -L/users/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =

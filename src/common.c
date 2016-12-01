@@ -309,7 +309,7 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
   int ir;
   OnionInfo *oi=my_malloc(sizeof(OnionInfo));
   double dx=par->l_box/par->n_grid;
-  double dr=FAC_CART2SPH_VOL*dx;
+  double dr=FAC_CART2SPH_PAR*dx;
 
   oi->nr=(int)(par->r_max/dr+1);
   dr=par->r_max/oi->nr; //Redefine radial interval
@@ -329,7 +329,7 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
     oi->r0_arr[ir]=ir*dr;
     oi->rf_arr[ir]=(ir+1)*dr;
 
-    while(dr_trans>FAC_CART2SPH_VOL*dx) {
+    while(dr_trans>FAC_CART2SPH_PERP*dx) {
       nside_here*=2;
       dr_trans=rm*get_res(nside_here);
     }
@@ -462,6 +462,10 @@ void free_beams(ParamCoLoRe *par)
 void alloc_beams(ParamCoLoRe *par)
 {
   int ib;
+#ifdef _DEBUG
+  unsigned long long total_GB=0;
+  double total_GB_d=0;
+#endif //_DEBUG
 
   par->dens_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
   par->vrad_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
@@ -490,17 +494,37 @@ void alloc_beams(ParamCoLoRe *par)
     for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
       par->dens_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
       par->vrad_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+#ifdef _DEBUG
+      total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+      total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+#endif //_DEBUG
       if(par->do_lensing) {
 	par->p_xx_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
 	par->p_xy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
 	par->p_yy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+#ifdef _DEBUG
+	total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+	total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+	total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+#endif //_DEBUG
       }
       if(par->do_isw) {
 	par->pdot_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
+#ifdef _DEBUG
+	total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+#endif //_DEBUG
       }
       par->nsrc_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(int));
+#ifdef _DEBUG
+      total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(int);
+#endif //_DEBUG
     }
   }
+
+#ifdef _DEBUG
+  total_GB_d=total_GB/pow(1024.,3);
+  printf(" Node %d: Have allocated %.3lf GB for beams\n",NodeThis,total_GB_d);
+#endif //_DEBUG
 }
 
 void free_hp_shell(HealpixShells *shell)

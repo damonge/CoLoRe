@@ -2,6 +2,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \usepackage{fullpage}
+\newcommand{\nv}{\hat{\bf n}}
 
 %opening
 \title{Fast lognormal realizations for multi-probe experiments}
@@ -19,71 +20,171 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
     \item Generate a Gaussian realization of the linear density field
       $\delta_G$ and the newtonian potential $\phi$ at $z=0$. For
       this we use FFTW in a box able to hold a sufficiently large
-      sphere. In what follows, let $dx$ be the comoving resolution 
-      used for this.
-    \item Interpolate cartesian grid into spherical shells. These
-      are generated with a width $dr=dx$. The pixels are defined
-      using a CEA scheme (cylindrical equal area), with constant
-      intervals in $\phi$ and $\mu\equiv \cos\theta$.
+      sphere. In what follows, let $\Delta x$ be the comoving resolution 
+      of this Cartesian grid.
+    \item Interpolate the Cartesian grid into spherical shells. These
+      are generated with a width $\Delta r=f_r\Delta x$ (with $f_r=1$
+      by default). The pixels are defined using a CAR scheme
+      (equirectangular projection), with constant intervals in $\phi$
+      and $\theta$.
 
-      Let $N_\mu$ be the number of divisions used in $\mu$. Firstly,
-      we will use $2\times N_\mu$ divisions in $\phi$. Secondly,
-      the largest transverse scale covered by each pixel is given by
-      \begin{equation}
-        \Delta d_{\rm max} = \chi\,{\rm arccos}(1-2/N_\mu),
-      \end{equation}
-      where $\chi$ is the comoving distance to the shell.
-      We determine $N_\mu$ by trying to achieve $\Delta d_{\rm max}=dx$,
-      which implies $N_\mu={\rm ceiling}(2/[1-\cos(dx/\chi)])$.
+      Let $N_\theta$ be the number of divisions used in $\theta$. Firstly,
+      we will use $2\times N_\theta$ divisions in $\varphi$. Secondly,
+      the largest transverse scale covered by a pixel is given by
+      $r_\perp^{\rm max}=\chi\,\pi/N_\theta$, where $\chi$ is the comoving
+      distance to the shell. We determine $N_\theta$ as \underline{the smallest power
+        of 2 that satisfies} $r_\perp^{\rm max}\leq f_\theta\Delta x$
+      (with $f_\theta=1$ by default).
     \item While doing the interpolation we compute the relevant
-      quantities at $z=0$ that will be used later. These are the radial
-      velocity, $v_r$, proportional to the radial gradient of $\phi$, and
-      the transverse tidal field, given by the angular second derivatives
-      of $\phi$. These two objects are needed for the computation of RSDs
-      and lensing. We compute these quantities by differentiating through
-      finite differences in the Cartesian grid, rotating and interpolating
-      into the spherical shells (in this order).
-    \item These fields are then evolved in the lightcone in different
-      ways (see details below). Galaxies are Poisson-sampled according
-      to the evolved, bias and lognormalized value of the density 
-      field, and are assigned redshift and shape distortions according
-      to the evolved velocity and lightcone-integrated transverse tidal
-      field.
+      quantities at $z=0$ that will be used later. These are:
+      \begin{itemize}
+        \item The radial velocity $v_r$, proportional to the radial
+          gradient of $\phi$. This is always computed, and is needed
+          for RSDs.
+        \item The second derivatives of $\phi$ in the transverse directions.
+          This is only computed if any lensing quantity (galaxy shear or
+          convergence maps) are required.
+        \item The time derivative of $\phi$, $\dot{\phi}$. This is only
+          computed if ISW maps are required.
+      \end{itemize}
+      All radial and transverse derivatives are estimated by first computing
+      the gradient or Hessian in Cartesian coordinates using finite differences
+      in the box and then rotating into spherical coordinates.
+      
+    \item The interpolation is carried out in three steps:
+      \begin{itemize}
+        \item First, each spherical voxel is sub-divided into 
+          $N_r^{\rm sub}\times (N_\theta^{\rm sub})^2$ sub-voxels, where $N_r$ is the
+          number of divisions taken in the radial direction and $N_\theta$ is
+          the number of divisions in the two transverse directions.
+          
+        \item Each sub-voxel is then assigned a value of the corresponding field
+          ($\delta_G$, $v_r$, $\nabla^2_\perp\phi$ or $\dot{\phi}$) by using
+          tri-linear interpolation on the sub-voxel centre. Specifically, let
+          $(x,y,z)$ be comoving Cartesian coordinates of the sub-voxel, and let
+          $(i,j,k)$ denote the cell in the Cartesian grid such that
+          \begin{align}
+            x_i\leq x<x_{i+1},\hspace{12pt}x_j\leq y<x_{j+1},\hspace{12pt}
+            x_k\leq z<x_{k+1},
+          \end{align}
+          where $x_i\equiv i\,\Delta x$. Let $f_{i,j,k}$ be the value of the
+          corresponding field in the Cartesian grid denoted by $(i,j,k)$, and
+          let $h_x=(x-x_i)/\Delta x$ etc.. Then, the field value assigned to the sub-voxel
+          is given by:
+          \begin{align}
+            f(x,y,z)=&
+            f_{i,j,k}(1-h_x)(1-h_y)(1-h_z)+
+            f_{i,j,k+1}(1-h_x)(1-h_y)h_z+\\
+            &f_{i,j+1,k}(1-h_x)h_y(1-h_z)+
+            f_{i,j+1,k+1}(1-h_x)h_yh_z+\\
+            &f_{i+1,j,k}h_x(1-h_y)(1-h_z)+
+            f_{i+1,j,k+1}h_x(1-h_y)h_z+\\
+            &f_{i+1,j+1,k}h_xh_y(1-h_z)+
+            f_{i+1,j+1,k+1}h_xh_yh_z
+          \end{align}
+        \item The field value assigned to the voxel is then computed as the average
+          of the different sub-voxels.
+      \end{itemize}
+    \item The different fields are evolved according to their linear perturbation growth
+      factors and integrated along the line of sight in the case of lensing and ISW (see 
+      details below).
+    \item The evolved field values are used to Poisson-sample sources, give them RSDs
+      and shapes, produce convergence, ISW and intensity maps.
   \end{itemize}
 
 \section{Relevant equations}
+  Given the Cartesian realization of the Gaussian density field $\delta_G$ at $z=0$,
+  we compute the Newtonian potential by solving Poisson's equation in Fourier space:
+  \begin{equation}
+    \phi({\bf k},z=0)=-\frac{3}{2}\Omega_MH_0^2\frac{\delta_G({\bf k},z=0)}{k^2},
+  \end{equation}
+
+  The radial velocity field is computed in terms of the gradient of the Newtonian
+  potential as
+  \begin{equation}
+    v_r(z=0)=-\frac{2f_0}{3H_0^2\Omega_M}(\nv\cdot\nabla)\phi(z=0),
+  \end{equation}
+  where $\nv\equiv(\sin\theta\cos\varphi,\sin\theta\sin\varphi,\cos\theta)$.
+
+  The transverse hessian of the gravitational potential is computed as
+  \begin{equation}
+    \hat{H}_\perp\phi=\hat{R}(\hat{H}\phi)\hat{R}^T
+  \end{equation}
+  where $\hat{H}$ is the Cartesian Hessian operator, and $\hat{R}$ is a rotation
+  matrix:
+  \begin{equation}
+    \hat{H}\equiv\left(
+    \begin{array}{ccc}
+      \partial_x\partial_x & \partial_x\partial_y & \partial_x\partial_z\\
+      \partial_x\partial_y & \partial_y\partial_y & \partial_y\partial_z\\
+      \partial_x\partial_z & \partial_y\partial_z & \partial_z\partial_z
+    \end{array}\right),
+    \hspace{6pt}
+    \hat{R}\equiv\left(
+    \begin{array}{ccc}
+      \cos\theta\cos\phi & \cos\theta\sin\phi & -\sin\theta\\
+      -\sin\phi & \cos\phi & 0
+    \end{array}
+    \right).
+  \end{equation}
+
+  The evolution equations for the different quantities are:
   \begin{align}
-    &\phi_{\bf k}(z=0)=-\frac{3}{2}\Omega_MH_0^2
-    \frac{\delta_{\bf k}(z=0)}{k^2},\hspace{12pt}
-    v_r(z=0)=-\frac{2\,f_0}{3\,H_0\Omega_M}\hat{\bf n}\cdot\nabla\phi(z=0)\\
-    &\delta(z)=D(z)\,\delta(z=0),\hspace{12pt}
-    v_r(z)=\frac{D(z)f(z)H(z)}{f_0H_0}v_r(z=0),\hspace{12pt}
-    \phi(z)=(1+z)D(z)\phi(z=0)
+    &\delta_G(z)=D(z)\delta(z=0),\hspace{12pt}
+    v_r(z)=\frac{D(z)f(z)H(z)}{f_0H_0}v_r(z=0),\\
+    &\phi(z)=(1+z)D(z)\phi(z=0),\hspace{12pt}
+    \dot{\phi}(z)=(1+z)D(z)H(z)[f(z)-1]\phi(z=0)
   \end{align}
 
+  Finally, we obtain the shear $(\gamma_1,\gamma_2)$, convergence $\kappa$
+  and ISW $\Delta^{\rm ISW}$ fields after integrating along the line
+  of sight:
+  \begin{align}
+    &\left(
+    \begin{array}{cc}
+      \kappa+\gamma_1 & \gamma_2\\
+      \gamma_2 & \kappa-\gamma_1
+    \end{array}\right)(\chi)=
+    2\int_0^\chi d\chi'\chi'\left(1-\frac{\chi'}{\chi}\right)\hat{H}_\perp\phi(\chi')\\
+    &\Delta^{\rm ISW}(\chi)=2\int_0^\chi d\chi'a(\chi')\dot{\phi}(\chi')
+  \end{align}    
+
+
 \section{Sources}
-  At each pixel, we compute the physical galaxy density for each galaxy
-  type $i$ as
+  At each voxel, we compute the physical galaxy density for each galaxy
+  type $a$ as
   \begin{equation}
-    n_i(\chi,\hat{\bf n})=
-    \bar{n}_i(\chi)\,
-    \exp\left[D(\chi)b_i(\chi)\left(\delta_G(\chi,\hat{\bf n})-
-      D(\chi)b_i(\chi)\sigma_G^2/2\right)\right],
+    n_a(\chi,\hat{\bf n})=
+    \bar{n}_a(\chi)\,
+    \exp\left[D(\chi)b_a(\chi)\left(\delta_G(\chi,\hat{\bf n})-
+      D(\chi)b_a(\chi)\sigma_G^2/2\right)\right],
   \end{equation}
-  where $\bar{n}_i$ is the mean number density of galaxies, and $\sigma_G^2$
+  where $\bar{n}_a$ is the mean number density of galaxies, and $\sigma_G^2$
   is the variance of the density field at $z=0$. $\bar{n}$ is related to
   $dn/(d\Omega dz)$ as $dn/(d\Omega dz)=\bar{n}\,\chi^2/H$.
 
   Then, at each pixel we sample a number of galaxies from a Poisson distribution with mean
-  $\lambda\equiv V_{\rm pix}n_i$, where $V_{\rm pix}$ is the comoving volume of each
+  $\lambda\equiv V_{\rm pix}n_a$, where $V_{\rm pix}$ is the comoving volume of each
   spherical voxel. We then place the resulting number of particles inside each voxel at
   random within it. Each galaxy is given a cosmological redshift corresponding $z_c$
   corresponding to its comoving distance by inverting
   \begin{equation}
     \chi=\int_0^{z_c}\frac{dz}{H(z)}.
   \end{equation}
+
   In addition, each galaxy is given a redshift distortion $\Delta z=v_r$ according to the
   value of the comoving velocity field in their corresponding voxel.
+
+  Each source is also given two ellipticity components based on the value of the local
+  shear field:
+  \begin{equation}
+    \epsilon_1=2\gamma_1,\hspace{12pt}\epsilon_2=2\gamma_2.
+  \end{equation}
+  It is also possible compute the fully non-linear values of the ellipticities, given
+  by
+  \begin{equation}
+    \epsilon_i=2\frac{1-\kappa}{(1-\kappa)^2+\gamma_1^2+\gamma_2^2}\gamma_i.
+  \end{equation}
 
 \section{Intensity mapping}
   The brightness temperature for a line-emitting species $a$ in a voxel $i$ is
@@ -107,16 +208,17 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
       the value of the density and velocity fields.
     \item We compute the overdensity in the voxel using a log-normal model:
       \begin{equation}
-        1+\delta^a_i=
+        1+\delta^a=
         \exp\left[D(\chi)b_a(\chi)\left(\delta_G(\chi,\hat{\bf n})-
           D(\chi)b_a(\chi)\sigma_G^2/2\right)\right].
       \end{equation}
     \item We sub-sample the voxel in $N_{\rm sub}$ random points. Each point is
       assigned a brightness temperature
       \begin{equation}
-        T_{a,{\rm sub}}=\bar{T_a}(\nu)\,(1+\delta^a_i)\frac{v_{\rm vox}}{N_{\rm sub}},
+        T_{a,{\rm sub}}=\bar{T_a}(\nu)\,(1+\delta^a_i)\frac{v_{\rm vox}}{N_{\rm sub}v_{\rm IMAP}},
       \end{equation}
-      where $v_{\rm vox}$ is the comoving volume of the voxel, as well as a redshift
+      where $v_{\rm vox}$ is the comoving volume of the voxel and $v_{\rm IMAP}$ is the
+      comoving volume of the intensity mapping pixel. Each point is also assigned a redshift
       displacement given by $v_r$, the value of the lightcone-evolved radial velocity
       field in the voxel.
     \item We compute the frequency channel corresponding to each point from their
@@ -202,6 +304,8 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
       \end{align}
   \end{itemize}
 
+\end{document}
+
 \section{Full-sky expressions}
 The angular power spectrum between two contributions is:
 \begin{equation}
@@ -259,4 +363,3 @@ where
 
 
 
-\end{document}

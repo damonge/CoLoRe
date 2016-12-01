@@ -148,13 +148,13 @@ void pixelize(ParamCoLoRe *par)
 	  double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
 #if PIXTYPE==PT_CEA
 	  flouble dcth=2.0/oi->nside_arr[ir];
-	  flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
+	  flouble dcth_sub=dcth/NSUB_PERP;
 #elif PIXTYPE==PT_CAR
 	  flouble dth=M_PI/oi->nside_arr[ir];
 #endif //PIXTYPE
 	  flouble dphi=M_PI/oi->nside_arr[ir];
-	  flouble dr_sub=dr/FAC_CART2SPH_NSUB;
-	  flouble dphi_sub=dphi/FAC_CART2SPH_NSUB;
+	  flouble dr_sub=dr/NSUB_PAR;
+	  flouble dphi_sub=dphi/NSUB_PERP;
 	  int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
 	  int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
 	  flouble r0=oi->r0_arr[ir];
@@ -166,7 +166,7 @@ void pixelize(ParamCoLoRe *par)
 #elif PIXTYPE==PT_CAR
 	    flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dth);
 	    flouble dcth=get_cosine(oi->icth0_arr[ir]+icth+1.0,dth)-cth0;
-	    flouble dcth_sub=dcth/FAC_CART2SPH_NSUB;
+	    flouble dcth_sub=dcth/NSUB_PERP;
 #endif //PIXTYPE
 	    flouble cth_h=cth0+dcth*0.5;
 	    flouble sth_h=sqrt(1-cth_h*cth_h);
@@ -182,14 +182,14 @@ void pixelize(ParamCoLoRe *par)
 	      u[0]=sth_h*cph_h; u[1]=sth_h*sph_h; u[2]=cth_h;
 
 	      //Make sub-voxels
-	      for(ir2=0;ir2<FAC_CART2SPH_NSUB;ir2++) {
+	      for(ir2=0;ir2<NSUB_PAR;ir2++) {
 		int icth2;
 		flouble r=r0+(ir2+0.5)*dr_sub;
-		for(icth2=0;icth2<FAC_CART2SPH_NSUB;icth2++) {
+		for(icth2=0;icth2<NSUB_PERP;icth2++) {
 		  int iphi2;
 		  flouble cth=cth0+(icth2+0.5)*dcth_sub;
 		  flouble sth=sqrt(1-cth*cth);
-		  for(iphi2=0;iphi2<FAC_CART2SPH_NSUB;iphi2++) {
+		  for(iphi2=0;iphi2<NSUB_PERP;iphi2++) {
 		    flouble phi=phi0+(iphi2+0.5)*dphi_sub;
 		    int ax;
 		    lint ix0[3];
@@ -204,7 +204,6 @@ void pixelize(ParamCoLoRe *par)
 			ix0[ax]-=par->n_grid;
 		      else if(ix0[ax]<0)
 			ix0[ax]+=par->n_grid;
-		      h0x[ax]=1./FAC_CART2SPH_NSUB;
 		    }
 		    ix0[2]-=par->iz0_here;
 		    
@@ -217,7 +216,7 @@ void pixelize(ParamCoLoRe *par)
 		      d+=d_000*w_000;
 		      for(ax=0;ax<3;ax++)
 			v[ax]+=v_000[ax]*w_000;
-		      if(par->do_isw) {
+		      if(par->do_isw)
 			pd+=pd_000*w_000;
 		      if(par->do_lensing) {
 			for(ax=0;ax<6;ax++)
@@ -243,8 +242,6 @@ void pixelize(ParamCoLoRe *par)
 			ix1[ax]-=par->n_grid;
 		      else if(ix1[ax]<0)
 			ix1[ax]+=par->n_grid;
-		      h0x[ax]/=FAC_CART2SPH_NSUB;
-		      h1x[ax]/=FAC_CART2SPH_NSUB;
 		    }
 		    ix0[2]-=par->iz0_here;
 		    ix1[2]-=par->iz0_here;
@@ -305,19 +302,20 @@ void pixelize(ParamCoLoRe *par)
 	      }
 
 	      if(added_anything) {
-		par->dens_beams[ib][ir][index]+=d;
-		par->vrad_beams[ib][ir][index]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+		double mean_norm=1./(NSUB_PAR*NSUB_PERP*NSUB_PERP);
+		par->dens_beams[ib][ir][index]+=d*mean_norm;
+		par->vrad_beams[ib][ir][index]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])*mean_norm;
 		if(par->do_isw)
-		  par->pdot_beams[ib][ir][index]+=pd;
+		  par->pdot_beams[ib][ir][index]+=pd*mean_norm;
 		if(par->do_lensing) {
 		  par->p_xx_beams[ib][ir][index]+=idx*idx*
 		    (cth_h*cth_h*(t[IND_XX]*cph_h*cph_h+2*t[IND_XY]*cph_h*sph_h+t[IND_YY]*sph_h*sph_h)+
-		     t[IND_ZZ]*sth_h*sth_h-2*cth_h*sth_h*(t[IND_XZ]*cph_h+t[IND_YZ]*sph_h));
+		     t[IND_ZZ]*sth_h*sth_h-2*cth_h*sth_h*(t[IND_XZ]*cph_h+t[IND_YZ]*sph_h))*mean_norm;
 		  par->p_xy_beams[ib][ir][index]+=idx*idx*
 		    (t[IND_XY]*(cph_h*cph_h-sph_h*sph_h)*cth_h+t[IND_XZ]*sph_h*sth_h-
-		     cph_h*((t[IND_XX]-t[IND_YY])*cth_h*sph_h+t[IND_YZ]*sth_h));
+		     cph_h*((t[IND_XX]-t[IND_YY])*cth_h*sph_h+t[IND_YZ]*sth_h))*mean_norm;
 		  par->p_yy_beams[ib][ir][index]+=idx*idx*
-		    (t[IND_XX]*sph_h*sph_h+t[IND_YY]*cph_h*cph_h-2*t[IND_XY]*cph_h*sph_h);
+		    (t[IND_XX]*sph_h*sph_h+t[IND_YY]*cph_h*cph_h-2*t[IND_XY]*cph_h*sph_h)*mean_norm;
 		}
 	      }
 	    }
