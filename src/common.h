@@ -65,6 +65,7 @@
 // Interpolation parameters
 #define PT_CEA 0
 #define PT_CAR 1
+#define PT_HPX 2
 
 #define INTERP_NGP 0
 #define INTERP_CIC 1
@@ -104,10 +105,10 @@
 #define NSUB_PERP 1
 #endif //NSUB_PERP
 
-//#random points per voxel for IM
-#ifndef N_RAN_IMAP
-#define N_RAN_IMAP 10
-#endif //N_RAN_IMAP
+//sqrt(#random points per pixel for IM)
+#ifndef NSUB_IMAP_PERP
+#define NSUB_IMAP_PERP 4
+#endif //NSUB_IMAP_PERP
 
 // End of interpolation parameters
 /////////
@@ -178,10 +179,9 @@ typedef struct {
   flouble *r0_arr;
   flouble *rf_arr;
   int *nside_arr;
+  int *nside_ratio_arr;
   int *iphi0_arr;
-  int *iphif_arr;
   int *icth0_arr;
-  int *icthf_arr;
   int *num_pix;
 } OnionInfo;
 
@@ -345,6 +345,11 @@ OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
 void free_onion_info(OnionInfo *oi);
 void alloc_beams(ParamCoLoRe *par);
 void free_beams(ParamCoLoRe *par);
+flouble get_res(int nside);
+long get_npix(int nside);
+void get_vec(int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,double *u);
+void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,
+		       double *th,double *phi);
 
 
 //////

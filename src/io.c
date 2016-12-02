@@ -364,7 +364,7 @@ ParamCoLoRe *read_run_params(char *fname)
   init_fftw(par);
 
   par->nside_base=1;
-  while(2*par->nside_base*par->nside_base<NNodes)
+  while(get_npix(par->nside_base)<NNodes)
     par->nside_base*=2;
 
   par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;

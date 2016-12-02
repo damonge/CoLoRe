@@ -281,26 +281,78 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
   return nmemb;
 }
 
-static inline flouble get_res(int nside)
+flouble get_res(int nside)
 {
 #if PIXTYPE == PT_CEA
-  //  return acos(1-2.0/nside);
-  return sqrt(2*M_PI)/nside;
+  return acos(1-2.0/nside);
 #elif PIXTYPE == PT_CAR
   return M_PI/nside;
+#elif PIXTYPE == PT_HPX
+  return sqrt(M_PI/3)/nside;
 #else
   return sqrt(2*M_PI)/nside;
 #endif //PIXTYPE
 }
 
-static inline flouble get_lat_index(int nside,flouble cth)
+long get_npix(int nside)
 {
 #if PIXTYPE == PT_CEA
-  return 0.5*(cth+1)*nside;
+  return 2*nside*((long)nside);
 #elif PIXTYPE == PT_CAR
-  return (1-acos(CLAMP(cth,-1,1))/M_PI)*nside;
+  return 2*nside*((long)nside);
+#elif PIXTYPE == PT_HPX
+  return 12*nside*((long)nside);
 #else
-  return 0.5*(cth+1)*nside;
+  return 2*nside*((long)nside);
+#endif //PIXTYPE
+}
+
+void get_vec(int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,double *u)
+{
+
+#if PIXTYPE == PT_HPX
+  pix2vec_nest(nside,iphi_0+ipix_nest,u);
+#else
+
+  double cth,sth,phi;
+  int icth=ipix_nest/nside_ratio;
+  int iphi=ipix_nest-icth*nside_ratio;
+
+#if PIXTYPE == PT_CEA
+  cth=(icth+icth_0+0.5)*2./nside-1;
+#else PIXTYPE == PT_CAR
+  cth=cos(M_PI-(icth+icth_0+0.5)*M_PI/nside);
+#endif //PIXTYPE
+
+  phi=(iphi+iphi_0+0.5)*2*M_PI/nside;
+  sth=sqrt((1+cth)*(1-cth));
+  u[0]=sth*cos(phi);
+  u[1]=sth*sin(phi);
+  u[2]=cth;
+
+#endif //PIXTYPE
+}
+
+#define NS_RANDOM_EXTRA_HPX 1
+void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,
+		       double *th,double *phi)
+{
+#if PIXTYPE == PT_HPX
+  int i_extra=(int)(NS_RANDOM_EXTRA_HPX*NS_RANDOM_EXTRA_HPX*rng_01(rng));
+  pix2ang_nest(nside*NS_RANDOM_EXTRA_HPX,iphi_0*NS_RANDOM_EXTRA_HPX*NS_RANDOM_EXTRA_HPX,th,phi);
+#else 
+
+  int icth=ipix_nest/nside_ratio;
+  int iphi=ipix_nest-icth*nside_ratio;
+
+#if PIXTYPE == PT_CEA
+  *th=acos(-1+(icth_0+icth+rng_01(rng))*2./nside);
+#elif PIXTYPE == PT_CAR
+  *th=M_PI-(icth_0+icth+rng_01(rng))*M_PI/nside;
+#endif //PIXTYPE
+
+  *phi=M_PI*(iphi_0+iphi+rng_01(rng))/nside;
+
 #endif //PIXTYPE
 }
 
@@ -317,9 +369,7 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
   oi->rf_arr=my_malloc(oi->nr*sizeof(flouble));
   oi->nside_arr=my_malloc(oi->nr*sizeof(int));
   oi->iphi0_arr=my_malloc(oi->nr*sizeof(int));
-  oi->iphif_arr=my_malloc(oi->nr*sizeof(int));
   oi->icth0_arr=my_malloc(oi->nr*sizeof(int));
-  oi->icthf_arr=my_malloc(oi->nr*sizeof(int));
   oi->num_pix=my_malloc(oi->nr*sizeof(int));
 
   for(ir=0;ir<oi->nr;ir++) {
@@ -345,7 +395,7 @@ OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
   OnionInfo **oi;
   OnionInfo *oi_dum=alloc_onion_empty(par,par->nside_base);
   int nside_base=oi_dum->nside_arr[0];
-  int npix_base=2*nside_base*nside_base;
+  int npix_base=get_npix(nside_base);
   int nbase_per_node=npix_base/NNodes;
   int nbase_extra=npix_base%NNodes;
   int nbase_here=nbase_per_node;
@@ -359,22 +409,26 @@ OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
   for(i_base=0;i_base<nbase_here;i_base++)
     oi[i_base]=alloc_onion_empty(par,nside_base);
 
-  i_base=0; i_base_here=0;
-  for(icth=0;icth<nside_base;icth++) {
-    int iphi;
-    for(iphi=0;iphi<2*nside_base;iphi++) {
-      if(i_base%NNodes==NodeThis) {
-	for(ir=0;ir<oi[i_base_here]->nr;ir++) {
-	  int nside_ratio=oi[i_base_here]->nside_arr[ir]/nside_base;
-	  oi[i_base_here]->iphi0_arr[ir]=iphi*nside_ratio;
-	  oi[i_base_here]->iphif_arr[ir]=(iphi+1)*nside_ratio-1;
-	  oi[i_base_here]->icth0_arr[ir]=icth*nside_ratio;
-	  oi[i_base_here]->icthf_arr[ir]=(icth+1)*nside_ratio-1;
-	  oi[i_base_here]->num_pix[ir]=nside_ratio*nside_ratio;
-	}
-	i_base_here++;
+  i_base_here=0;
+  for(i_base=0;i_base<npix_base;i_base++) {
+#if PIXTYPE != PT_HPX
+    int icth=i_base/(2*nside_base);
+    int iphi=i_base-icth*2*nside_base;
+#endif //PIXTYPE
+    if(i_base%NNodes==NodeThis) {
+      for(ir=0;ir<oi[i_base_here]->nr;ir++) {
+	int nside_ratio=oi[i_base_here]->nside_arr[ir]/nside_base;
+	  oi[i_base_here]->nside_ratio_arr[ir]=nside_ratio;
+#if PIXTYPE == PT_CEA || PIXTYPE == PT_CAR
+	oi[i_base_here]->iphi0_arr[ir]=iphi*nside_ratio;
+	oi[i_base_here]->icth0_arr[ir]=icth*nside_ratio;
+#elif PIXTYPE == PT_HPX
+	oi[i_base_here]->iphi0_arr[ir]=i_base*nside_ratio*nside_ratio;
+	oi[i_base_here]->icth0_arr[ir]=-1;
+#endif //PIXTYPE
+	oi[i_base_here]->num_pix[ir]=nside_ratio*nside_ratio;
       }
-      i_base++;
+      i_base_here++;
     }
   }
 
@@ -406,10 +460,9 @@ void free_onion_info(OnionInfo *oi)
     free(oi->r0_arr);
     free(oi->rf_arr);
     free(oi->nside_arr);
+    free(oi->nside_ratio_arr);
     free(oi->iphi0_arr);
-    free(oi->iphif_arr);
     free(oi->icth0_arr);
-    free(oi->icthf_arr);
     free(oi->num_pix);
   }
   free(oi);
