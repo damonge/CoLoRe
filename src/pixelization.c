@@ -141,7 +141,7 @@ void pixelize(ParamCoLoRe *par)
 	  flouble dr_sub=dr/NSUB_PAR;
 	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	    int ipix_sub;
-	    double cth_h,sth_h,phi,cph_h,sph_h,u[3];
+	    double cth_h,sth_h,cph_h,sph_h,u[3];
 	    int added_anything=0;
 	    flouble d=0,v[3]={0,0,0},t[6]={0,0,0,0,0,0},pd=0;
 

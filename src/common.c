@@ -284,7 +284,8 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
 flouble get_res(int nside)
 {
 #if PIXTYPE == PT_CEA
-  return acos(1-2.0/nside);
+  return sqrt(2*M_PI)/nside;
+  //  return acos(1-2.0/nside);
 #elif PIXTYPE == PT_CAR
   return M_PI/nside;
 #elif PIXTYPE == PT_HPX
@@ -324,7 +325,7 @@ void get_vec(int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,doubl
   cth=cos(M_PI-(icth+icth_0+0.5)*M_PI/nside);
 #endif //PIXTYPE
 
-  phi=(iphi+iphi_0+0.5)*2*M_PI/nside;
+  phi=(iphi+iphi_0+0.5)*M_PI/nside;
   sth=sqrt((1+cth)*(1-cth));
   u[0]=sth*cos(phi);
   u[1]=sth*sin(phi);
@@ -333,13 +334,16 @@ void get_vec(int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,doubl
 #endif //PIXTYPE
 }
 
-#define NS_RANDOM_EXTRA_HPX 1
+#define NS_RANDOM_EXTRA_HPX 4
 void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,
 		       double *th,double *phi)
 {
 #if PIXTYPE == PT_HPX
   int i_extra=(int)(NS_RANDOM_EXTRA_HPX*NS_RANDOM_EXTRA_HPX*rng_01(rng));
-  pix2ang_nest(nside*NS_RANDOM_EXTRA_HPX,iphi_0*NS_RANDOM_EXTRA_HPX*NS_RANDOM_EXTRA_HPX,th,phi);
+  pix2ang_nest(nside*NS_RANDOM_EXTRA_HPX,
+	       (iphi_0+ipix_nest)*NS_RANDOM_EXTRA_HPX*NS_RANDOM_EXTRA_HPX+i_extra,th,phi);
+  (*phi)+=(rng_01(rng)-0.5)*0.57/(nside*NS_RANDOM_EXTRA_HPX);
+  (*th)+=(rng_01(rng)-0.5)*0.57/(nside*NS_RANDOM_EXTRA_HPX);
 #else 
 
   int icth=ipix_nest/nside_ratio;
@@ -368,6 +372,7 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
   oi->r0_arr=my_malloc(oi->nr*sizeof(flouble));
   oi->rf_arr=my_malloc(oi->nr*sizeof(flouble));
   oi->nside_arr=my_malloc(oi->nr*sizeof(int));
+  oi->nside_ratio_arr=my_malloc(oi->nr*sizeof(int));
   oi->iphi0_arr=my_malloc(oi->nr*sizeof(int));
   oi->icth0_arr=my_malloc(oi->nr*sizeof(int));
   oi->num_pix=my_malloc(oi->nr*sizeof(int));

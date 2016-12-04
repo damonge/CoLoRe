@@ -52,6 +52,8 @@ static inline double get_cosine(double index,double dx)
   return index*dx-1;
 #elif PIXTYPE==PT_CAR
   return cos(M_PI-index*dx);
+#else
+  return cos(M_PI-index*dx);
 #endif //PIXTYPE
 }
 
@@ -325,10 +327,16 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	  OnionInfo *oi=par->oi_beams[ib];
 	  flouble *dens_slice=par->dens_beams[ib][ir];
 	  int *nsrc_slice=par->nsrc_beams[ib][ir];
+#if PIXTYPE!=PT_CAR
+	  double pixarea=get_pixel_area(0,0,0,oi->nside_arr[ir],0);
+	  double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
+#endif //PIXTYPE
 	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+#if PIXTYPE==PT_CAR
 	    double pixarea=get_pixel_area(ipix,oi->iphi0_arr[ir],oi->icth0_arr[ir],
 					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
+#endif //PIXTYPE
 	    double lambda=ndens*cell_vol*exp(gfb*(dens_slice[ipix]-0.5*gfb*par->sigma2_gauss));
 	    int npp=rng_poisson(lambda,rng_thr);
 	    nsrc_slice[ipix]=npp;
@@ -614,7 +622,7 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
     int ib;
     int goodpix=0;
 
-#ifdef PIXTYPE==PT_HPX
+#if PIXTYPE==PT_HPX
     long ip_nest,ip_base;
     int nside_ratio=shell->nside/par->oi_beams[0]->nside_arr[0];
     ring2nest(shell->nside,ip,&ip_nest);
@@ -727,11 +735,17 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	  OnionInfo *oi=par->oi_beams[ib];
 	  flouble *dens_slice=par->dens_beams[ib][ir];
 	  flouble *vrad_slice=par->vrad_beams[ib][ir];
+#if PIXTYPE!=PT_CAR
+	  double pixarea=get_pixel_area(0,0,0,oi->nside_arr[ir],0);
+	  double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
+#endif //PIXTYPE
 	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	    int ipix_sub;
+#if PIXTYPE==PT_CAR
 	    double pixarea=get_pixel_area(ipix,oi->iphi0_arr[ir],oi->icth0_arr[ir],
 					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
+#endif //PIXTYPE
 	    double temp=tmean*cell_vol*exp(gfb*(dens_slice[ipix]-0.5*gfb*par->sigma2_gauss));
 	    double dr_rsd=prefac_rsd*vrad_slice[ipix];
 
@@ -835,10 +849,15 @@ void get_kappa(ParamCoLoRe *par)
       for(ib=0;ib<par->n_beams_here;ib++) {
 	int ipix;
 	OnionInfo *oi=par->oi_beams[ib];
+#if PIXTYPE!=PT_CAR
+	double pixarea=get_pixel_area(0,0,0,oi->nside_arr[irb],0);
+#endif //PIXTYPE
 	for(ipix=0;ipix<oi->num_pix[irb];ipix++) {
 	  int ipix_sub;
+#if PIXTYPE==PT_CAR
 	  double pixarea=get_pixel_area(ipix,oi->iphi0_arr[irb],oi->icth0_arr[irb],
 					oi->nside_arr[irb],oi->nside_ratio_arr[irb]);
+#endif //PIXTYPE
 	  double pxx=par->p_xx_beams[ib][irb][ipix];
 	  double pyy=par->p_yy_beams[ib][irb][ipix];
 	  double kappa=pxx+pyy;
@@ -915,10 +934,15 @@ void get_isw(ParamCoLoRe *par)
       for(ib=0;ib<par->n_beams_here;ib++) {
 	int ipix;
 	OnionInfo *oi=par->oi_beams[ib];
+#if PIXTYPE!=PT_CAR
+	double pixarea=get_pixel_area(0,0,0,oi->nside_arr[irb],0);
+#endif //PIXTYPE
 	for(ipix=0;ipix<oi->num_pix[irb];ipix++) {
 	  int ipix_sub;
+#if PIXTYPE==PT_CAR
 	  double pixarea=get_pixel_area(ipix,oi->iphi0_arr[irb],oi->icth0_arr[irb],
 					oi->nside_arr[irb],oi->nside_ratio_arr[irb]);
+#endif //PIXTYPE
 	  double isw=par->pdot_beams[ib][irb][ipix];
 
 	  int nsub_perside=1;

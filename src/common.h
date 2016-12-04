@@ -72,7 +72,7 @@
 
 //Pixelization type
 #ifndef PIXTYPE
-#define PIXTYPE PT_CAR
+#define PIXTYPE PT_HPX
 #endif //PIXTYPE
 
 //Interpolation type
