@@ -24,17 +24,33 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
       of this Cartesian grid.
     \item Interpolate the Cartesian grid into spherical shells. These
       are generated with a width $\Delta r=f_r\Delta x$ (with $f_r=1$
-      by default). The pixels are defined using a CAR scheme
-      (equirectangular projection), with constant intervals in $\phi$
-      and $\theta$.
+      by default). The pixels are defined using one of three pixelization
+      schemes:
+      \begin{itemize}
+        \item CEA (cylindrical equal-area): with $N_\theta$ divisions at
+          equal intervals in $\cos\theta$, and $2N_\theta$ divisions in
+          $\varphi$.
+        \item CAR (equirectangular projection):  with $N_\theta$ divisions at
+          equal intervals in $\theta$, and $2N_\theta$ divisions in
+          $\varphi$.
+        \item HEALPix: in this case $N_\theta$ is the {\tt nside} resolution
+          parameter, and there are $12N_\theta^2$ pixels in total.
+      \end{itemize}
 
-      Let $N_\theta$ be the number of divisions used in $\theta$. Firstly,
-      we will use $2\times N_\theta$ divisions in $\varphi$. Secondly,
-      the largest transverse scale covered by a pixel is given by
-      $r_\perp^{\rm max}=\chi\,\pi/N_\theta$, where $\chi$ is the comoving
-      distance to the shell. We determine $N_\theta$ as \underline{the smallest power
-        of 2 that satisfies} $r_\perp^{\rm max}\leq f_\theta\Delta x$
-      (with $f_\theta=1$ by default).
+      Secondly, the largest transverse scale covered by a pixel is given by
+      $r_\perp^{\rm max}\sim\chi\,\alpha/N_\theta$, where $\chi$ is the comoving
+      distance to the shell and $\alpha=\sqrt{2\pi}$ for CEA\footnote{This is a
+        mere approximation. The largest scale probed by a pixel for CEA corresponds
+        to the width in $\theta$ of the pixel closest to the pole, and in that 
+        case the resolution would scale with ${\rm arccos}(1-2/N_\theta)$ instead
+        of $1/N_\theta$. However, this scales causes an excessive number of pixels
+        at large $\chi$, and thus we use the scaling $\sqrt{2\pi}/N_\theta$,
+        corresponding to the square-root of the pixel area.}, $\alpha=\pi$ for
+      CAR\footnote{The largest angle in this case corresponds to the side of
+        pixels around the equator.} and $\alpha=\sqrt{\pi/3}$ for
+      HEALPix\footnote{Here we use the square root of the pixel area.}. We
+      determine $N_\theta$ as \underline{the smallest power of 2 that satisfies}
+      $r_\perp^{\rm max}\leq f_\theta\Delta x$ (with $f_\theta=1$ by default).
     \item While doing the interpolation we compute the relevant
       quantities at $z=0$ that will be used later. These are:
       \begin{itemize}
@@ -55,7 +71,7 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
       \begin{itemize}
         \item First, each spherical voxel is sub-divided into 
           $N_r^{\rm sub}\times (N_\theta^{\rm sub})^2$ sub-voxels, where $N_r$ is the
-          number of divisions taken in the radial direction and $N_\theta$ is
+          number of divisions taken in the radial direction and $N^{\rm sub}_\theta$ is
           the number of divisions in the two transverse directions.
           
         \item Each sub-voxel is then assigned a value of the corresponding field
@@ -151,28 +167,28 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
 
 
 \section{Sources}
-  At each voxel, we compute the physical galaxy density for each galaxy
-  type $a$ as
+  At each voxel (defined by its coordinates $\chi,\nv$), we compute the physical source
+  density for each source type $a$ as
   \begin{equation}
     n_a(\chi,\hat{\bf n})=
     \bar{n}_a(\chi)\,
     \exp\left[D(\chi)b_a(\chi)\left(\delta_G(\chi,\hat{\bf n})-
       D(\chi)b_a(\chi)\sigma_G^2/2\right)\right],
   \end{equation}
-  where $\bar{n}_a$ is the mean number density of galaxies, and $\sigma_G^2$
+  where $\bar{n}_a$ is the mean number density of source, and $\sigma_G^2$
   is the variance of the density field at $z=0$. $\bar{n}$ is related to
   $dn/(d\Omega dz)$ as $dn/(d\Omega dz)=\bar{n}\,\chi^2/H$.
 
-  Then, at each pixel we sample a number of galaxies from a Poisson distribution with mean
-  $\lambda\equiv V_{\rm pix}n_a$, where $V_{\rm pix}$ is the comoving volume of each
+  Then, at each pixel we sample a number of sources from a Poisson distribution with mean
+  $\lambda\equiv V_{\rm vox}n_a$, where $V_{\rm vox}$ is the comoving volume of each
   spherical voxel. We then place the resulting number of particles inside each voxel at
-  random within it. Each galaxy is given a cosmological redshift corresponding $z_c$
+  random within it. Each source is given a cosmological redshift corresponding $z_c$
   corresponding to its comoving distance by inverting
   \begin{equation}
     \chi=\int_0^{z_c}\frac{dz}{H(z)}.
   \end{equation}
 
-  In addition, each galaxy is given a redshift distortion $\Delta z=v_r$ according to the
+  In addition, each source is given a redshift distortion $\Delta z=v_r$ according to the
   value of the comoving velocity field in their corresponding voxel.
 
   Each source is also given two ellipticity components based on the value of the local

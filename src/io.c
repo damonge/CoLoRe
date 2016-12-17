@@ -363,7 +363,7 @@ ParamCoLoRe *read_run_params(char *fname)
 
   init_fftw(par);
 
-  par->nside_base=1;
+  par->nside_base=2;
   while(get_npix(par->nside_base)<NNodes)
     par->nside_base*=2;
 
