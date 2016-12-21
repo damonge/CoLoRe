@@ -321,7 +321,8 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       if(ndens>0) {
 	int ib;
 	double bias=bias_of_z_srcs(par,redshift,ipop);
-	double gfb=dgrowth_of_r(par,rm)*bias;
+	double sig2=sigma2_of_z(par,redshift);
+	double gfb=bias;//*dgrowth_of_r(par,rm);
 	for(ib=0;ib<par->n_beams_here;ib++) {
 	  int ipix;
 	  OnionInfo *oi=par->oi_beams[ib];
@@ -337,7 +338,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
 #endif //PIXTYPE
-	    double lambda=ndens*cell_vol*exp(gfb*(dens_slice[ipix]-0.5*gfb*par->sigma2_gauss));
+	    double lambda=ndens*cell_vol*exp(gfb*(dens_slice[ipix]-0.5*gfb*sig2));
 	    int npp=rng_poisson(lambda,rng_thr);
 	    nsrc_slice[ipix]=npp;
 	    np_tot_thr[ithr]+=npp;
@@ -404,7 +405,6 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       double ndens=ndens_of_z_srcs(par,redshift,ipop);
       if(ndens>0) {
 	int ib;
-	double vg=vgrowth_of_r(par,rm);
 	for(ib=0;ib<par->n_beams_here;ib++) {
 	  int ipix;
 	  OnionInfo *oi=par->oi_beams[ib];
@@ -414,7 +414,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	    int ip;
 	    double e1=0,e2=0;
 	    int npp=nsrc_slice[ipix];
-	    double dz_rsd=vg*vrad_slice[ipix];
+	    double dz_rsd=vrad_slice[ipix];
 	    if(par->shear_srcs[ipop]) {
 	      double pxx=par->p_xx_beams[ib][ir][ipix];
 	      double pxy=par->p_xy_beams[ib][ir][ipix];
@@ -479,7 +479,7 @@ void integrate_isw(ParamCoLoRe *par)
       double r0=oi->r0_arr[ir];
       double rf=oi->rf_arr[ir];
       double rm=0.5*(r0+rf),dr=rf-r0;
-      double g_phi=2*dr*pdgrowth_of_r(par,rm);
+      double g_phi=2*dr;
       for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	int ipix_old=get_ipix_old(ipix,oi->nside_ratio_arr[ir],ratio_oldnew);
 	pdot_new[ipix]=pdot_old[ipix_old]+g_phi*par->pdot_beams[ib][ir][ipix];
@@ -530,11 +530,10 @@ void integrate_lensing(ParamCoLoRe *par)
       double rf=oi->rf_arr[ir];
       double rm=0.5*(r0+rf),dr=rf-r0;
       double redshift=z_of_r(par,rm);
-      double g_phi=dgrowth_of_r(par,rm)*(1+redshift);
-      double integ1=g_phi*rm*dr;
-      double integ2=g_phi*rm*rm*dr;
-      //      double integ1=g_phi*0.5*(rf*rf-r0*r0);
-      //      double integ2=g_phi*(rf*rf*rf-r0*r0*r0)/3;
+      double integ1=rm*dr;
+      double integ2=rm*rm*dr;
+      //      double integ1=0.5*(rf*rf-r0*r0);
+      //      double integ2=(rf*rf*rf-r0*r0*r0)/3;
       for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	int ipix_old=get_ipix_old(ipix,oi->nside_ratio_arr[ir],ratio_oldnew);
 	pxx1_new[ipix]=pxx1_old[ipix_old]+integ1*par->p_xx_beams[ib][ir][ipix];
@@ -728,8 +727,9 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	int ib;
 	int irad=0;
 	double bias=bias_of_z_imap(par,redshift,ipop);
-	double gfb=dgrowth_of_r(par,rm)*bias;
-	double prefac_rsd=ihub_of_r(par,rm)*vgrowth_of_r(par,rm);
+	double sig2=sigma2_of_z(par,redshift);
+	double gfb=bias;//*dgrowth_of_r(par,rm);
+	double prefac_rsd=ihub_of_r(par,rm);
 	for(ib=0;ib<par->n_beams_here;ib++) {
 	  int ipix;
 	  OnionInfo *oi=par->oi_beams[ib];
@@ -746,7 +746,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
 #endif //PIXTYPE
-	    double temp=tmean*cell_vol*exp(gfb*(dens_slice[ipix]-0.5*gfb*par->sigma2_gauss));
+	    double temp=tmean*cell_vol*exp(gfb*(dens_slice[ipix]-0.5*gfb*sig2));
 	    double dr_rsd=prefac_rsd*vrad_slice[ipix];
 
 	    for(ipix_sub=0;ipix_sub<NSUB_IMAP_PERP*NSUB_IMAP_PERP;ipix_sub++) {

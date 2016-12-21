@@ -72,6 +72,12 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
   par->sigma2_gauss=0;
+  par->z0_sigma2=0;
+  par->zf_sigma2=0;
+  par->sigma2_0=0;
+  par->sigma2_f=0;
+  par->intacc_sigma2_z=NULL;
+  par->spline_sigma2_z=NULL;
 
   par->do_lensing=0;
   par->do_isw=0;
@@ -802,6 +808,9 @@ void param_colore_free(ParamCoLoRe *par)
   free(par->iz0_all);
   free(par->logkarr);
   free(par->pkarr);
+
+  gsl_spline_free(par->spline_sigma2_z);
+  gsl_interp_accel_free(par->intacc_sigma2_z);
 
   if(par->need_onions) {
     free_beams(par);

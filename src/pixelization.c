@@ -97,6 +97,90 @@ static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
   }
 }  
 
+#define DZ_SIGMA 0.05
+static void compute_sigmaz(ParamCoLoRe *par)
+{
+  int nz,ib;
+  double idz,df;
+  double *zarr,*sarr;
+  unsigned long long *narr;
+
+  double zmax=z_of_r(par,par->l_box*0.5);
+  nz=(int)(zmax/DZ_SIGMA)+2;
+  idz=(nz-2)/zmax;
+
+  zarr=my_calloc(nz,sizeof(double));
+  narr=my_calloc(nz,sizeof(unsigned long long));
+  sarr=my_calloc(nz,sizeof(double));
+
+  for(ib=0;ib<par->n_beams_here;ib++) {
+    OnionInfo *oi=par->oi_beams[ib];
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) shared(par,oi,ib,zarr,narr,sarr,nz,idz)
+#endif //_HAVE_OMP
+    {
+      int ir;
+
+#ifdef _HAVE_OMP
+#pragma omp for nowait schedule(dynamic)
+#endif //_HAVE_OMP
+      for(ir=0;ir<oi->nr;ir++) {
+	int ipix;
+	double r=0.5*(oi->rf_arr[ir]+oi->r0_arr[ir]);
+	double z=z_of_r(par,r);
+	int iz=(int)(z*idz)+1;
+
+#pragma omp atomic
+	narr[iz]+=oi->num_pix[ir];
+
+	for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+	  double d=par->dens_beams[ib][ir][ipix];
+#pragma omp atomic
+	  sarr[iz]+=d*d;
+#pragma omp atomic
+	  zarr[iz]+=z;
+	}
+      } //end omp for
+    } //end omp parallel
+  }
+
+#ifdef _HAVE_MPI
+  MPI_Allreduce(MPI_IN_PLACE,narr,nz,MPI_UNSIGNED_LONG_LONG,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,sarr,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,zarr,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+
+  for(ib=0;ib<nz;ib++) {
+    if(narr[ib]>0) {
+      zarr[ib]/=narr[ib];
+      sarr[ib]/=narr[ib];
+    }
+  }
+
+  df=dgrowth_of_r(par,0.5*par->l_box);
+  zarr[0]=0;
+  sarr[0]=par->sigma2_gauss;
+  zarr[nz-1]=z_of_r(par,0.5*par->l_box);
+  sarr[nz-1]=df*df*par->sigma2_gauss;
+
+  par->z0_sigma2=zarr[0];
+  par->zf_sigma2=zarr[nz-1];
+  par->sigma2_0=sarr[0];
+  par->sigma2_f=sarr[nz-1];
+  par->spline_sigma2_z=gsl_spline_alloc(gsl_interp_cspline,nz);
+  par->intacc_sigma2_z=gsl_interp_accel_alloc();
+  gsl_spline_init(par->spline_sigma2_z,zarr,sarr,nz);
+
+  for(ib=0;ib<nz;ib++) {
+    print_info("z=%.3lE, <d^2>=%.3lE, <d^2_s>=%.3lE, n=%d\n",
+	       zarr[ib],sqrt(sarr[ib]),sqrt(sigma2_of_z(par,zarr[ib])),narr[ib]);
+  }
+  
+  free(zarr);
+  free(narr);
+  free(sarr);
+}
+
 void pixelize(ParamCoLoRe *par)
 {
   print_info("*** Pixelizing cartesian grids\n");
@@ -139,6 +223,11 @@ void pixelize(ParamCoLoRe *par)
 	  double r0=oi->r0_arr[ir];
 	  double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
 	  flouble dr_sub=dr/NSUB_PAR;
+	  double rm=r0+dr*0.5;
+	  double dg=dgrowth_of_r(par,rm);
+	  double vg=vgrowth_of_r(par,rm);
+	  double pg=dg*(1+z_of_r(par,rm));
+	  double pdg=pdgrowth_of_r(par,rm);
 	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	    int ipix_sub;
 	    double cth_h,sth_h,cph_h,sph_h,u[3];
@@ -287,19 +376,19 @@ void pixelize(ParamCoLoRe *par)
 	    }
 	    if(added_anything) {
 	      double mean_norm=1./(NSUB_PAR*NSUB_PERP*NSUB_PERP);
-	      par->dens_beams[ib][ir][ipix]+=d*mean_norm;
-	      par->vrad_beams[ib][ir][ipix]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])*mean_norm;
+	      par->dens_beams[ib][ir][ipix]+=d*mean_norm*dg;
+	      par->vrad_beams[ib][ir][ipix]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])*mean_norm*vg;
 	      if(par->do_isw)
-		par->pdot_beams[ib][ir][ipix]+=pd*mean_norm;
+		par->pdot_beams[ib][ir][ipix]+=pd*mean_norm*pdg;
 	      if(par->do_lensing) {
 		par->p_xx_beams[ib][ir][ipix]+=idx*idx*
 		  (cth_h*cth_h*(t[IND_XX]*cph_h*cph_h+2*t[IND_XY]*cph_h*sph_h+t[IND_YY]*sph_h*sph_h)+
-		   t[IND_ZZ]*sth_h*sth_h-2*cth_h*sth_h*(t[IND_XZ]*cph_h+t[IND_YZ]*sph_h))*mean_norm;
+		   t[IND_ZZ]*sth_h*sth_h-2*cth_h*sth_h*(t[IND_XZ]*cph_h+t[IND_YZ]*sph_h))*mean_norm*pg;
 		par->p_xy_beams[ib][ir][ipix]+=idx*idx*
 		  (t[IND_XY]*(cph_h*cph_h-sph_h*sph_h)*cth_h+t[IND_XZ]*sph_h*sth_h-
-		   cph_h*((t[IND_XX]-t[IND_YY])*cth_h*sph_h+t[IND_YZ]*sth_h))*mean_norm;
+		   cph_h*((t[IND_XX]-t[IND_YY])*cth_h*sph_h+t[IND_YZ]*sth_h))*mean_norm*pg;
 		par->p_yy_beams[ib][ir][ipix]+=idx*idx*
-		  (t[IND_XX]*sph_h*sph_h+t[IND_YY]*cph_h*cph_h-2*t[IND_XY]*cph_h*sph_h)*mean_norm;
+		  (t[IND_XX]*sph_h*sph_h+t[IND_YY]*cph_h*cph_h-2*t[IND_XY]*cph_h*sph_h)*mean_norm*pg;
 	      }
 	    }
 	  }
@@ -310,4 +399,6 @@ void pixelize(ParamCoLoRe *par)
 
   if(NodeThis==0) timer(2);
   print_info("\n");
+
+  compute_sigmaz(par);
 }

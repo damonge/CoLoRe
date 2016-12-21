@@ -24,6 +24,7 @@
 static void compute_sigma_dens(ParamCoLoRe *par)
 {
   double mean_gauss=0;
+  double s2_save=par->sigma2_gauss;
   par->sigma2_gauss=0;
 
   //Compute Gaussian variance
@@ -73,6 +74,8 @@ static void compute_sigma_dens(ParamCoLoRe *par)
 
   par->sigma2_gauss-=mean_gauss*mean_gauss;
   print_info(" <d>=%.3lE, <d^2>=%.3lE\n",mean_gauss,sqrt(par->sigma2_gauss));
+  if(par->need_onions)
+    par->sigma2_gauss=s2_save;
 }
 
 static void fftw_wrap(int ng,dftw_complex *pin,flouble *pout)

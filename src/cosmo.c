@@ -26,6 +26,16 @@
 #define CL_TYPE_KAPPA 0
 #define CL_TYPE_ISW 1
 
+double sigma2_of_z(ParamCoLoRe *par,double z)
+{
+  if(z<=par->z0_sigma2)
+    return par->sigma2_0;
+  else if(z>=par->zf_sigma2)
+    return par->sigma2_f;
+  else
+    return gsl_spline_eval(par->spline_sigma2_z,z,par->intacc_sigma2_z);
+}
+
 static double a_of_r_provisional(ParamCoLoRe *par,double r)
 {
   if(r<=0) return 1.;
@@ -502,10 +512,10 @@ static void pk_linear_set(ParamCoLoRe *par)
   for(ii=0;ii<par->numk;ii++)
     par->pkarr[ii]*=norm_pk;
 
+  double r_effective=sqrt(par->r2_smooth+pow(0.45*par->l_box/par->n_grid,2));
+  par->sigma2_gauss=sigL2(par,r_effective,r_effective,"Gauss","Gauss");
 #ifdef _DEBUG
-  double r_effective=sqrt(par->r2_smooth+pow(0.22*par->l_box/par->n_grid,2));
-  print_info("  Sigma_Gauss should be %lf\n",
-	     sqrt(sigL2(par,r_effective,r_effective,"Gauss","Gauss")));
+  print_info("  Sigma_Gauss should be %lf\n",sqrt(par->sigma2_gauss));
 #endif //_DEBUG
 }
 

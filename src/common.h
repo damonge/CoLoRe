@@ -259,7 +259,14 @@ typedef struct {
   flouble *grid_npot; //Real-space grid for the Newtonian potential
   flouble *slice_left; //Dummy array to store grid cells coming from the left node
   flouble *slice_right; //Dummy array to store grid cells coming from the right node
+
   double sigma2_gauss; //Variance of the cartesian density field
+  double z0_sigma2; //Start z for sigma(z)
+  double zf_sigma2; //End z for sigma(z)
+  double sigma2_0; //Start sigma(z)
+  double sigma2_f; //End sigma(z)
+  gsl_interp_accel *intacc_sigma2_z; //Splines sigma(z)
+  gsl_spline *spline_sigma2_z; //Splines sigma(z)
 
   int need_onions; //Do we need spherical voxels at all?
   int do_lensing; //Do we need to compute the lensing potential?
@@ -356,6 +363,7 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nsid
 // Functions defined in cosmo.c
 double pk_linear0(ParamCoLoRe *par,double lgk);
 void cosmo_set(ParamCoLoRe *par);
+double sigma2_of_z(ParamCoLoRe *par,double z);
 double r_of_z(ParamCoLoRe *par,double z);
 double z_of_r(ParamCoLoRe *par,double r);
 double dgrowth_of_r(ParamCoLoRe *par,double r);
