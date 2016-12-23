@@ -166,9 +166,9 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
 	  double ndens=ndens_of_z_srcs(par,redshift,ipop);
 	  if(ndens>0) {
 	    double bias=bias_of_z_srcs(par,redshift,ipop);
-	    double gfb=dgrowth_of_r(par,r)*bias;
-	    double lambda=ndens*cell_vol*
-	      exp(gfb*(par->grid_dens[index]-0.5*gfb*par->sigma2_gauss));
+	    double sig2=sigma2_of_z(par,redshift);
+	    double denom=pow((1+sig2),(1-bias)*0.5);
+	    double lambda=ndens*cell_vol*pow((1+par->grid_dens[index])*denom,bias);
 	    npp=rng_poisson(lambda,rng_thr);
 	  }
 
@@ -322,7 +322,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	int ib;
 	double bias=bias_of_z_srcs(par,redshift,ipop);
 	double sig2=sigma2_of_z(par,redshift);
-	double gfb=bias;//*dgrowth_of_r(par,rm);
+	double denom=pow((1+sig2),(1-bias)*0.5);
 	for(ib=0;ib<par->n_beams_here;ib++) {
 	  int ipix;
 	  OnionInfo *oi=par->oi_beams[ib];
@@ -338,7 +338,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
 #endif //PIXTYPE
-	    double lambda=ndens*cell_vol*exp(gfb*(dens_slice[ipix]-0.5*gfb*sig2));
+	    double lambda=ndens*cell_vol*pow((1+dens_slice[ipix])*denom,bias);
 	    int npp=rng_poisson(lambda,rng_thr);
 	    nsrc_slice[ipix]=npp;
 	    np_tot_thr[ithr]+=npp;
@@ -476,9 +476,7 @@ void integrate_isw(ParamCoLoRe *par)
       int ipix;
       int nside_new=oi->nside_arr[ir];
       int ratio_oldnew=nside_new/nside_old;
-      double r0=oi->r0_arr[ir];
-      double rf=oi->rf_arr[ir];
-      double rm=0.5*(r0+rf),dr=rf-r0;
+      double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
       double g_phi=2*dr;
       for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	int ipix_old=get_ipix_old(ipix,oi->nside_ratio_arr[ir],ratio_oldnew);
@@ -529,7 +527,6 @@ void integrate_lensing(ParamCoLoRe *par)
       double r0=oi->r0_arr[ir];
       double rf=oi->rf_arr[ir];
       double rm=0.5*(r0+rf),dr=rf-r0;
-      double redshift=z_of_r(par,rm);
       double integ1=rm*dr;
       double integ2=rm*rm*dr;
       //      double integ1=0.5*(rf*rf-r0*r0);
@@ -613,7 +610,9 @@ static int get_r_index_imap(HealpixShells *sh,double r,int ir_start)
 static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
 {
   long ip,npx=he_nside2npix(shell->nside);
+#if PIXTYPE!=PT_HPX
   double pixsize=2*sqrt(4*M_PI/npx);
+#endif //PIXTYPE
   shell->num_pix=0;
   shell->listpix=my_malloc(npx*sizeof(long));
 
@@ -630,7 +629,7 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
       if(ip_base==par->oi_beams[ib]->iphi0_arr[0])
 	goodpix=1;
     }
-#else
+#else //PIXTYPE
 
     double phi0,phif,phim;
     double th0,thf,thm,cth0,cthf;
@@ -728,7 +727,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	int irad=0;
 	double bias=bias_of_z_imap(par,redshift,ipop);
 	double sig2=sigma2_of_z(par,redshift);
-	double gfb=bias;//*dgrowth_of_r(par,rm);
+	double denom=pow((1+sig2),(1-bias)*0.5);
 	double prefac_rsd=ihub_of_r(par,rm);
 	for(ib=0;ib<par->n_beams_here;ib++) {
 	  int ipix;
@@ -746,7 +745,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
 #endif //PIXTYPE
-	    double temp=tmean*cell_vol*exp(gfb*(dens_slice[ipix]-0.5*gfb*sig2));
+	    double temp=tmean*cell_vol*pow((1+dens_slice[ipix])*denom,bias);
 	    double dr_rsd=prefac_rsd*vrad_slice[ipix];
 
 	    for(ipix_sub=0;ipix_sub<NSUB_IMAP_PERP*NSUB_IMAP_PERP;ipix_sub++) {

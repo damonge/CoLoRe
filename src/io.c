@@ -47,6 +47,9 @@ static ParamCoLoRe *param_colore_new(void)
   par->r_min=-1;
   par->r2_smooth=2.0;
   par->do_smoothing=1;
+  par->dens_type=DENS_TYPE_LGNR;
+  par->lpt_interp_type=INTERP_CIC;
+  par->lpt_buffer_fraction=0.2;
   par->smooth_potential=0;
   par->numk=0;
   par->logkmax=1;
@@ -210,16 +213,20 @@ ParamCoLoRe *read_run_params(char *fname)
 
   conf_read_string(conf,"global","prefix_out",par->prefixOut);
   conf_read_string(conf,"global","pk_filename",par->fnamePk);
-  conf_read_double(conf,"global","r_smooth",&(par->r2_smooth));
-  conf_read_bool(conf,"global","smooth_potential",&(par->smooth_potential));
   conf_read_double(conf,"global","z_min",&(par->z_min));
   conf_read_double(conf,"global","z_max",&(par->z_max));
-  conf_read_int(conf,"global","n_grid",&(par->n_grid));
   conf_read_bool(conf,"global","output_density",&(par->output_density));
   conf_read_int(conf,"global","seed",&i_dum);
   conf_read_bool(conf,"global","write_pred",&(par->do_pred));
   if (par->do_pred) 
     conf_read_double(conf,"global","pred_dz",&(par->pred_dz));
+
+  conf_read_double(conf,"field_par","r_smooth",&(par->r2_smooth));
+  conf_read_bool(conf,"field_par","smooth_potential",&(par->smooth_potential));
+  conf_read_int(conf,"field_par","n_grid",&(par->n_grid));
+  conf_read_int(conf,"field_par","dens_type",&(par->dens_type));
+  conf_read_double(conf,"field_par","lpt_buffer_fraction",&(par->lpt_buffer_fraction));
+  conf_read_int(conf,"field_par","lpt_interp_type",&(par->lpt_interp_type));
 
   par->seed_rng=i_dum;
   conf_read_string(conf,"global","output_format",c_dum);
@@ -377,8 +384,8 @@ ParamCoLoRe *read_run_params(char *fname)
   if(par->need_onions) {
     par->oi_beams=alloc_onion_info_beams(par);
     par->nside_base=par->oi_beams[0]->nside_arr[0];
-    alloc_beams(par);
   }
+  get_max_memory(par);
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");

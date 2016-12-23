@@ -69,6 +69,7 @@
 
 #define INTERP_NGP 0
 #define INTERP_CIC 1
+#define INTERP_TSC 1
 
 //Pixelization type
 #ifndef PIXTYPE
@@ -109,6 +110,13 @@
 #ifndef NSUB_IMAP_PERP
 #define NSUB_IMAP_PERP 4
 #endif //NSUB_IMAP_PERP
+
+
+//Density field parameters
+#define DZ_SIGMA 0.05
+#define DENS_TYPE_LGNR 0
+#define DENS_TYPE_1LPT 1
+#define DENS_TYPE_2LPT 2
 
 // End of interpolation parameters
 /////////
@@ -216,6 +224,9 @@ typedef struct {
   double r2_smooth; //Square of the smoothing scale
   int smooth_potential; //Do we smooth the newtonian potential as well?
   int do_smoothing; //Are we smoothing the density field?
+  int dens_type; //Method to produce the density field
+  double lpt_buffer_fraction; //Fraction of memory saved for buffer particles
+  int lpt_interp_type;
 
 #ifdef _DEBUG
   FILE *f_dbg; //File into which all debug info is written
@@ -350,6 +361,7 @@ void rng_gauss(gsl_rng *rng,double *r1,double *r2);
 void end_rng(gsl_rng *rng);
 OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
 void free_onion_info(OnionInfo *oi);
+unsigned long long get_max_memory(ParamCoLoRe *par);
 void alloc_beams(ParamCoLoRe *par);
 void free_beams(ParamCoLoRe *par);
 flouble get_res(int nside);
@@ -399,11 +411,19 @@ void write_predictions(ParamCoLoRe *par);
 void init_fftw(ParamCoLoRe *par);
 void create_cartesian_fields(ParamCoLoRe *par);
 void end_fftw(ParamCoLoRe *par);
+void fftw_wrap_c2r(int ng,dftw_complex *pin,flouble *pout);
+void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout);
 
 
 //////
 // Functions defined in pixelization.c
 void pixelize(ParamCoLoRe *par);
+
+
+//////
+// Functions defined in density.c
+void compute_physical_density_field(ParamCoLoRe *par);
+void compute_density_normalization(ParamCoLoRe *par);
 
 
 //////

@@ -3,6 +3,7 @@
 \usepackage{amsmath}
 \usepackage{fullpage}
 \newcommand{\nv}{\hat{\bf n}}
+\newcommand{\TODO}[1]{{\bf TODO: #1}}
 
 %opening
 \title{Fast lognormal realizations for multi-probe experiments}
@@ -52,7 +53,9 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
       determine $N_\theta$ as \underline{the smallest power of 2 that satisfies}
       $r_\perp^{\rm max}\leq f_\theta\Delta x$ (with $f_\theta=1$ by default).
     \item While doing the interpolation we compute the relevant
-      quantities at $z=0$ that will be used later. These are:
+      quantities at $z=0$ that will be used later \TODO{$\delta_G$ is actually
+        linearly evolved at this stage. We should also note the $\sigma_G$
+        calculation}. These are:
       \begin{itemize}
         \item The radial velocity $v_r$, proportional to the radial
           gradient of $\phi$. This is always computed, and is needed
@@ -70,12 +73,12 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
     \item The interpolation is carried out in three steps:
       \begin{itemize}
         \item First, each spherical voxel is sub-divided into 
-          $N_r^{\rm sub}\times (N_\theta^{\rm sub})^2$ sub-voxels, where $N_r$ is the
-          number of divisions taken in the radial direction and $N^{\rm sub}_\theta$ is
-          the number of divisions in the two transverse directions.
+          $N_r^{\rm sub}\times (N_\theta^{\rm sub})^2$ sub-voxels, where $N^{\rm sub}_r$
+          is the number of divisions taken in the radial direction and $N^{\rm sub}_\theta$ is
+          the number of divisions in each of the two transverse directions.
           
         \item Each sub-voxel is then assigned a value of the corresponding field
-          ($\delta_G$, $v_r$, $\nabla^2_\perp\phi$ or $\dot{\phi}$) by using
+          ($\delta_G$, $v_r$, $\hat{H}_\perp\phi$ or $\dot{\phi}$) by using
           tri-linear interpolation on the sub-voxel centre. Specifically, let
           $(x,y,z)$ be comoving Cartesian coordinates of the sub-voxel, and let
           $(i,j,k)$ denote the cell in the Cartesian grid such that
@@ -98,8 +101,8 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
             &f_{i+1,j+1,k}h_xh_y(1-h_z)+
             f_{i+1,j+1,k+1}h_xh_yh_z
           \end{align}
-        \item The field value assigned to the voxel is then computed as the average
-          of the different sub-voxels.
+        \item The field value assigned to the voxel is then computed as an average
+          over sub-voxels.
       \end{itemize}
     \item The different fields are evolved according to their linear perturbation growth
       factors and integrated along the line of sight in the case of lensing and ISW (see 
@@ -122,7 +125,7 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
   \end{equation}
   where $\nv\equiv(\sin\theta\cos\varphi,\sin\theta\sin\varphi,\cos\theta)$.
 
-  The transverse hessian of the gravitational potential is computed as
+  The transverse Hessian of the gravitational potential is computed as
   \begin{equation}
     \hat{H}_\perp\phi=\hat{R}(\hat{H}\phi)\hat{R}^T
   \end{equation}
@@ -182,22 +185,19 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
   Then, at each pixel we sample a number of sources from a Poisson distribution with mean
   $\lambda\equiv V_{\rm vox}n_a$, where $V_{\rm vox}$ is the comoving volume of each
   spherical voxel. We then place the resulting number of particles inside each voxel at
-  random within it. Each source is given a cosmological redshift corresponding $z_c$
+  random within it. Each source is given a cosmological redshift $z_c$
   corresponding to its comoving distance by inverting
   \begin{equation}
     \chi=\int_0^{z_c}\frac{dz}{H(z)}.
   \end{equation}
 
   In addition, each source is given a redshift distortion $\Delta z=v_r$ according to the
-  value of the comoving velocity field in their corresponding voxel.
-
-  Each source is also given two ellipticity components based on the value of the local
-  shear field:
+  value of the comoving velocity field in their corresponding voxel. Each source is also
+  assigned two ellipticity components based on the value of the local shear field:
   \begin{equation}
     \epsilon_1=2\gamma_1,\hspace{12pt}\epsilon_2=2\gamma_2.
   \end{equation}
-  It is also possible compute the fully non-linear values of the ellipticities, given
-  by
+  It is also possible compute the fully non-linear values of the ellipticities, given by
   \begin{equation}
     \epsilon_i=2\frac{1-\kappa}{(1-\kappa)^2+\gamma_1^2+\gamma_2^2}\gamma_i.
   \end{equation}

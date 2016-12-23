@@ -48,11 +48,18 @@ int main(int argc,char **argv)
   //Create Gaussian density and radial velocity fields
   create_cartesian_fields(par);
 
+  //Lognormalize density field
+  compute_physical_density_field(par);
+
   if(par->need_onions) {
     //Interpolate into beams
+    alloc_beams(par);
     pixelize(par);
     end_fftw(par);
   }
+  
+  //Compute normalization of density field for biasing
+  compute_density_normalization(par);
 
   //Precompute lensing if needed
   if(par->do_lensing)

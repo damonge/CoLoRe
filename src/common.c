@@ -396,7 +396,7 @@ OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
 
 OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
 {
-  int i_base,ir,i_base_here,icth;
+  int i_base,ir,i_base_here;
   OnionInfo **oi;
   OnionInfo *oi_dum=alloc_onion_empty(par,par->nside_base);
   int nside_base=oi_dum->nside_arr[0];
@@ -515,6 +515,48 @@ void free_beams(ParamCoLoRe *par)
     free(par->pdot_beams);
   }
   free(par->nsrc_beams);
+}
+
+unsigned long long get_max_memory(ParamCoLoRe *par)
+{
+  int ib;
+  unsigned long long total_GB=0;
+  unsigned long long total_GB_pix=0;
+  unsigned long long total_GB_lpt=0;
+
+  if(par->need_onions) {
+    for(ib=0;ib<par->n_beams_here;ib++) {
+      int ii;
+      for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
+	total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+	total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+	if(par->do_lensing) {
+	  total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+	  total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+	  total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+	}
+	if(par->do_isw)
+	  total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
+	total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(int);
+      }
+    }
+  }
+
+  if(par->dens_type==DENS_TYPE_1LPT) {
+    total_GB_lpt=(unsigned long long)(3*(1+par->lpt_buffer_fraction)*par->nz_here*
+				      ((lint)(par->n_grid*par->n_grid))*6*sizeof(flouble));
+  }
+  else if(par->dens_type==DENS_TYPE_2LPT) {
+    total_GB_lpt=0;
+    total_GB_lpt=(unsigned long long)(8*(1+par->lpt_buffer_fraction)*par->nz_here*
+				      ((lint)(par->n_grid*par->n_grid))*6*sizeof(flouble));
+  }
+
+  total_GB=MAX(total_GB_lpt,total_GB_pix);
+
+  void *ptest=my_malloc(total_GB);
+  free(ptest);
+  return total_GB;
 }
 
 void alloc_beams(ParamCoLoRe *par)

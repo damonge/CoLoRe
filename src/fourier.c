@@ -78,7 +78,7 @@ static void compute_sigma_dens(ParamCoLoRe *par)
     par->sigma2_gauss=s2_save;
 }
 
-static void fftw_wrap(int ng,dftw_complex *pin,flouble *pout)
+void fftw_wrap_c2r(int ng,dftw_complex *pin,flouble *pout)
 {
 #ifdef _SPREC
   fftwf_plan plan_ft;
@@ -95,6 +95,29 @@ static void fftw_wrap(int ng,dftw_complex *pin,flouble *pout)
   plan_ft=fftw_mpi_plan_dft_c2r_3d(ng,ng,ng,pin,pout,MPI_COMM_WORLD,FFTW_ESTIMATE);
 #else //_HAVE_MPI
   plan_ft=fftw_plan_dft_c2r_3d(ng,ng,ng,pin,pout,FFTW_ESTIMATE);
+#endif //_HAVE_MPI
+  fftw_execute(plan_ft);
+  fftw_destroy_plan(plan_ft);
+#endif //_SPREC
+}
+
+void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout)
+{
+#ifdef _SPREC
+  fftwf_plan plan_ft;
+#ifdef _HAVE_MPI
+  plan_ft=fftwf_mpi_plan_dft_r2c_3d(ng,ng,ng,pin,pout,MPI_COMM_WORLD,FFTW_ESTIMATE);
+#else //_HAVE_MPI
+  plan_ft=fftwf_plan_dft_r2c_3d(ng,ng,ng,pin,pout,FFTW_ESTIMATE);
+#endif //_HAVE_MPI
+  fftwf_execute(plan_ft);
+  fftwf_destroy_plan(plan_ft);
+#else //_SPREC
+  fftw_plan plan_ft;
+#ifdef _HAVE_MPI
+  plan_ft=fftw_mpi_plan_dft_r2c_3d(ng,ng,ng,pin,pout,MPI_COMM_WORLD,FFTW_ESTIMATE);
+#else //_HAVE_MPI
+  plan_ft=fftw_plan_dft_r2c_3d(ng,ng,ng,pin,pout,FFTW_ESTIMATE);
 #endif //_HAVE_MPI
   fftw_execute(plan_ft);
   fftw_destroy_plan(plan_ft);
@@ -364,8 +387,8 @@ void create_cartesian_fields(ParamCoLoRe *par)
 
   print_info("Transforming density and Newtonian potential\n");
   if(NodeThis==0) timer(0);
-  fftw_wrap(par->n_grid,par->grid_dens_f,par->grid_dens);
-  fftw_wrap(par->n_grid,par->grid_npot_f,par->grid_npot);
+  fftw_wrap_c2r(par->n_grid,par->grid_dens_f,par->grid_dens);
+  fftw_wrap_c2r(par->n_grid,par->grid_npot_f,par->grid_npot);
   if(NodeThis==0) timer(2);
 
   print_info("Normalizing density and Newtonian potential \n");
