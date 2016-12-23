@@ -55,7 +55,7 @@ static void pos_2_ngp(ParamCoLoRe *par,unsigned long long np,
     i0[2]-=par->iz0_here;
 
     if((i0[2]>=0) && (i0[2]<par->nz_here)) {
-      index=i0[0]+par->n_grid*(i0[1]+ngx*i0[0]);
+      index=i0[0]+ngx*(i0[1]+par->n_grid*i0[0]);
       delta[index]+=1.;
     }
   }
@@ -90,16 +90,16 @@ static void pos_2_cic(ParamCoLoRe *par,unsigned long long np,
     i1[2]-=par->iz0_here;
 
     if((i0[2]>=0) && (i0[2]<par->nz_here)) {
-      delta[i0[0]+par->n_grid*(i0[1]+ngx*i0[2])]+=a0[0]*a0[1]*a0[2];
-      delta[i1[0]+par->n_grid*(i0[1]+ngx*i0[2])]+=a1[0]*a0[1]*a0[2];
-      delta[i0[0]+par->n_grid*(i1[1]+ngx*i0[2])]+=a0[0]*a1[1]*a0[2];
-      delta[i1[0]+par->n_grid*(i1[1]+ngx*i0[2])]+=a1[0]*a1[1]*a0[2];
+      delta[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2];
+      delta[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2];
+      delta[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2];
+      delta[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2];
     }
     if((i1[2]>=0) && (i1[2]<par->nz_here)) {
-      delta[i0[0]+par->n_grid*(i0[1]+ngx*i1[2])]+=a0[0]*a0[1]*a1[2];
-      delta[i1[0]+par->n_grid*(i0[1]+ngx*i1[2])]+=a1[0]*a0[1]*a1[2];
-      delta[i0[0]+par->n_grid*(i1[1]+ngx*i1[2])]+=a0[0]*a1[1]*a1[2];
-      delta[i1[0]+par->n_grid*(i1[1]+ngx*i1[2])]+=a1[0]*a1[1]*a1[2];
+      delta[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2];
+      delta[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2];
+      delta[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2];
+      delta[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2];
     }
   }
 }
@@ -139,37 +139,37 @@ static void pos_2_tsc(ParamCoLoRe *par,unsigned long long np,
     ip[2]-=par->iz0_here;
 
     if((im[2]>=0) && (im[2]<par->nz_here)) {
-      delta[im[0]+par->n_grid*(im[1]+ngx*im[2])]+=am[0]*am[1]*am[2];
-      delta[i0[0]+par->n_grid*(im[1]+ngx*im[2])]+=a0[0]*am[1]*am[2];
-      delta[ip[0]+par->n_grid*(im[1]+ngx*im[2])]+=ap[0]*am[1]*am[2];
-      delta[im[0]+par->n_grid*(i0[1]+ngx*im[2])]+=am[0]*a0[1]*am[2];
-      delta[i0[0]+par->n_grid*(i0[1]+ngx*im[2])]+=a0[0]*a0[1]*am[2];
-      delta[ip[0]+par->n_grid*(i0[1]+ngx*im[2])]+=ap[0]*a0[1]*am[2];
-      delta[im[0]+par->n_grid*(ip[1]+ngx*im[2])]+=am[0]*ap[1]*am[2];
-      delta[i0[0]+par->n_grid*(ip[1]+ngx*im[2])]+=a0[0]*ap[1]*am[2];
-      delta[ip[0]+par->n_grid*(ip[1]+ngx*im[2])]+=ap[0]*ap[1]*am[2];
+      delta[im[0]+ngx*(im[1]+par->n_grid*im[2])]+=am[0]*am[1]*am[2];
+      delta[i0[0]+ngx*(im[1]+par->n_grid*im[2])]+=a0[0]*am[1]*am[2];
+      delta[ip[0]+ngx*(im[1]+par->n_grid*im[2])]+=ap[0]*am[1]*am[2];
+      delta[im[0]+ngx*(i0[1]+par->n_grid*im[2])]+=am[0]*a0[1]*am[2];
+      delta[i0[0]+ngx*(i0[1]+par->n_grid*im[2])]+=a0[0]*a0[1]*am[2];
+      delta[ip[0]+ngx*(i0[1]+par->n_grid*im[2])]+=ap[0]*a0[1]*am[2];
+      delta[im[0]+ngx*(ip[1]+par->n_grid*im[2])]+=am[0]*ap[1]*am[2];
+      delta[i0[0]+ngx*(ip[1]+par->n_grid*im[2])]+=a0[0]*ap[1]*am[2];
+      delta[ip[0]+ngx*(ip[1]+par->n_grid*im[2])]+=ap[0]*ap[1]*am[2];
     }
     if((i0[2]>=0) && (i0[2]<par->nz_here)) {
-      delta[im[0]+par->n_grid*(im[1]+ngx*i0[2])]+=am[0]*am[1]*a0[2];
-      delta[i0[0]+par->n_grid*(im[1]+ngx*i0[2])]+=a0[0]*am[1]*a0[2];
-      delta[ip[0]+par->n_grid*(im[1]+ngx*i0[2])]+=ap[0]*am[1]*a0[2];
-      delta[im[0]+par->n_grid*(i0[1]+ngx*i0[2])]+=am[0]*a0[1]*a0[2];
-      delta[i0[0]+par->n_grid*(i0[1]+ngx*i0[2])]+=a0[0]*a0[1]*a0[2];
-      delta[ip[0]+par->n_grid*(i0[1]+ngx*i0[2])]+=ap[0]*a0[1]*a0[2];
-      delta[im[0]+par->n_grid*(ip[1]+ngx*i0[2])]+=am[0]*ap[1]*a0[2];
-      delta[i0[0]+par->n_grid*(ip[1]+ngx*i0[2])]+=a0[0]*ap[1]*a0[2];
-      delta[ip[0]+par->n_grid*(ip[1]+ngx*i0[2])]+=ap[0]*ap[1]*a0[2];
+      delta[im[0]+ngx*(im[1]+par->n_grid*i0[2])]+=am[0]*am[1]*a0[2];
+      delta[i0[0]+ngx*(im[1]+par->n_grid*i0[2])]+=a0[0]*am[1]*a0[2];
+      delta[ip[0]+ngx*(im[1]+par->n_grid*i0[2])]+=ap[0]*am[1]*a0[2];
+      delta[im[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=am[0]*a0[1]*a0[2];
+      delta[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2];
+      delta[ip[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=ap[0]*a0[1]*a0[2];
+      delta[im[0]+ngx*(ip[1]+par->n_grid*i0[2])]+=am[0]*ap[1]*a0[2];
+      delta[i0[0]+ngx*(ip[1]+par->n_grid*i0[2])]+=a0[0]*ap[1]*a0[2];
+      delta[ip[0]+ngx*(ip[1]+par->n_grid*i0[2])]+=ap[0]*ap[1]*a0[2];
     }
     if((ip[2]>=0) && (ip[2]<par->nz_here)) {
-      delta[im[0]+par->n_grid*(im[1]+ngx*ip[2])]+=am[0]*am[1]*ap[2];
-      delta[i0[0]+par->n_grid*(im[1]+ngx*ip[2])]+=a0[0]*am[1]*ap[2];
-      delta[ip[0]+par->n_grid*(im[1]+ngx*ip[2])]+=ap[0]*am[1]*ap[2];
-      delta[im[0]+par->n_grid*(i0[1]+ngx*ip[2])]+=am[0]*a0[1]*ap[2];
-      delta[i0[0]+par->n_grid*(i0[1]+ngx*ip[2])]+=a0[0]*a0[1]*ap[2];
-      delta[ip[0]+par->n_grid*(i0[1]+ngx*ip[2])]+=ap[0]*a0[1]*ap[2];
-      delta[im[0]+par->n_grid*(ip[1]+ngx*ip[2])]+=am[0]*ap[1]*ap[2];
-      delta[i0[0]+par->n_grid*(ip[1]+ngx*ip[2])]+=a0[0]*ap[1]*ap[2];
-      delta[ip[0]+par->n_grid*(ip[1]+ngx*ip[2])]+=ap[0]*ap[1]*ap[2];
+      delta[im[0]+ngx*(im[1]+par->n_grid*ip[2])]+=am[0]*am[1]*ap[2];
+      delta[i0[0]+ngx*(im[1]+par->n_grid*ip[2])]+=a0[0]*am[1]*ap[2];
+      delta[ip[0]+ngx*(im[1]+par->n_grid*ip[2])]+=ap[0]*am[1]*ap[2];
+      delta[im[0]+ngx*(i0[1]+par->n_grid*ip[2])]+=am[0]*a0[1]*ap[2];
+      delta[i0[0]+ngx*(i0[1]+par->n_grid*ip[2])]+=a0[0]*a0[1]*ap[2];
+      delta[ip[0]+ngx*(i0[1]+par->n_grid*ip[2])]+=ap[0]*a0[1]*ap[2];
+      delta[im[0]+ngx*(ip[1]+par->n_grid*ip[2])]+=am[0]*ap[1]*ap[2];
+      delta[i0[0]+ngx*(ip[1]+par->n_grid*ip[2])]+=a0[0]*ap[1]*ap[2];
+      delta[ip[0]+ngx*(ip[1]+par->n_grid*ip[2])]+=ap[0]*ap[1]*ap[2];
     }
   }
 }
@@ -318,7 +318,7 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
 		 y+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
     MPI_Sendrecv(z_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
 		 z+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
-    
+
     n_inrange+=nrecv;
   }
 
@@ -354,7 +354,7 @@ static void lpt_1(ParamCoLoRe *par)
     disp[axis]=(flouble *)cdisp[axis];
   }
   fftw_wrap_r2c(par->n_grid,par->grid_dens,par->grid_dens_f);
-  
+
   print_info(" - Computing displacement field\n");
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none) \
@@ -364,6 +364,7 @@ static void lpt_1(ParamCoLoRe *par)
     int ii;
     double dk=2*M_PI/par->l_box;
     double kv[3];
+    double fftnorm=(double)(par->n_grid*((lint)(par->n_grid*par->n_grid)));
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -390,9 +391,9 @@ static void lpt_1(ParamCoLoRe *par)
 	  else
 	    kv[0]=-(par->n_grid-kk)*dk; //This should never happen
 
-	  k_mod2=kv[0]*kv[0]+kv[1]*kv[1]+kv[2]*kv[2];
+	  k_mod2=fftnorm*(kv[0]*kv[0]+kv[1]*kv[1]+kv[2]*kv[2]);
 
-	  for(ax=2;ax>=0;ax++) {
+	  for(ax=0;ax<3;ax++) {
 	    if(k_mod2<=0)
 	      cdisp[ax][index]=0;
 	    else
@@ -408,14 +409,27 @@ static void lpt_1(ParamCoLoRe *par)
     fftw_wrap_c2r(par->n_grid,cdisp[axis],disp[axis]);
 
   print_info(" - Computing particle positions\n");
+#ifdef _DEBUG
+  double d_sigma2_1=0;
+  double d_mean_1[3]={0,0,0};
+#endif //_DEBUG
 #ifdef _HAVE_OMP
+#ifdef _DEBUG
+#pragma omp parallel default(none) shared(par,disp,d_mean_1,d_sigma2_1)
+#else //_DEBUG
 #pragma omp parallel default(none) shared(par,disp)
+#endif //_DEBUG
 #endif //_HAVE_OMP
   {
     lint iz;
     int ngx=2*(par->n_grid/2+1);
     double dx=par->l_box/par->n_grid;
     double xv[3];
+
+#ifdef _DEBUG
+    double d_sigma2_1_thr=0;
+    double d_mean_1_thr[3]={0,0,0};
+#endif //_DEBUG
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static)
@@ -432,23 +446,86 @@ static void lpt_1(ParamCoLoRe *par)
 	  int ax;
 	  double r,dg;
 	  lint index=ix+indexy+indexz;
-	  lint index_nopad=ix+par->n_grid*((lint)(iy+par->n_grid*iz));
 	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
 	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
 	  dg=dgrowth_of_r(par,r);
 	  for(ax=0;ax<3;ax++) {
+#ifdef _DEBUG
+	    d_mean_1_thr[ax]+=disp[ax][index];
+	    d_sigma2_1_thr+=disp[ax][index]*disp[ax][index];
+#endif //_DEBUG
 	    flouble p=xv[ax]+dg*disp[ax][index];
 	    if(p<0) p+=par->l_box;
 	    else if(p>=par->l_box) p-=par->l_box;
-	    disp[ax][index_nopad]=p;
+	    disp[ax][index]=p;
 	  }
 	  par->grid_dens[index]=0;
 	}
       }
     } //end omp for
+#ifdef _DEBUG
+#pragma omp critical
+    {
+      d_mean_1[0]+=d_mean_1_thr[0];
+      d_mean_1[1]+=d_mean_1_thr[1];
+      d_mean_1[2]+=d_mean_1_thr[2];
+      d_sigma2_1+=d_sigma2_1_thr;
+    }
+#endif //_DEBUG
   } //end omp parallel
 
+#ifdef _DEBUG
+#ifdef _HAVE_MPI
+  if(NodeThis==0) 
+    MPI_Reduce(MPI_IN_PLACE,d_mean_1,3,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  else 
+    MPI_Reduce(d_mean_1,d_mean_1,3,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  if(NodeThis==0) 
+    MPI_Reduce(MPI_IN_PLACE,&d_sigma2_1,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  else 
+    MPI_Reduce(&d_sigma2_1,&d_sigma2_1,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+  if(NodeThis==0) {
+    d_mean_1[0]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_1[1]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_1[2]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_sigma2_1/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+  
+    print_info(" 1st-order displacement : [%lE,%lE,%lE] %lE\n",
+	       d_mean_1[0],d_mean_1[1],d_mean_1[2],sqrt(d_sigma2_1));
+  }
+#endif //_DEBUG
+
+  print_info(" - Undoing padding\n");
+  {
+    lint iz;
+    int ngx=2*(par->n_grid/2+1);
+
+    for(iz=0;iz<par->nz_here;iz++) {
+      int iy;
+      lint indexz=iz*((lint)(ngx*par->n_grid));
+      lint indexz_unpadded=iz*((lint)(par->n_grid*par->n_grid));
+      for(iy=0;iy<par->n_grid;iy++) {
+	int ix;
+	lint indexy=iy*ngx;
+	lint indexy_unpadded=iy*par->n_grid;
+	for(ix=0;ix<par->n_grid;ix++) {
+	  int ax;
+	  lint index=ix+indexy+indexz;
+	  lint index_unpadded=ix+indexy_unpadded+indexz_unpadded;
+	  for(ax=0;ax<3;ax++)
+	    disp[ax][index_unpadded]=disp[ax][index];
+	}
+      }
+    }
+  }
+
   unsigned long long np_here;
+  if(par->output_lpt) {
+    np_here=par->nz_here*((lint)(par->n_grid*par->n_grid));
+    write_lpt(par,np_here,disp[0],disp[1],disp[2]);
+  }
+
 #ifdef _HAVE_MPI
   print_info(" - Sharing particle positions\n");
   share_particles(par,(unsigned long long)(2*dsize_buff),
@@ -467,6 +544,356 @@ static void lpt_1(ParamCoLoRe *par)
 #else //_SPREC
   for(axis=0;axis<3;axis++)
     fftw_free(cdisp[axis]);
+#endif //_SPREC
+
+  print_info(" - Normalizing density field\n");
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) shared(par)
+#endif //_HAVE_OMP
+  {
+    lint iz;
+    int ngx=2*(par->n_grid/2+1);
+    flouble inv_dens=1.;
+
+#ifdef _HAVE_OMP
+#pragma omp for schedule(static)
+#endif //_HAVE_OMP
+    for(iz=0;iz<par->nz_here;iz++) {
+      int iy;
+      lint indexz=iz*((lint)(ngx*par->n_grid));
+      for(iy=0;iy<par->n_grid;iy++) {
+	int ix;
+	lint indexy=iy*ngx;
+	for(ix=0;ix<par->n_grid;ix++) {
+	  lint index=ix+indexy+indexz;
+	  par->grid_dens[index]=par->grid_dens[index]*inv_dens-1.;
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+}
+
+static void lpt_2(ParamCoLoRe *par)
+{
+  int axis;
+
+  dftw_complex *(cdisp[3]),*(cdigrad[6]);
+  flouble *(disp[3]),*(digrad[6]);
+  ptrdiff_t dsize=par->nz_here*((lint)(par->n_grid*(par->n_grid/2+1)));
+  ptrdiff_t dsize_buff=(ptrdiff_t)(dsize*(1+par->lpt_buffer_fraction));
+
+  print_info("2-LPT\n");
+
+  print_info(" - Transforming density field\n");
+  for(axis=0;axis<2;axis++) {
+    cdisp[axis]=dftw_alloc_complex(dsize_buff);
+    disp[axis]=(flouble *)cdisp[axis];
+  }
+  for(axis=0;axis<6;axis++) {
+    cdigrad[axis]=dftw_alloc_complex(dsize_buff);
+    digrad[axis]=(flouble *)cdigrad[axis];
+  }
+  cdisp[2]=par->grid_dens_f;
+  disp[2]=par->grid_dens;
+  fftw_wrap_r2c(par->n_grid,par->grid_dens,par->grid_dens_f);
+
+  print_info(" - Computing displacement field\n");
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) \
+  shared(par,cdisp,cdigrad)
+#endif //_HAVE_OMP
+  {
+    int ii;
+    double dk=2*M_PI/par->l_box;
+    double kv[3];
+    double fftnorm=(double)(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(ii=0;ii<par->nz_here;ii++) {
+      int jj,ii_true;
+      ii_true=par->iz0_here+ii;
+      if(2*ii_true<=par->n_grid)
+	kv[2]=ii_true*dk;
+      else
+	kv[2]=-(par->n_grid-ii_true)*dk;
+      for(jj=0;jj<par->n_grid;jj++) {
+	int kk;
+	if(2*jj<=par->n_grid)
+	  kv[1]=jj*dk;
+	else
+	  kv[1]=-(par->n_grid-jj)*dk;
+	for(kk=0;kk<=par->n_grid/2;kk++) {
+	  int ax;
+	  double k_mod2;
+	  lint index=kk+(par->n_grid/2+1)*((lint)(jj+par->n_grid*ii)); //Grid index for +k
+	  if(2*kk<=par->n_grid)
+	    kv[0]=kk*dk;
+	  else
+	    kv[0]=-(par->n_grid-kk)*dk; //This should never happen
+
+	  k_mod2=fftnorm*(kv[0]*kv[0]+kv[1]*kv[1]+kv[2]*kv[2]);
+
+	  for(ax=0;ax<3;ax++) {
+	    if(k_mod2<=0)
+	      cdisp[ax][index]=0;
+	    else
+	      cdisp[ax][index]=I*kv[ax]*par->grid_dens_f[index]/k_mod2;
+	  }
+
+	  cdigrad[0][index]=I*kv[0]*cdisp[0][index]; //SIGN
+	  cdigrad[1][index]=I*kv[1]*cdisp[0][index];
+	  cdigrad[2][index]=I*kv[2]*cdisp[0][index];
+	  cdigrad[3][index]=I*kv[1]*cdisp[1][index];
+	  cdigrad[4][index]=I*kv[2]*cdisp[1][index];
+	  cdigrad[5][index]=I*kv[2]*cdisp[2][index];
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+  print_info(" - Transform digradient\n");
+  for(axis=0;axis<6;axis++)
+    fftw_wrap_c2r(par->n_grid,cdigrad[axis],digrad[axis]);
+
+  print_info(" - Computing second-order potential\n");
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) \
+  shared(par,digrad)
+#endif //_HAVE_OMP
+  {
+    int iz;
+    int ngx=2*(par->n_grid/2+1);
+
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(iz=0;iz<par->nz_here;iz++) {
+      int iy;
+      lint indexz=iz*((lint)(ngx*par->n_grid));
+      for(iy=0;iy<par->n_grid;iy++) {
+	int ix;
+	lint indexy=iy*ngx;
+	for(ix=0;ix<par->n_grid;ix++) {
+	  lint index=ix+indexy+indexz; //SIGN
+	  digrad[5][index]=
+	    digrad[0][index]*digrad[3][index]+//xx*yy
+	    digrad[0][index]*digrad[5][index]+//xx*zz
+	    digrad[3][index]*digrad[5][index]-//+yy*zz
+	    digrad[1][index]*digrad[1][index]-//-xy*xy
+	    digrad[2][index]*digrad[2][index]-//-xz*xz
+	    digrad[4][index]*digrad[4][index];//-yz*yz
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+  print_info(" - Transforming second-order potential\n");
+  fftw_wrap_r2c(par->n_grid,digrad[5],cdigrad[5]);
+
+  print_info(" - Computing 2nd-order displacement field\n");
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) \
+  shared(par,cdigrad)
+#endif //_HAVE_OMP
+  {
+    int ii;
+    double dk=2*M_PI/par->l_box;
+    double kv[3];
+    double fftnorm=(double)(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(ii=0;ii<par->nz_here;ii++) {
+      int jj,ii_true;
+      ii_true=par->iz0_here+ii;
+      if(2*ii_true<=par->n_grid)
+	kv[2]=ii_true*dk;
+      else
+	kv[2]=-(par->n_grid-ii_true)*dk;
+      for(jj=0;jj<par->n_grid;jj++) {
+	int kk;
+	if(2*jj<=par->n_grid)
+	  kv[1]=jj*dk;
+	else
+	  kv[1]=-(par->n_grid-jj)*dk;
+	for(kk=0;kk<=par->n_grid/2;kk++) {
+	  int ax;
+	  double k_mod2;
+	  lint index=kk+(par->n_grid/2+1)*((lint)(jj+par->n_grid*ii)); //Grid index for +k
+	  if(2*kk<=par->n_grid)
+	    kv[0]=kk*dk;
+	  else
+	    kv[0]=-(par->n_grid-kk)*dk; //This should never happen
+
+	  k_mod2=fftnorm*(kv[0]*kv[0]+kv[1]*kv[1]+kv[2]*kv[2]);
+
+	  for(ax=0;ax<3;ax++) {
+	    if(k_mod2<=0)
+	      cdigrad[ax][index]=0;
+	    else
+	      cdigrad[ax][index]=-I*kv[ax]*cdigrad[5][index]/k_mod2; //SIGN, 1/k^2, normalization
+	  }
+	}
+      }
+    } //end omp for
+  } //end omp parallel
+
+  print_info(" - Transform 1st- and 2nd-order displacement fields\n");
+  for(axis=0;axis<3;axis++) {
+    fftw_wrap_c2r(par->n_grid,cdisp[axis],disp[axis]);
+    fftw_wrap_c2r(par->n_grid,cdigrad[axis],digrad[axis]);
+  }
+
+  print_info(" - Computing particle positions\n");
+#ifdef _DEBUG
+  double d_sigma2_1=0;
+  double d_mean_1[3]={0,0,0};
+  double d_sigma2_2=0;
+  double d_mean_2[3]={0,0,0};
+#endif //_DEBUG
+#ifdef _HAVE_OMP
+#ifdef _DEBUG
+#pragma omp parallel default(none) shared(par,disp,digrad,d_mean_1,d_mean_2,d_sigma2_1,d_sigma2_2)
+#else //_DEBUG
+#pragma omp parallel default(none) shared(par,disp,digrad)
+#endif //_DEBUG
+#endif //_HAVE_OMP
+  {
+    lint iz;
+    int ngx=2*(par->n_grid/2+1);
+    double dx=par->l_box/par->n_grid;
+    double xv[3];
+
+#ifdef _DEBUG
+    double d_sigma2_1_thr=0;
+    double d_mean_1_thr[3]={0,0,0};
+    double d_sigma2_2_thr=0;
+    double d_mean_2_thr[3]={0,0,0};
+#endif //_DEBUG
+
+#ifdef _HAVE_OMP
+#pragma omp for schedule(static)
+#endif //_HAVE_OMP
+    for(iz=0;iz<par->nz_here;iz++) {
+      int iy;
+      lint indexz=iz*((lint)(ngx*par->n_grid));
+      xv[2]=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
+      for(iy=0;iy<par->n_grid;iy++) {
+	int ix;
+	lint indexy=iy*ngx;
+	xv[1]=(iy+0.0)*dx-par->pos_obs[1];
+	for(ix=0;ix<par->n_grid;ix++) {
+	  int ax;
+	  double r,dg,dg2;
+	  lint index=ix+indexy+indexz;
+	  lint index_nopad=ix+par->n_grid*((lint)(iy+par->n_grid*iz));
+	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
+	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
+	  dg=dgrowth_of_r(par,r);
+	  double om=1.;
+	  dg2=-0.42857142857*dg*dg*pow(om,-0.00699300699); //Fix this
+	  for(ax=0;ax<3;ax++) {
+#ifdef _DEBUG
+	    d_mean_1_thr[ax]+=disp[ax][index];
+	    d_mean_2_thr[ax]+=digrad[ax][index];
+	    d_sigma2_1_thr+=disp[ax][index]*disp[ax][index];
+	    d_sigma2_2_thr+=digrad[ax][index]*digrad[ax][index];
+#endif //_DEBUG
+	    flouble p=xv[ax]+dg*disp[ax][index]+dg2*digrad[ax][index];
+	    if(p<0) p+=par->l_box;
+	    else if(p>=par->l_box) p-=par->l_box;
+	    digrad[3+ax][index_nopad]=p;
+	  }
+	  par->grid_dens[index]=0;
+	}
+      }
+    } //end omp for
+#ifdef _DEBUG
+#pragma omp critical
+    {
+      d_mean_1[0]+=d_mean_1_thr[0];
+      d_mean_1[1]+=d_mean_1_thr[1];
+      d_mean_1[2]+=d_mean_1_thr[2];
+      d_mean_2[0]+=d_mean_2_thr[0];
+      d_mean_2[1]+=d_mean_2_thr[1];
+      d_mean_2[2]+=d_mean_2_thr[2];
+      d_sigma2_1+=d_sigma2_1_thr;
+      d_sigma2_2+=d_sigma2_2_thr;
+    }
+#endif //_DEBUG
+  } //end omp parallel
+
+#ifdef _DEBUG
+#ifdef _HAVE_MPI
+  if(NodeThis==0) 
+    MPI_Reduce(MPI_IN_PLACE,d_mean_1,3,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  else 
+    MPI_Reduce(d_mean_1,d_mean_1,3,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  if(NodeThis==0) 
+    MPI_Reduce(MPI_IN_PLACE,d_mean_2,3,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  else 
+    MPI_Reduce(d_mean_2,d_mean_2,3,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  if(NodeThis==0) 
+    MPI_Reduce(MPI_IN_PLACE,&d_sigma2_1,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  else 
+    MPI_Reduce(&d_sigma2_1,&d_sigma2_1,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  if(NodeThis==0) 
+    MPI_Reduce(MPI_IN_PLACE,&d_sigma2_2,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  else 
+    MPI_Reduce(&d_sigma2_2,&d_sigma2_2,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+  if(NodeThis==0) {
+    d_mean_1[0]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_1[1]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_1[2]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_2[0]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_2[1]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_2[2]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_sigma2_1/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_sigma2_2/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+  
+    print_info(" 1st-order displacement : [%lE,%lE,%lE] %lE\n",
+	       d_mean_1[0],d_mean_1[1],d_mean_1[2],sqrt(d_sigma2_1));
+    print_info(" 2nd-order displacement : [%lE,%lE,%lE] %lE\n",
+	       d_mean_2[0],d_mean_2[1],d_mean_2[2],sqrt(d_sigma2_2));
+  }
+#endif //_DEBUG
+
+#ifdef _SPREC
+  for(axis=0;axis<2;axis++)
+    fftwf_free(cdisp[axis]);
+  for(axis=0;axis<3;axis++)
+    fftwf_free(cdigrad[axis]);
+#else //_SPREC
+  for(axis=0;axis<2;axis++)
+    fftw_free(cdisp[axis]);
+  for(axis=0;axis<3;axis++)
+    fftw_free(cdigrad[axis]);
+#endif //_SPREC
+
+  unsigned long long np_here;
+#ifdef _HAVE_MPI
+  print_info(" - Sharing particle positions\n");
+  share_particles(par,(unsigned long long)(2*dsize_buff),
+		  (unsigned long long)(par->nz_here*((lint)(par->n_grid*par->n_grid))),
+		  digrad[3],digrad[4],digrad[5],&np_here);
+#else //_HAVE_MPI
+  np_nere=par->nz_here*((lint)(par->n_grid*par->n_grid));
+#endif //_HAVE_MPI
+
+  print_info(" - Interpolating positions into density field\n");
+  pos_2_dens(par,np_here,digrad[3],digrad[4],digrad[5],par->grid_dens);
+
+#ifdef _SPREC
+  for(axis=0;axis<3;axis++)
+    fftwf_free(cdigrad[3+axis]);
+#else //_SPREC
+  for(axis=0;axis<3;axis++)
+    fftw_free(cdigrad[3+axis]);
 #endif //_SPREC
 
   print_info(" - Normalizing density field\n");
@@ -537,14 +964,21 @@ void compute_physical_density_field(ParamCoLoRe *par)
 {
   print_info("*** Creating physical matter density\n");
   if(NodeThis==0) timer(0);
+
   if(par->dens_type==DENS_TYPE_LGNR)
     lognormalize(par);
   else if(par->dens_type==DENS_TYPE_1LPT)
     lpt_1(par);
+  else if(par->dens_type==DENS_TYPE_2LPT)
+    lpt_2(par);
   else
     report_error(1,"Density type %d not supported\n",par->dens_type);
+
   if(NodeThis==0) timer(2);
   print_info("\n");
+
+  if(par->output_density)
+    write_density_grid(par,"lightcone");
 }
 
 static void collect_sigmaz_from_grid(ParamCoLoRe *par,int nz,int idz,

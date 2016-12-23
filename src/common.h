@@ -227,6 +227,7 @@ typedef struct {
   int dens_type; //Method to produce the density field
   double lpt_buffer_fraction; //Fraction of memory saved for buffer particles
   int lpt_interp_type;
+  int output_lpt;
 
 #ifdef _DEBUG
   FILE *f_dbg; //File into which all debug info is written
@@ -397,7 +398,8 @@ void write_catalog(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
 void write_isw(ParamCoLoRe *par);
-void write_grids(ParamCoLoRe *par);
+void write_density_grid(ParamCoLoRe *par,char *prefix_dens);
+void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z);
 void param_colore_free(ParamCoLoRe *par);
 
 

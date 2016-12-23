@@ -50,6 +50,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->dens_type=DENS_TYPE_LGNR;
   par->lpt_interp_type=INTERP_CIC;
   par->lpt_buffer_fraction=0.2;
+  par->output_lpt=0;
   par->smooth_potential=0;
   par->numk=0;
   par->logkmax=1;
@@ -225,8 +226,10 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_bool(conf,"field_par","smooth_potential",&(par->smooth_potential));
   conf_read_int(conf,"field_par","n_grid",&(par->n_grid));
   conf_read_int(conf,"field_par","dens_type",&(par->dens_type));
+  printf("%d\n",par->dens_type);
   conf_read_double(conf,"field_par","lpt_buffer_fraction",&(par->lpt_buffer_fraction));
   conf_read_int(conf,"field_par","lpt_interp_type",&(par->lpt_interp_type));
+  conf_read_int(conf,"field_par","output_lpt",&(par->output_lpt));
 
   par->seed_rng=i_dum;
   conf_read_string(conf,"global","output_format",c_dum);
@@ -443,6 +446,143 @@ void write_grids(ParamCoLoRe *par)
     }
   }
   fclose(fo);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+void write_density_grid(ParamCoLoRe *par,char *prefix_dens)
+{
+  FILE *fo;
+  char fname[256];
+  int iz;
+  int ngx=2*(par->n_grid/2+1);
+  int size_flouble=sizeof(flouble);
+
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing density field (native format)\n");
+  sprintf(fname,"%s_dens_%s_%d.dat",par->prefixOut,prefix_dens,NodeThis);
+  fo=fopen(fname,"wb");
+  if(fo==NULL) error_open_file(fname);
+  my_fwrite(&NNodes,sizeof(int),1,fo);
+  my_fwrite(&size_flouble,sizeof(int),1,fo);
+  my_fwrite(&(par->l_box),sizeof(double),1,fo);
+  my_fwrite(&(par->n_grid),sizeof(int),1,fo);
+  my_fwrite(&(par->nz_here),sizeof(int),1,fo);
+  my_fwrite(&(par->iz0_here),sizeof(int),1,fo);
+  for(iz=0;iz<par->nz_here;iz++) {
+    int iy;
+    for(iy=0;iy<par->n_grid;iy++) {
+      lint index0=ngx*((lint)(iy+iz*par->n_grid));
+      my_fwrite(&(par->grid_dens[index0]),sizeof(flouble),par->n_grid,fo);
+    }
+  }
+  fclose(fo);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+typedef struct {
+  int    np[6];
+  double mass[6];
+  double time;
+  double redshift;
+  int    flag_sfr;
+  int    flag_feedback;
+  unsigned int np_total[6];
+  int    flag_cooling;
+  int    num_files;
+  double boxsize;
+  double omega0;
+  double omega_lambda;
+  double hubble_param;
+  int flag_stellarage;
+  int flag_metals;
+  unsigned int np_total_highword[6];
+  int  flag_entropy_instead_u;
+  int flag_gadgetformat;
+  char fill[56];
+} GadgetHeader;
+
+void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z)
+{
+  GadgetHeader header;
+  FILE *fo;
+  char fname[256];
+  unsigned long long ipart,np_total;
+  unsigned long long np_send=npart;
+  unsigned long long np_total_expected=par->n_grid*((lint)(par->n_grid*par->n_grid));
+
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing LPT positions\n");
+
+  sprintf(fname,"%s_lpt_out.%d",par->prefixOut,NodeThis);
+  fo=fopen(fname,"w");
+  if(fo==NULL) error_open_file(fname);
+
+#ifdef _HAVE_MPI
+  MPI_Reduce(&np_send,&np_total,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,0,MPI_COMM_WORLD);
+  MPI_Bcast(&np_total,1,MPI_UNSIGNED_LONG_LONG,0,MPI_COMM_WORLD);
+#else //_HAVE_MPI
+  np_total=npart;
+#endif //_HAVE_MPI
+
+  if(np_total!=np_total_expected)
+    report_error(1,"Only %llu particles found, but there should be %ull\n",np_total,np_total_expected);
+
+  double m=27.7455*par->OmegaM*pow(par->l_box,3.)/np_total;
+  memset(&header,0,sizeof(GadgetHeader));
+
+  header.np[1]=npart;
+  header.mass[1]=m;
+  header.time=1.;
+  header.redshift=0.;
+  header.np_total[1]=(unsigned int)np_total;
+  header.np_total_highword[1]=(unsigned int)(np_total >> 32);
+  header.num_files=NNodes;
+  header.boxsize=par->l_box;
+  header.omega0=par->OmegaM;
+  header.omega_lambda=par->OmegaL;
+  header.hubble_param=par->hhub;
+  header.flag_gadgetformat=1;
+
+  int blklen=sizeof(GadgetHeader);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  my_fwrite(&header,sizeof(GadgetHeader),1,fo);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  float x0[3];
+  // position
+  blklen=npart*sizeof(float)*3;
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  for(ipart=0;ipart<npart;ipart++) {
+    x0[0]=x[ipart];
+    x0[1]=y[ipart];
+    x0[2]=z[ipart];
+    my_fwrite(x0,sizeof(float),3,fo);
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  // velocity
+  x0[0]=0; x0[1]=0; x0[2]=0;
+  blklen=npart*sizeof(float)*3;
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  for(ipart=0;ipart<npart;ipart++) {
+    my_fwrite(x0,sizeof(float),3,fo);
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  // id
+  blklen=npart*sizeof(unsigned long long);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  long long id0=(long long)(par->iz0_here*((lint)(par->n_grid*par->n_grid)));
+  for(ipart=0;ipart<npart;ipart++) {
+    unsigned long long id_out=id0+ipart;
+    my_fwrite(&id_out,sizeof(unsigned long long),1,fo); 
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  fclose(fo);
+
   if(NodeThis==0) timer(2);
   print_info("\n");
 }

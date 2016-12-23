@@ -432,5 +432,5 @@ void create_cartesian_fields(ParamCoLoRe *par)
 
   //Output density field if necessary
   if(par->output_density)
-    write_grids(par);
+    write_density_grid(par,"gaussian");
 }
