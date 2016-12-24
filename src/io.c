@@ -76,12 +76,8 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
   par->sigma2_gauss=0;
-  par->z0_sigma2=0;
-  par->zf_sigma2=0;
-  par->sigma2_0=0;
-  par->sigma2_f=0;
-  par->intacc_sigma2_z=NULL;
-  par->spline_sigma2_z=NULL;
+  par->z0_norm=0;
+  par->zf_norm=0;
 
   par->do_lensing=0;
   par->do_isw=0;
@@ -124,7 +120,11 @@ static ParamCoLoRe *param_colore_new(void)
     par->z_kappa_out[ii]=-1;
     par->z_isw_out[ii]=-1;
     par->nu0_imap[ii]=-1;
+    par->spline_norm_srcs[ii]=NULL;
+    par->spline_norm_imap[ii]=NULL;
   }
+  par->intacc_norm_srcs=NULL;
+  par->intacc_norm_imap=NULL;
   par->srcs=NULL;
   par->imap=NULL;
   par->kmap=NULL;
@@ -226,7 +226,6 @@ ParamCoLoRe *read_run_params(char *fname)
   conf_read_bool(conf,"field_par","smooth_potential",&(par->smooth_potential));
   conf_read_int(conf,"field_par","n_grid",&(par->n_grid));
   conf_read_int(conf,"field_par","dens_type",&(par->dens_type));
-  printf("%d\n",par->dens_type);
   conf_read_double(conf,"field_par","lpt_buffer_fraction",&(par->lpt_buffer_fraction));
   conf_read_int(conf,"field_par","lpt_interp_type",&(par->lpt_interp_type));
   conf_read_int(conf,"field_par","output_lpt",&(par->output_lpt));
@@ -394,7 +393,7 @@ ParamCoLoRe *read_run_params(char *fname)
   print_info("Run parameters: \n");
   print_info("  %.3lf < z < %.3lf\n",par->z_min,par->z_max);
   print_info("  %.3lf < r/(Mpc/h) < %.3lf\n",par->r_min,par->r_max);
-  print_info("  L_box = %.3lf Mpc/h, N_grid = %d \n",par->l_box,par->n_grid);
+  print_info("  L_box = %.3lf Mpc/h, N_grid = %d \n",(double)(par->l_box),par->n_grid);
   print_info("  Scales resolved: %.3lE < k < %.3lE h/Mpc\n",dk,0.5*(par->n_grid-1)*dk);
   print_info("  Fourier-space resolution: dk = %.3lE h/Mpc\n",dk);
   print_info("  Real-space resolution: dx = %.3lE Mpc/h\n",par->l_box/par->n_grid);
@@ -419,37 +418,6 @@ ParamCoLoRe *read_run_params(char *fname)
   return par;
 }
 
-void write_grids(ParamCoLoRe *par)
-{
-  FILE *fo;
-  char fname[256];
-  int iz;
-  int ngx=2*(par->n_grid/2+1);
-  int size_flouble=sizeof(flouble);
-
-  if(NodeThis==0) timer(0);
-  print_info("*** Writing density field (native format)\n");
-  sprintf(fname,"%s_dens_%d.dat",par->prefixOut,NodeThis);
-  fo=fopen(fname,"wb");
-  if(fo==NULL) error_open_file(fname);
-  my_fwrite(&NNodes,sizeof(int),1,fo);
-  my_fwrite(&size_flouble,sizeof(int),1,fo);
-  my_fwrite(&(par->l_box),sizeof(double),1,fo);
-  my_fwrite(&(par->n_grid),sizeof(int),1,fo);
-  my_fwrite(&(par->nz_here),sizeof(int),1,fo);
-  my_fwrite(&(par->iz0_here),sizeof(int),1,fo);
-  for(iz=0;iz<par->nz_here;iz++) {
-    int iy;
-    for(iy=0;iy<par->n_grid;iy++) {
-      lint index0=ngx*((lint)(iy+iz*par->n_grid));
-      my_fwrite(&(par->grid_dens[index0]),sizeof(flouble),par->n_grid,fo);
-    }
-  }
-  fclose(fo);
-  if(NodeThis==0) timer(2);
-  print_info("\n");
-}
-
 void write_density_grid(ParamCoLoRe *par,char *prefix_dens)
 {
   FILE *fo;
@@ -457,6 +425,7 @@ void write_density_grid(ParamCoLoRe *par,char *prefix_dens)
   int iz;
   int ngx=2*(par->n_grid/2+1);
   int size_flouble=sizeof(flouble);
+  double lb=par->l_box;
 
   if(NodeThis==0) timer(0);
   print_info("*** Writing density field (native format)\n");
@@ -465,7 +434,7 @@ void write_density_grid(ParamCoLoRe *par,char *prefix_dens)
   if(fo==NULL) error_open_file(fname);
   my_fwrite(&NNodes,sizeof(int),1,fo);
   my_fwrite(&size_flouble,sizeof(int),1,fo);
-  my_fwrite(&(par->l_box),sizeof(double),1,fo);
+  my_fwrite(&lb,sizeof(double),1,fo);
   my_fwrite(&(par->n_grid),sizeof(int),1,fo);
   my_fwrite(&(par->nz_here),sizeof(int),1,fo);
   my_fwrite(&(par->iz0_here),sizeof(int),1,fo);
@@ -511,9 +480,6 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   unsigned long long ipart,np_total;
   unsigned long long np_send=npart;
   unsigned long long np_total_expected=par->n_grid*((lint)(par->n_grid*par->n_grid));
-
-  if(NodeThis==0) timer(0);
-  print_info("*** Writing LPT positions\n");
 
   sprintf(fname,"%s_lpt_out.%d",par->prefixOut,NodeThis);
   fo=fopen(fname,"w");
@@ -582,9 +548,6 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   my_fwrite(&blklen,sizeof(blklen),1,fo);
 
   fclose(fo);
-
-  if(NodeThis==0) timer(2);
-  print_info("\n");
 }
 
 void write_imap(ParamCoLoRe *par)
@@ -956,9 +919,6 @@ void param_colore_free(ParamCoLoRe *par)
   free(par->logkarr);
   free(par->pkarr);
 
-  gsl_spline_free(par->spline_sigma2_z);
-  gsl_interp_accel_free(par->intacc_sigma2_z);
-
   if(par->need_onions) {
     free_beams(par);
     for(ii=0;ii<par->n_beams_here;ii++)
@@ -970,10 +930,12 @@ void param_colore_free(ParamCoLoRe *par)
     for(ii=0;ii<par->n_srcs;ii++) {
       gsl_spline_free(par->spline_srcs_bz[ii]);
       gsl_spline_free(par->spline_srcs_nz[ii]);
+      gsl_spline_free(par->spline_norm_srcs[ii]);
       gsl_interp_accel_free(par->intacc_srcs[ii]);
       if(par->srcs[ii]!=NULL)
       	free(par->srcs[ii]);
     }
+    gsl_interp_accel_free(par->intacc_norm_srcs);
     if(par->srcs!=NULL)
       free(par->srcs);
     free(par->nsources_this);
@@ -983,9 +945,11 @@ void param_colore_free(ParamCoLoRe *par)
     for(ii=0;ii<par->n_imap;ii++) {
       gsl_spline_free(par->spline_imap_bz[ii]);
       gsl_spline_free(par->spline_imap_tz[ii]);
+      gsl_spline_free(par->spline_norm_imap[ii]);
       gsl_interp_accel_free(par->intacc_imap[ii]);
       free_hp_shell(par->imap[ii]);
     }
+    gsl_interp_accel_free(par->intacc_norm_imap);
     if(par->imap!=NULL)
       free(par->imap);
   }

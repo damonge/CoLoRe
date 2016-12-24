@@ -237,7 +237,7 @@ void mpi_init(int* p_argc,char*** p_argv)
 
 #ifdef _DEBUG
   printf("Node %d, thread count starts at %d\n",NodeThis,IThread0);
-  print_info(" Threads = %d\n",MPIThreadsOK);
+  print_info(" MPIThreads = %d\n",MPIThreadsOK);
 #endif //_DEBUG
 }
 
@@ -521,8 +521,11 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
 {
   int ib;
   unsigned long long total_GB=0;
+  unsigned long long total_GB_gau=0;
   unsigned long long total_GB_pix=0;
   unsigned long long total_GB_lpt=0;
+
+  total_GB_gau=(2*(par->nz_here+1)*((lint)(par->n_grid*(par->n_grid/2+1))))*sizeof(dftw_complex);
 
   if(par->need_onions) {
     for(ib=0;ib<par->n_beams_here;ib++) {
@@ -544,15 +547,24 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
 
   if(par->dens_type==DENS_TYPE_1LPT) {
     total_GB_lpt=(unsigned long long)(3*(1+par->lpt_buffer_fraction)*par->nz_here*
-				      ((lint)(par->n_grid*par->n_grid))*6*sizeof(flouble));
+				      ((lint)((par->n_grid/2+1)*par->n_grid))*sizeof(dftw_complex));
   }
   else if(par->dens_type==DENS_TYPE_2LPT) {
     total_GB_lpt=0;
     total_GB_lpt=(unsigned long long)(8*(1+par->lpt_buffer_fraction)*par->nz_here*
-				      ((lint)(par->n_grid*par->n_grid))*6*sizeof(flouble));
+				      ((lint)((par->n_grid/2+1)*par->n_grid))*sizeof(dftw_complex));
   }
 
-  total_GB=MAX(total_GB_lpt,total_GB_pix);
+  total_GB=total_GB_gau+MAX(total_GB_lpt,total_GB_pix);
+
+#ifdef _DEBUG
+  printf("Node %d will allocate %.3lf GB (Gaussian)",NodeThis,(double)(total_GB_gau/pow(1024.,3)));
+  if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
+    printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
+  if(par->need_onions)
+    printf(", %.3lf GB (pixels)",(double)(total_GB_pix/pow(1024.,3)));
+  printf("\n");
+#endif //_DEBUG
 
   void *ptest=my_malloc(total_GB);
   free(ptest);
@@ -562,10 +574,6 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
 void alloc_beams(ParamCoLoRe *par)
 {
   int ib;
-#ifdef _DEBUG
-  unsigned long long total_GB=0;
-  double total_GB_d=0;
-#endif //_DEBUG
 
   par->dens_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
   par->vrad_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
@@ -594,37 +602,17 @@ void alloc_beams(ParamCoLoRe *par)
     for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
       par->dens_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
       par->vrad_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-#ifdef _DEBUG
-      total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-      total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-#endif //_DEBUG
       if(par->do_lensing) {
 	par->p_xx_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
 	par->p_xy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
 	par->p_yy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-#ifdef _DEBUG
-	total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-	total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-	total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-#endif //_DEBUG
       }
       if(par->do_isw) {
 	par->pdot_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-#ifdef _DEBUG
-	total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-#endif //_DEBUG
       }
       par->nsrc_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(int));
-#ifdef _DEBUG
-      total_GB+=par->oi_beams[ib]->num_pix[ii]*sizeof(int);
-#endif //_DEBUG
     }
   }
-
-#ifdef _DEBUG
-  total_GB_d=total_GB/pow(1024.,3);
-  printf(" Node %d: Have allocated %.3lf GB for beams\n",NodeThis,total_GB_d);
-#endif //_DEBUG
 }
 
 void free_hp_shell(HealpixShells *shell)

@@ -69,7 +69,7 @@
 
 #define INTERP_NGP 0
 #define INTERP_CIC 1
-#define INTERP_TSC 1
+#define INTERP_TSC 2
 
 //Pixelization type
 #ifndef PIXTYPE
@@ -245,6 +245,7 @@ typedef struct {
   double z_arr_r2z[NA]; //Array of redshifts used to compute z(r)
   double r_arr_r2z[NA]; //Array of comoving distances used to compute z(r), D_d(r), D_v(r), 1/H(z)
   double growth_d_arr[NA]; //Array of density growth factors used to compute D_d(r)
+  double growth_d2_arr[NA]; //Array of density growth factors used to compute D_d(r)
   double growth_v_arr[NA]; //Array of velocity growth factors used to compute D_v(r)
   double growth_pd_arr[NA]; //Array of potential derivative factors used to compute \dot{\phi}
   double ihub_arr[NA]; //Array of 1/H(z)
@@ -253,7 +254,7 @@ typedef struct {
   unsigned int seed_rng; //RNG seed
 
   int n_grid; //Number of cells per side for the Cartesian grid
-  double l_box; //Box size for the cartesian grid
+  flouble l_box; //Box size for the cartesian grid
   int nz_here; //Number of cells in the z-direction stored in this node
   int iz0_here; //index of the first cell in the z-direction stored in this node
   int nz_max;
@@ -273,12 +274,8 @@ typedef struct {
   flouble *slice_right; //Dummy array to store grid cells coming from the right node
 
   double sigma2_gauss; //Variance of the cartesian density field
-  double z0_sigma2; //Start z for sigma(z)
-  double zf_sigma2; //End z for sigma(z)
-  double sigma2_0; //Start sigma(z)
-  double sigma2_f; //End sigma(z)
-  gsl_interp_accel *intacc_sigma2_z; //Splines sigma(z)
-  gsl_spline *spline_sigma2_z; //Splines sigma(z)
+  double z0_norm;
+  double zf_norm;
 
   int need_onions; //Do we need spherical voxels at all?
   int do_lensing; //Do we need to compute the lensing potential?
@@ -301,6 +298,10 @@ typedef struct {
   gsl_spline *spline_srcs_bz[NPOP_MAX]; //Spline for b(z)
   gsl_spline *spline_srcs_nz[NPOP_MAX]; //Spline for n(z)
   gsl_interp_accel *intacc_srcs[NPOP_MAX]; //Spline accelerator for sources
+  gsl_spline *spline_norm_srcs[NPOP_MAX]; //Spline for density normalization
+  gsl_interp_accel *intacc_norm_srcs; //Spline accelerator for density normalization
+  double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
+  double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
   int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
   lint *nsources_this; //Number of sources found in this node
   Src **srcs; //Galaxy objects stored in this node
@@ -312,7 +313,11 @@ typedef struct {
   char fnameNuImap[NPOP_MAX][256]; //Files containing frequency table for each IM species
   gsl_spline *spline_imap_bz[NPOP_MAX]; //Spline for b(z)
   gsl_spline *spline_imap_tz[NPOP_MAX]; //Spline for T(z)
-  gsl_interp_accel *intacc_imap[NPOP_MAX]; //Spline accelerator for IM
+  gsl_interp_accel *intacc_imap[NPOP_MAX]; //Spline accelerator for imap
+  gsl_spline *spline_norm_imap[NPOP_MAX]; //Spline for density normalization
+  gsl_interp_accel *intacc_norm_imap; //Spline accelerator for density normalization
+  double norm_imap_0[NPOP_MAX]; //Bottom edge of spline for density normalization
+  double norm_imap_f[NPOP_MAX]; //Top edge of spline for density normalization
   int nside_imap[NPOP_MAX]; //Output angular resolution for each IM species
   double nu0_imap[NPOP_MAX]; //Rest-frame frequency for each IM species
   HealpixShells **imap; //intensity maps for each IM species
@@ -376,10 +381,12 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nsid
 // Functions defined in cosmo.c
 double pk_linear0(ParamCoLoRe *par,double lgk);
 void cosmo_set(ParamCoLoRe *par);
-double sigma2_of_z(ParamCoLoRe *par,double z);
+double norm_srcs_of_z(ParamCoLoRe *par,double z,int ipop);
+double norm_imap_of_z(ParamCoLoRe *par,double z,int ipop);
 double r_of_z(ParamCoLoRe *par,double z);
 double z_of_r(ParamCoLoRe *par,double r);
 double dgrowth_of_r(ParamCoLoRe *par,double r);
+double d2growth_of_r(ParamCoLoRe *par,double r);
 double vgrowth_of_r(ParamCoLoRe *par,double r);
 double pdgrowth_of_r(ParamCoLoRe *par,double r);
 double ihub_of_r(ParamCoLoRe *par,double r);

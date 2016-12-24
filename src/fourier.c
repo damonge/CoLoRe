@@ -218,12 +218,6 @@ void init_fftw(ParamCoLoRe *par)
     report_error(1,"Ran out of memory\n");
   par->grid_dens=(flouble *)(par->grid_dens_f);
 
-#ifdef _DEBUG
-  double total_GB_d=0;
-  unsigned long long  total_GB=0;
-  total_GB+=dsize*sizeof(dftw_complex);
-#endif //_DEBUG
-
 #ifdef _SPREC
   par->grid_npot_f=fftwf_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
 #else //_SPREC
@@ -233,15 +227,7 @@ void init_fftw(ParamCoLoRe *par)
     report_error(1,"Ran out of memory\n");
   par->grid_npot=(flouble *)(par->grid_npot_f);
 
-#ifdef _DEBUG
-  total_GB+=(dsize+2*par->n_grid*(par->n_grid/2+1))*sizeof(dftw_complex);
-  total_GB_d=total_GB/pow(1024.,3);
-  printf("Node %d: Have allocated %.3lf GB for grids\n",NodeThis,total_GB_d);
-#endif //_DEBUG
-
 #ifdef _HAVE_MPI
-  //  par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
-  //  par->slice_right=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
   par->slice_left =&(par->grid_npot[2*dsize]);
   par->slice_right=&(par->grid_npot[2*(dsize+par->n_grid*(par->n_grid/2+1))]);
 #endif //_HAVE_MPI

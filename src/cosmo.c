@@ -26,14 +26,24 @@
 #define CL_TYPE_KAPPA 0
 #define CL_TYPE_ISW 1
 
-double sigma2_of_z(ParamCoLoRe *par,double z)
+double norm_srcs_of_z(ParamCoLoRe *par,double z,int ipop)
 {
-  if(z<=par->z0_sigma2)
-    return par->sigma2_0;
-  else if(z>=par->zf_sigma2)
-    return par->sigma2_f;
+  if(z<par->z0_norm)
+    return par->norm_srcs_0[ipop];
+  else if(z>=par->zf_norm)
+    return par->norm_srcs_f[ipop];
   else
-    return gsl_spline_eval(par->spline_sigma2_z,z,par->intacc_sigma2_z);
+    return gsl_spline_eval(par->spline_norm_srcs[ipop],z,par->intacc_norm_srcs);
+}
+
+double norm_imap_of_z(ParamCoLoRe *par,double z,int ipop)
+{
+  if(z<par->z0_norm)
+    return par->norm_imap_0[ipop];
+  else if(z>=par->zf_norm)
+    return par->norm_imap_f[ipop];
+  else
+    return gsl_spline_eval(par->spline_norm_imap[ipop],z,par->intacc_norm_imap);
 }
 
 static double a_of_r_provisional(ParamCoLoRe *par,double r)
@@ -81,6 +91,18 @@ double dgrowth_of_r(ParamCoLoRe *par,double r)
   else {
     int ir=(int)(r*par->glob_idr);
     double gd=par->growth_d_arr[ir]+(par->growth_d_arr[ir+1]-par->growth_d_arr[ir])*
+      (r-par->r_arr_r2z[ir])*par->glob_idr;
+    return gd;
+  }
+}
+
+double d2growth_of_r(ParamCoLoRe *par,double r)
+{
+  if(r<=0) return 1;
+  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_d2_arr[NA-1];
+  else {
+    int ir=(int)(r*par->glob_idr);
+    double gd=par->growth_d2_arr[ir]+(par->growth_d2_arr[ir+1]-par->growth_d2_arr[ir])*
       (r-par->r_arr_r2z[ir])*par->glob_idr;
     return gd;
   }
@@ -663,11 +685,13 @@ void cosmo_set(ParamCoLoRe *par)
     double a=a_of_r_provisional(par,r);
     double z=1./a-1;
     double gz=csm_growth_factor(pars,a)/growth0;
+    double om=csm_omega_m(pars,a);
     double fz=csm_f_growth(pars,a);
     double hhz=csm_hubble(pars,a);
     par->z_arr_r2z[ii]=z;
     par->r_arr_r2z[ii]=r;
     par->growth_d_arr[ii]=gz;
+    par->growth_d2_arr[ii]=-0.42857142857*gz*gz*pow(om,-0.00699300699);
     par->growth_v_arr[ii]=(gz*hhz*fz)/(par->fgrowth_0*par->hubble_0); //This is for the comoving velocity
     par->growth_pd_arr[ii]=gz*hhz*(fz-1);
     par->ihub_arr[ii]=1./hhz;
@@ -682,8 +706,10 @@ void cosmo_set(ParamCoLoRe *par)
 #ifdef _ADD_EXTRA_KAPPA
 	int l,nl=3*par->kmap->nside;
 	double chi_here=r_of_z(par,z);
+#ifdef _DEBUG
 	if(NodeThis==0)
 	  fprintf(par->f_dbg,"Power spectra for extra kappa, shell %d (z=%.3lf)\n",ii+1,z);
+#endif //_DEBUG
 	par->need_extra_kappa[ii]=1;
 	par->fl_mean_extra_kappa[ii]=my_malloc(nl*sizeof(flouble));
 	par->cl_extra_kappa[ii]=my_malloc(nl*sizeof(flouble));
@@ -697,11 +723,15 @@ void cosmo_set(ParamCoLoRe *par)
 	    par->fl_mean_extra_kappa[ii][l]=0;
 	    par->cl_extra_kappa[ii][l]=0;
 	  }
+#ifdef _DEBUG
 	  if(NodeThis==0)
 	    fprintf(par->f_dbg,"%d %lE %lE \n",l,par->fl_mean_extra_kappa[ii][l],par->cl_extra_kappa[ii][l]);
+#endif //_DEBUG
 	}
+#ifdef _DEBUG
 	if(NodeThis==0)
 	  fprintf(par->f_dbg,"\n");
+#endif //_DEBUG
 #else //_ADD_EXTRA_KAPPA
 	report_error(1,"Source plane %d outside redshift range\n",ii+1);
 #endif //_ADD_EXTRA_KAPPA
@@ -718,8 +748,10 @@ void cosmo_set(ParamCoLoRe *par)
 #ifdef _ADD_EXTRA_ISW
 	int l,nl=3*par->pd_map->nside;
 	double chi_here=r_of_z(par,z);
+#ifdef _DEBUG
 	if(NodeThis==0)
 	  fprintf(par->f_dbg,"Power spectra for extra isw, shell %d (z=%.3lf)\n",ii+1,z);
+#endif //_DEBUG
 	par->need_extra_isw[ii]=1;
 	par->fl_mean_extra_isw[ii]=my_malloc(nl*sizeof(flouble));
 	par->cl_extra_isw[ii]=my_malloc(nl*sizeof(flouble));
@@ -733,11 +765,15 @@ void cosmo_set(ParamCoLoRe *par)
 	    par->fl_mean_extra_isw[ii][l]=0;
 	    par->cl_extra_isw[ii][l]=0;
 	  }
+#ifdef _DEBUG
 	  if(NodeThis==0)
 	    fprintf(par->f_dbg,"%d %lE %lE \n",l,par->fl_mean_extra_isw[ii][l],par->cl_extra_isw[ii][l]);
+#endif //_DEBUG
 	}
+#ifdef _DEBUG
 	if(NodeThis==0)
 	  fprintf(par->f_dbg,"\n");
+#endif //_DEBUG
 #else //_ADD_EXTRA_ISW
 	report_error(1,"Source plane %d outside redshift range\n",ii+1);
 #endif //_ADD_EXTRA_ISW

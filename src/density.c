@@ -55,7 +55,7 @@ static void pos_2_ngp(ParamCoLoRe *par,unsigned long long np,
     i0[2]-=par->iz0_here;
 
     if((i0[2]>=0) && (i0[2]<par->nz_here)) {
-      index=i0[0]+ngx*(i0[1]+par->n_grid*i0[0]);
+      index=i0[0]+ngx*(i0[1]+par->n_grid*i0[2]);
       delta[index]+=1.;
     }
   }
@@ -115,9 +115,9 @@ static void pos_2_tsc(ParamCoLoRe *par,unsigned long long np,
     int ax,i0[3],ip[3],im[3];
     flouble a0[3],ap[3],am[3];
 
-    i0[0]=(int)(x[ii]*i_agrid+0.5);
-    i0[1]=(int)(y[ii]*i_agrid+0.5);
-    i0[2]=(int)(z[ii]*i_agrid+0.5);
+    i0[0]=(int)(floorf(x[ii]*i_agrid+0.5));
+    i0[1]=(int)(floorf(y[ii]*i_agrid+0.5));
+    i0[2]=(int)(floorf(z[ii]*i_agrid+0.5));
     a0[0]=x[ii]*i_agrid-i0[0];
     a0[1]=y[ii]*i_agrid-i0[1];
     a0[2]=z[ii]*i_agrid-i0[2];
@@ -210,20 +210,28 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
   for(inode=0;inode<NNodes;inode++) {
     z_left[inode]=par->iz0_all[inode]*dx;
     z_right[inode]=(par->iz0_all[inode]+par->nz_all[inode])*dx;
-    z_true_left[inode]=z_left[inode]+dx;
-    z_true_right[inode]=z_right[inode]-dx;
-    z_bleft_left[inode]=z_left[inode]-dx;
+    z_true_left[inode]=(par->iz0_all[inode]+(par->lpt_interp_type+1)*0.5)*dx;
+    z_true_right[inode]=(par->iz0_all[inode]+par->nz_all[inode]-(par->lpt_interp_type+1)*0.5)*dx;
+    z_bleft_left[inode]=(par->iz0_all[inode]-(par->lpt_interp_type+1)*0.5)*dx;
     z_bleft_right[inode]=z_left[inode];
     z_bright_left[inode]=z_right[inode];
-    z_bright_right[inode]=z_right[inode]+dx;
+    z_bright_right[inode]=(par->iz0_all[inode]+par->nz_all[inode]+(par->lpt_interp_type+1)*0.5)*dx;
     if(inode==0) {
-      z_bleft_left[inode]+=par->l_box;
-      z_bleft_right[inode]+=par->l_box;
+      z_bleft_left[inode]=(par->n_grid-(par->lpt_interp_type+1)*0.5)*dx;
+      z_bleft_right[inode]=par->n_grid*dx;
     }
     else if(inode==NNodes-1) {
-      z_bright_left[inode]-=par->l_box;
-      z_bright_right[inode]-=par->l_box;
+      z_bright_left[inode]=0;
+      z_bright_right[inode]=(par->lpt_interp_type+1)*0.5*dx;
     }
+#ifdef _DEBUG
+    print_info("Node %d: [%lf,%lf] [%lf,%lf] [%lf %lf] [%lf %lf]\n",inode,
+	       z_left[inode],z_right[inode],
+	       z_true_left[inode],z_true_right[inode],
+	       z_bleft_left[inode],z_bleft_right[inode],
+	       z_bright_left[inode],z_bright_right[inode]);
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif //_DEBUG
   }
 
   //Figure out which particles need to be moved and which stay
@@ -234,12 +242,13 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
        ((z[ip]>=z_bleft_left[NodeThis]) && (z[ip]<z_bleft_right[NodeThis])) ||
        ((z[ip]>=z_bright_left[NodeThis]) && (z[ip]<z_bright_right[NodeThis])))
       include=1;
-    if((z[ip]<=z_true_left[NodeThis]) || (z[ip]>=z_true_right[NodeThis]))
+    if((z[ip]<z_true_left[NodeThis]) || (z[ip]>=z_true_right[NodeThis]))
       send=1;
 
     if(send) {
       if(n_inbuffer>=nbuffer)
-	report_error(1,"Out of memory, enlarge buffer\n");
+	report_error(1,"Out of memory, enlarge buffer %llu (%llu,%llu) %llu\n",
+		     np_allocated,n_inbuffer,nbuffer,n_inrange);
       x_b[n_inbuffer]=x[ip];
       y_b[n_inbuffer]=y[ip];
       z_b[n_inbuffer]=z[ip];
@@ -248,7 +257,7 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
 
     if(include) {
       if(n_inrange>=np_allocated)
-	report_error(1,"Out of memory, enlarge buffer\n");
+	report_error(1,"Out of memory, enlarge buffer %llu %llu %llu\n",np_allocated,n_inbuffer,n_inrange);
       x[n_inrange]=x[ip];
       y[n_inrange]=y[ip];
       z[n_inrange]=z[ip];
@@ -256,10 +265,16 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
     }
   }
 
+#ifdef _DEBUG
+  printf("Node %d: %llu %llu %llu %llu\n",NodeThis,np_allocated,n_inrange,nbuffer,n_inbuffer);
+  MPI_Barrier(MPI_COMM_WORLD);
+#endif //_DEBUG
+
   for(inode=1;inode<NNodes;inode++) {
     int node_to=(NodeThis+inode+NNodes)%NNodes;
     int node_from=(NodeThis-inode+NNodes)%NNodes;
-    int i=0,j=n_inbuffer;
+    int i=0,j=n_inbuffer-1;
+
     while(1) {
       while(i<n_inbuffer && 
 	    !(((z_b[i]>=z_left[node_to]) && (z_b[i]<z_right[node_to])) ||
@@ -309,6 +324,12 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
     MPI_Sendrecv(&nsend,1,MPI_INT,node_to,tag,&nrecv,1,MPI_INT,node_from,tag,MPI_COMM_WORLD,&status);
     tag++;
 
+#ifdef _DEBUG
+    printf("%d. Node %d: send %d particles to node %d, receive %d particles from node %d\n",
+	   inode,NodeThis,nsend,node_to,nrecv,node_from);
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif //_DEBUG
+
     if(n_inrange+nrecv>np_allocated)
       report_error(1,"Not enough memory, enlarge buffer\n");
 
@@ -346,7 +367,7 @@ static void lpt_1(ParamCoLoRe *par)
   ptrdiff_t dsize=par->nz_here*((lint)(par->n_grid*(par->n_grid/2+1)));
   ptrdiff_t dsize_buff=(ptrdiff_t)(dsize*(1+par->lpt_buffer_fraction));
 
-  print_info("1-LPT\n");
+  print_info(" 1LPT\n");
 
   print_info(" - Transforming density field\n");
   for(axis=0;axis<3;axis++) {
@@ -423,8 +444,8 @@ static void lpt_1(ParamCoLoRe *par)
   {
     lint iz;
     int ngx=2*(par->n_grid/2+1);
-    double dx=par->l_box/par->n_grid;
-    double xv[3];
+    flouble dx=par->l_box/par->n_grid;
+    flouble xv[3];
 
 #ifdef _DEBUG
     double d_sigma2_1_thr=0;
@@ -454,9 +475,9 @@ static void lpt_1(ParamCoLoRe *par)
 	    d_mean_1_thr[ax]+=disp[ax][index];
 	    d_sigma2_1_thr+=disp[ax][index]*disp[ax][index];
 #endif //_DEBUG
-	    flouble p=xv[ax]+dg*disp[ax][index];
+	    flouble p=xv[ax]+dg*disp[ax][index]+par->pos_obs[ax];
 	    if(p<0) p+=par->l_box;
-	    else if(p>=par->l_box) p-=par->l_box;
+	    if(p>=par->l_box) p-=par->l_box;
 	    disp[ax][index]=p;
 	  }
 	  par->grid_dens[index]=0;
@@ -523,6 +544,7 @@ static void lpt_1(ParamCoLoRe *par)
   unsigned long long np_here;
   if(par->output_lpt) {
     np_here=par->nz_here*((lint)(par->n_grid*par->n_grid));
+    print_info(" - Writing LPT positions\n");
     write_lpt(par,np_here,disp[0],disp[1],disp[2]);
   }
 
@@ -547,13 +569,23 @@ static void lpt_1(ParamCoLoRe *par)
 #endif //_SPREC
 
   print_info(" - Normalizing density field\n");
+#ifdef _DEBUG
+  double numtot=0;
+#endif //_DEBUG
 #ifdef _HAVE_OMP
+#ifdef _DEBUG
+#pragma omp parallel default(none) shared(par,numtot)
+#else //_DEBUG
 #pragma omp parallel default(none) shared(par)
+#endif //_DEBUG
 #endif //_HAVE_OMP
   {
     lint iz;
     int ngx=2*(par->n_grid/2+1);
     flouble inv_dens=1.;
+#ifdef _DEBUG
+    double numtot_thr=0;
+#endif //_DEBUG
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static)
@@ -566,12 +598,30 @@ static void lpt_1(ParamCoLoRe *par)
 	lint indexy=iy*ngx;
 	for(ix=0;ix<par->n_grid;ix++) {
 	  lint index=ix+indexy+indexz;
+#ifdef _DEBUG
+	  numtot_thr+=par->grid_dens[index];
+#endif //_DEBUG
 	  par->grid_dens[index]=par->grid_dens[index]*inv_dens-1.;
 	}
       }
     } //end omp for
+#ifdef _DEBUG
+#pragma omp critical
+    {
+      numtot+=numtot_thr;
+    }
+#endif //_DEBUG
   } //end omp parallel
 
+#ifdef _DEBUG
+#ifdef _HAVE_MPI
+  if(NodeThis==0)
+    MPI_Reduce(MPI_IN_PLACE,&numtot,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  else
+    MPI_Reduce(&numtot,&numtot,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+  print_info(" Total density : %lE\n",numtot-(double)(par->n_grid*((lint)(par->n_grid*par->n_grid))));
+#endif //_DEBUG
 }
 
 static void lpt_2(ParamCoLoRe *par)
@@ -583,7 +633,7 @@ static void lpt_2(ParamCoLoRe *par)
   ptrdiff_t dsize=par->nz_here*((lint)(par->n_grid*(par->n_grid/2+1)));
   ptrdiff_t dsize_buff=(ptrdiff_t)(dsize*(1+par->lpt_buffer_fraction));
 
-  print_info("2-LPT\n");
+  print_info(" 2LPT\n");
 
   print_info(" - Transforming density field\n");
   for(axis=0;axis<2;axis++) {
@@ -765,8 +815,8 @@ static void lpt_2(ParamCoLoRe *par)
   {
     lint iz;
     int ngx=2*(par->n_grid/2+1);
-    double dx=par->l_box/par->n_grid;
-    double xv[3];
+    flouble dx=par->l_box/par->n_grid;
+    flouble xv[3];
 
 #ifdef _DEBUG
     double d_sigma2_1_thr=0;
@@ -788,14 +838,13 @@ static void lpt_2(ParamCoLoRe *par)
 	xv[1]=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int ax;
-	  double r,dg,dg2;
+	  double r,dg,d2g;
 	  lint index=ix+indexy+indexz;
 	  lint index_nopad=ix+par->n_grid*((lint)(iy+par->n_grid*iz));
 	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
 	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
 	  dg=dgrowth_of_r(par,r);
-	  double om=1.;
-	  dg2=-0.42857142857*dg*dg*pow(om,-0.00699300699); //Fix this
+	  d2g=d2growth_of_r(par,r);
 	  for(ax=0;ax<3;ax++) {
 #ifdef _DEBUG
 	    d_mean_1_thr[ax]+=disp[ax][index];
@@ -803,9 +852,9 @@ static void lpt_2(ParamCoLoRe *par)
 	    d_sigma2_1_thr+=disp[ax][index]*disp[ax][index];
 	    d_sigma2_2_thr+=digrad[ax][index]*digrad[ax][index];
 #endif //_DEBUG
-	    flouble p=xv[ax]+dg*disp[ax][index]+dg2*digrad[ax][index];
+	    flouble p=xv[ax]+dg*disp[ax][index]+d2g*digrad[ax][index]+par->pos_obs[ax];
 	    if(p<0) p+=par->l_box;
-	    else if(p>=par->l_box) p-=par->l_box;
+	    if(p>=par->l_box) p-=par->l_box;
 	    digrad[3+ax][index_nopad]=p;
 	  }
 	  par->grid_dens[index]=0;
@@ -876,6 +925,12 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_SPREC
 
   unsigned long long np_here;
+  if(par->output_lpt) {
+    np_here=par->nz_here*((lint)(par->n_grid*par->n_grid));
+    print_info(" - Writing LPT positions\n");
+    write_lpt(par,np_here,digrad[3],digrad[4],digrad[5]);
+  }
+
 #ifdef _HAVE_MPI
   print_info(" - Sharing particle positions\n");
   share_particles(par,(unsigned long long)(2*dsize_buff),
@@ -897,13 +952,23 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_SPREC
 
   print_info(" - Normalizing density field\n");
+#ifdef _DEBUG
+  double numtot=0;
+#endif //_DEBUG
 #ifdef _HAVE_OMP
+#ifdef _DEBUG
+#pragma omp parallel default(none) shared(par,numtot)
+#else //_DEBUG
 #pragma omp parallel default(none) shared(par)
+#endif //_DEBUG
 #endif //_HAVE_OMP
   {
     lint iz;
     int ngx=2*(par->n_grid/2+1);
     flouble inv_dens=1.;
+#ifdef _DEBUG
+    double numtot_thr=0;
+#endif //_DEBUG
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static)
@@ -916,12 +981,30 @@ static void lpt_2(ParamCoLoRe *par)
 	lint indexy=iy*ngx;
 	for(ix=0;ix<par->n_grid;ix++) {
 	  lint index=ix+indexy+indexz;
+#ifdef _DEBUG
+	  numtot_thr+=par->grid_dens[index];
+#endif //_DEBUG
 	  par->grid_dens[index]=par->grid_dens[index]*inv_dens-1.;
 	}
       }
     } //end omp for
+#ifdef _DEBUG
+#pragma omp critical
+    {
+      numtot+=numtot_thr;
+    }
+#endif //_DEBUG
   } //end omp parallel
 
+#ifdef _DEBUG
+#ifdef _HAVE_MPI
+  if(NodeThis==0)
+    MPI_Reduce(MPI_IN_PLACE,&numtot,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+  else
+    MPI_Reduce(&numtot,&numtot,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+  print_info(" Total density : %lE\n",numtot-(double)(par->n_grid*((lint)(par->n_grid*par->n_grid))));
+#endif //_DEBUG
 }
 
 //Lognormalizes density grid and puts in lightcone
@@ -934,7 +1017,7 @@ static void lognormalize(ParamCoLoRe *par)
   {
     lint iz;
     int ngx=2*(par->n_grid/2+1);
-    double dx=par->l_box/par->n_grid;
+    flouble dx=par->l_box/par->n_grid;
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static)
@@ -942,14 +1025,14 @@ static void lognormalize(ParamCoLoRe *par)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       lint indexz=iz*((lint)(ngx*par->n_grid));
-      double z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	lint indexy=iy*ngx;
-	double y0=(iy+0.5)*dx-par->pos_obs[1];
+	flouble y0=(iy+0.5)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  lint index=ix+indexy+indexz;
-	  double x0=(ix+0.5)*dx-par->pos_obs[0];
+	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double dg=dgrowth_of_r(par,r);
 	  double delta=par->grid_dens[index];
@@ -981,19 +1064,25 @@ void compute_physical_density_field(ParamCoLoRe *par)
     write_density_grid(par,"lightcone");
 }
 
-static void collect_sigmaz_from_grid(ParamCoLoRe *par,int nz,int idz,
-				     double *zarr,double *sarr,unsigned long long *narr)
+static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,int idz,double *zarr,
+						    unsigned long long *narr,
+						    double **norm_srcs_arr,double **norm_imap_arr)
 {
 #ifdef _HAVE_OMP
-#pragma omp parallel default(none)		\
-  shared(par,idz,nz,zarr,narr,sarr)
+#pragma omp parallel default(none)				\
+  shared(par,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr)
 #endif //_HAVE_OMP
   {
-    int iz;
-    double dx=par->l_box/par->n_grid;
+    int iz,ipop;
+    flouble dx=par->l_box/par->n_grid;
     double *zarr_thr=my_calloc(nz,sizeof(double));
-    double *sarr_thr=my_calloc(nz,sizeof(double));
     unsigned long long *narr_thr=my_calloc(nz,sizeof(unsigned long long));
+    double **norm_srcs_arr_thr=my_malloc(par->n_srcs*sizeof(double *));
+    double **norm_imap_arr_thr=my_malloc(par->n_imap*sizeof(double *));
+    for(ipop=0;ipop<par->n_srcs;ipop++)
+      norm_srcs_arr_thr[ipop]=my_calloc(nz,sizeof(double));
+    for(ipop=0;ipop<par->n_imap;ipop++)
+      norm_imap_arr_thr[ipop]=my_calloc(nz,sizeof(double));
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -1001,22 +1090,25 @@ static void collect_sigmaz_from_grid(ParamCoLoRe *par,int nz,int idz,
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       lint iz0=iz*((lint)(2*(par->n_grid/2+1)*par->n_grid));
-      double z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	lint iy0=iy*2*(par->n_grid/2+1);
-	double y0=(iy+0.5)*dx-par->pos_obs[1];
+	flouble y0=(iy+0.5)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  lint index=ix+iy0+iz0;
-	  double x0=(ix+0.5)*dx-par->pos_obs[0];
+	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double redshift=z_of_r(par,r);
 	  int ind_z=(int)(redshift*idz)+1;
 	  if((ind_z>=0) && (ind_z<nz)) {
-	    double d=par->grid_dens[index];
-	    narr_thr[iz]++;
-	    sarr_thr[iz]+=d*d;
-	    zarr_thr[iz]+=redshift;
+	    double d=1+par->grid_dens[index];
+	    narr_thr[ind_z]++;
+	    zarr_thr[ind_z]+=redshift;
+	    for(ipop=0;ipop<par->n_srcs;ipop++)
+	      norm_srcs_arr_thr[ipop][ind_z]+=pow(d,bias_of_z_srcs(par,redshift,ipop));
+	    for(ipop=0;ipop<par->n_imap;ipop++)
+	      norm_imap_arr_thr[ipop][ind_z]+=pow(d,bias_of_z_imap(par,redshift,ipop));
 	  }
 	}
       }
@@ -1028,31 +1120,47 @@ static void collect_sigmaz_from_grid(ParamCoLoRe *par,int nz,int idz,
       for(iz=0;iz<nz;iz++) {
 	narr[iz]+=narr_thr[iz];
 	zarr[iz]+=zarr_thr[iz];
-	sarr[iz]+=sarr_thr[iz];
+	for(ipop=0;ipop<par->n_srcs;ipop++)
+	  norm_srcs_arr[ipop][iz]+=norm_srcs_arr_thr[ipop][iz];
+	for(ipop=0;ipop<par->n_imap;ipop++)
+	  norm_imap_arr[ipop][iz]+=norm_imap_arr_thr[ipop][iz];
       }
     } //end omp critical
 
     free(narr_thr);
     free(zarr_thr);
-    free(sarr_thr);
+    for(ipop=0;ipop<par->n_srcs;ipop++)
+      free(norm_srcs_arr_thr[ipop]);
+    free(norm_srcs_arr_thr);
+    for(ipop=0;ipop<par->n_imap;ipop++)
+      free(norm_imap_arr_thr[ipop]);
+    free(norm_imap_arr_thr);
   } //end omp parallel
 }
 
-static void collect_sigmaz_from_pixels(ParamCoLoRe *par,int nz,int idz,
-				       double *zarr,double *sarr,unsigned long long *narr)
+static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,int idz,double *zarr,
+						      unsigned long long *narr,
+						      double **norm_srcs_arr,double **norm_imap_arr)
 {
   int ib;
 
   for(ib=0;ib<par->n_beams_here;ib++) {
     OnionInfo *oi=par->oi_beams[ib];
 #ifdef _HAVE_OMP
-#pragma omp parallel default(none) shared(par,oi,ib,zarr,narr,sarr,nz,idz)
+#pragma omp parallel default(none) shared(par,oi,ib,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr)
 #endif //_HAVE_OMP
     {
-      int ir;
+      int ir,ipop;
+      double *barr_srcs=my_malloc(par->n_srcs*sizeof(double));
+      double *barr_imap=my_malloc(par->n_imap*sizeof(double));
       double *zarr_thr=my_calloc(nz,sizeof(double));
-      double *sarr_thr=my_calloc(nz,sizeof(double));
       unsigned long long *narr_thr=my_calloc(nz,sizeof(unsigned long long));
+      double **norm_srcs_arr_thr=my_malloc(par->n_srcs*sizeof(double *));
+      double **norm_imap_arr_thr=my_malloc(par->n_imap*sizeof(double *));
+      for(ipop=0;ipop<par->n_srcs;ipop++)
+	norm_srcs_arr_thr[ipop]=my_calloc(nz,sizeof(double));
+      for(ipop=0;ipop<par->n_imap;ipop++)
+	norm_imap_arr_thr[ipop]=my_calloc(nz,sizeof(double));
 
 #ifdef _HAVE_OMP
 #pragma omp for nowait schedule(dynamic)
@@ -1062,12 +1170,19 @@ static void collect_sigmaz_from_pixels(ParamCoLoRe *par,int nz,int idz,
 	double r=0.5*(oi->rf_arr[ir]+oi->r0_arr[ir]);
 	double redshift=z_of_r(par,r);
 	int iz=(int)(redshift*idz)+1;
+	for(ipop=0;ipop<par->n_srcs;ipop++)
+	  barr_srcs[ipop]=bias_of_z_srcs(par,redshift,ipop);
+	for(ipop=0;ipop<par->n_imap;ipop++)
+	  barr_imap[ipop]=bias_of_z_imap(par,redshift,ipop);
 
 	narr_thr[iz]+=oi->num_pix[ir];
+	zarr_thr[iz]+=redshift*oi->num_pix[ir];
 	for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
-	  double d=par->dens_beams[ib][ir][ipix];
-	  sarr_thr[iz]+=d*d;
-	  zarr_thr[iz]+=redshift;
+	  double d=1+par->dens_beams[ib][ir][ipix];
+	  for(ipop=0;ipop<par->n_srcs;ipop++)
+	    norm_srcs_arr_thr[ipop][iz]+=pow(d,barr_srcs[ipop]);
+	  for(ipop=0;ipop<par->n_imap;ipop++)
+	    norm_imap_arr_thr[ipop][iz]+=pow(d,barr_imap[ipop]);
 	}
       } //end omp for
 #ifdef _HAVE_OMP
@@ -1077,32 +1192,43 @@ static void collect_sigmaz_from_pixels(ParamCoLoRe *par,int nz,int idz,
 	for(ir=0;ir<nz;ir++) {
 	  narr[ir]+=narr_thr[ir];
 	  zarr[ir]+=zarr_thr[ir];
-	  sarr[ir]+=sarr_thr[ir];
+	  for(ipop=0;ipop<par->n_srcs;ipop++)
+	    norm_srcs_arr[ipop][ir]+=norm_srcs_arr_thr[ipop][ir];
+	  for(ipop=0;ipop<par->n_imap;ipop++)
+	    norm_imap_arr[ipop][ir]+=norm_imap_arr_thr[ipop][ir];
 	}
       } //end omp critical
 
       free(narr_thr);
       free(zarr_thr);
-      free(sarr_thr);
+      for(ipop=0;ipop<par->n_srcs;ipop++)
+	free(norm_srcs_arr_thr[ipop]);
+      free(norm_srcs_arr_thr);
+      free(barr_srcs);
+      for(ipop=0;ipop<par->n_imap;ipop++)
+	free(norm_imap_arr_thr[ipop]);
+      free(norm_imap_arr_thr);
+      free(barr_imap);
     } //end omp parallel
   }
 }
 
-static void collect_sigmaz(ParamCoLoRe *par,int nz,double idz,
-			   double *zarr,double *sarr,unsigned long long *narr)
+static void collect_density_normalization(ParamCoLoRe *par,int nz,double idz,double *zarr,
+					  unsigned long long *narr,
+					  double **norm_srcs_arr,double **norm_imap_arr)
 {
   if(par->need_onions)
-    collect_sigmaz_from_pixels(par,nz,idz,zarr,sarr,narr);
+    collect_density_normalization_from_pixels(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
   else 
-    collect_sigmaz_from_grid(par,nz,idz,zarr,sarr,narr);
+    collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
 }
 
 //Computes sigma2(z) for physical density field
 void compute_density_normalization(ParamCoLoRe *par)
 {
-  int nz,iz;
-  double idz,df;
-  double *zarr,*sarr;
+  int nz,iz,ipop;
+  double idz;
+  double *zarr,**norm_imap_arr,**norm_srcs_arr;
   unsigned long long *narr;
   double zmax=z_of_r(par,par->l_box*0.5);
 
@@ -1114,46 +1240,81 @@ void compute_density_normalization(ParamCoLoRe *par)
 
   zarr=my_calloc(nz,sizeof(double));
   narr=my_calloc(nz,sizeof(unsigned long long));
-  sarr=my_calloc(nz,sizeof(double));
+  norm_srcs_arr=my_malloc(par->n_srcs*sizeof(double *));
+  norm_imap_arr=my_malloc(par->n_imap*sizeof(double *));
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    norm_srcs_arr[ipop]=my_calloc(nz,sizeof(double));
+  for(ipop=0;ipop<par->n_imap;ipop++)
+    norm_imap_arr[ipop]=my_calloc(nz,sizeof(double));
 
-  collect_sigmaz(par,nz,idz,zarr,sarr,narr);
+  collect_density_normalization(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
 
 #ifdef _HAVE_MPI
   MPI_Allreduce(MPI_IN_PLACE,narr,nz,MPI_UNSIGNED_LONG_LONG,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,sarr,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    MPI_Allreduce(MPI_IN_PLACE,norm_srcs_arr[ipop],nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  for(ipop=0;ipop<par->n_imap;ipop++)
+    MPI_Allreduce(MPI_IN_PLACE,norm_imap_arr[ipop],nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE,zarr,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
 
   for(iz=0;iz<nz;iz++) {
     if(narr[iz]>0) {
       zarr[iz]/=narr[iz];
-      sarr[iz]/=narr[iz];
+      for(ipop=0;ipop<par->n_srcs;ipop++)
+	norm_srcs_arr[ipop][iz]=narr[iz]/norm_srcs_arr[ipop][iz];
+      for(ipop=0;ipop<par->n_imap;ipop++)
+	norm_imap_arr[ipop][iz]=narr[iz]/norm_imap_arr[ipop][iz];
     }
   }
 
-  //TODO: only for lognormal
-  df=dgrowth_of_r(par,0.5*par->l_box);
   zarr[0]=0;
-  sarr[0]=exp(par->sigma2_gauss)-1;
   zarr[nz-1]=z_of_r(par,0.5*par->l_box);
-  sarr[nz-1]=exp(df*df*par->sigma2_gauss)-1;
-
-  par->z0_sigma2=zarr[0];
-  par->zf_sigma2=zarr[nz-1];
-  par->sigma2_0=sarr[0];
-  par->sigma2_f=sarr[nz-1];
-  par->spline_sigma2_z=gsl_spline_alloc(gsl_interp_cspline,nz);
-  par->intacc_sigma2_z=gsl_interp_accel_alloc();
-  gsl_spline_init(par->spline_sigma2_z,zarr,sarr,nz);
-
-  if(NodeThis==0) timer(2);
-  for(iz=0;iz<nz;iz++) {
-    print_info("z=%.3lE, <d^2>=%.3lE, <d^2_s>=%.3lE, n=%d\n",
-	       zarr[iz],sqrt(sarr[iz]),sqrt(sigma2_of_z(par,zarr[iz])),narr[iz]);
+  for(ipop=0;ipop<par->n_srcs;ipop++) {
+    norm_srcs_arr[ipop][0]=norm_srcs_arr[ipop][1];
+    norm_srcs_arr[ipop][nz-1]=norm_srcs_arr[ipop][nz-2];
   }
+  for(ipop=0;ipop<par->n_imap;ipop++) {
+    norm_imap_arr[ipop][0]=norm_imap_arr[ipop][1];
+    norm_imap_arr[ipop][nz-1]=norm_imap_arr[ipop][nz-2];
+  }
+
+  par->z0_norm=zarr[0];
+  par->zf_norm=zarr[nz-1];
+  for(ipop=0;ipop<par->n_srcs;ipop++) {
+    par->norm_srcs_0[ipop]=norm_srcs_arr[ipop][0];
+    par->norm_srcs_f[ipop]=norm_srcs_arr[ipop][nz-1];
+    par->spline_norm_srcs[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_norm_srcs[ipop],zarr,norm_srcs_arr[ipop],nz);
+  }
+  if(par->n_srcs>0)
+    par->intacc_norm_srcs=gsl_interp_accel_alloc();
+  for(ipop=0;ipop<par->n_imap;ipop++) {
+    par->norm_imap_0[ipop]=norm_imap_arr[ipop][0];
+    par->norm_imap_f[ipop]=norm_imap_arr[ipop][nz-1];
+    par->spline_norm_imap[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(par->spline_norm_imap[ipop],zarr,norm_imap_arr[ipop],nz);
+  }
+  if(par->n_imap>0)
+    par->intacc_norm_imap=gsl_interp_accel_alloc();
+
+#ifdef _DEBUG
+  for(iz=0;iz<nz;iz++) {
+    print_info("z=%.3lE, ",zarr[iz]);
+    for(ipop=0;ipop<par->n_srcs;ipop++)
+      print_info("<d^2_%d>=%.3lE, ",ipop,norm_srcs_of_z(par,zarr[iz],ipop));
+    for(ipop=0;ipop<par->n_imap;ipop++)
+      print_info("<d^2_%d>=%.3lE, ",ipop,norm_imap_of_z(par,zarr[iz],ipop));
+    print_info("%llu\n",narr[iz]);
+  }
+#endif //_DEBUG
+  if(NodeThis==0) timer(2);
   print_info("\n");
 
   free(zarr);
   free(narr);
-  free(sarr);
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    free(norm_srcs_arr[ipop]);
+  for(ipop=0;ipop<par->n_imap;ipop++)
+    free(norm_imap_arr[ipop]);
 }

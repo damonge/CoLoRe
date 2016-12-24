@@ -51,8 +51,6 @@ int main(int argc,char **argv)
   //Lognormalize density field
   compute_physical_density_field(par);
 
-  exit(1);
-
   if(par->need_onions) {
     //Interpolate into beams
     alloc_beams(par);
