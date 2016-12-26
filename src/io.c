@@ -657,12 +657,12 @@ void write_kappa(ParamCoLoRe *par)
 	  int lmax=3*par->kmap->nside;
 	  flouble *map_extra;
 	  flouble *map_mean=my_calloc(npx,sizeof(flouble));
-	  //	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
+	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
 	  print_info("Adding perturbations to kappa shell #%d\n",ir+1);
-	  //	  he_map2alm(par->kmap->nside,lmax,1,&map_write,&alm);
-	  //	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_kappa[ir]);
-	  //	  he_alm2map(par->kmap->nside,lmax,1,&map_mean,&alm);
-	  //	  free(alm);
+	  he_map2alm(par->kmap->nside,lmax,1,&map_write,&alm);
+	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_kappa[ir]);
+	  he_alm2map(par->kmap->nside,lmax,1,&map_mean,&alm);
+	  free(alm);
 	  map_extra=he_synfast(par->cl_extra_kappa[ir],par->kmap->nside,lmax,par->seed_rng);
 	  for(ip=0;ip<npx;ip++)
 	    map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
@@ -732,12 +732,12 @@ void write_isw(ParamCoLoRe *par)
 	  int lmax=3*par->pd_map->nside;
 	  flouble *map_extra;
 	  flouble *map_mean=my_calloc(npx,sizeof(flouble));
-	  //	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
+	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
 	  print_info("Adding perturbations to isw shell #%d\n",ir+1);
-	  //	  he_map2alm(par->pd_map->nside,lmax,1,&map_write,&alm);
-	  //	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_isw[ir]);
-	  //	  he_alm2map(par->pd_map->nside,lmax,1,&map_mean,&alm);
-	  //	  free(alm);
+	  he_map2alm(par->pd_map->nside,lmax,1,&map_write,&alm);
+	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_isw[ir]);
+	  he_alm2map(par->pd_map->nside,lmax,1,&map_mean,&alm);
+	  free(alm);
 	  map_extra=he_synfast(par->cl_extra_isw[ir],par->pd_map->nside,lmax,par->seed_rng);
 	  for(ip=0;ip<npx;ip++)
 	    map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];

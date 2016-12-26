@@ -208,7 +208,7 @@ static double window_isw_limber(ParamCoLoRe *par,int l,double k,double chi_0,dou
   if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
     return 0;
   else
-    return 2*par->prefac_lensing*pdgrowth_of_r(par,chi_l)/(k*k);
+    return -2*par->prefac_lensing*pdgrowth_of_r(par,chi_l)/(k*k);
 }
 
 static double cl_integrand(double lk,void *params)
