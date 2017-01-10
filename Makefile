@@ -1,4 +1,3 @@
-
 ########## User-definable stuff ##########
 #
 ###Compiler and compilation options
