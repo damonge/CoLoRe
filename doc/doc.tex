@@ -2,7 +2,10 @@
 \usepackage[utf8]{inputenc}
 \usepackage{amsmath}
 \usepackage{fullpage}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows}
 \newcommand{\nv}{\hat{\bf n}}
+\newcommand{\disp}{\boldsymbol{\Psi}}
 \newcommand{\TODO}[1]{{\bf TODO: #1}}
 
 %opening
@@ -14,102 +17,45 @@
 \maketitle
 
 \section{Notation}
-$\chi$ is comoving radial density. We use units $c=1$ throughout.
+  \begin{itemize}
+    \item $\chi$     : the comoving radial distance.
+    \item $\delta_G$ : Gaussian matter density field.
+    \item $\delta$   : physical matter density field.
+    \item $\phi$     : Newtonian potential (corresponding to $\delta_G$).
+    \item $a_g$      : Cartesian grid spacing.
+    \item $D(\chi)$  : linear growth factor of matter perturbations.
+    \item We use units $c=1$ throughout.
+  \end{itemize}
 
 \section{Algorithm}
-  \begin{itemize}
-    \item Generate a Gaussian realization of the linear density field
-      $\delta_G$ and the newtonian potential $\phi$ at $z=0$. For
-      this we use FFTW in a box able to hold a sufficiently large
-      sphere. In what follows, let $\Delta x$ be the comoving resolution 
-      of this Cartesian grid.
-    \item Interpolate the Cartesian grid into spherical shells. These
-      are generated with a width $\Delta r=f_r\Delta x$ (with $f_r=1$
-      by default). The pixels are defined using one of three pixelization
-      schemes:
-      \begin{itemize}
-        \item CEA (cylindrical equal-area): with $N_\theta$ divisions at
-          equal intervals in $\cos\theta$, and $2N_\theta$ divisions in
-          $\varphi$.
-        \item CAR (equirectangular projection):  with $N_\theta$ divisions at
-          equal intervals in $\theta$, and $2N_\theta$ divisions in
-          $\varphi$.
-        \item HEALPix: in this case $N_\theta$ is the {\tt nside} resolution
-          parameter, and there are $12N_\theta^2$ pixels in total.
-      \end{itemize}
-
-      Secondly, the largest transverse scale covered by a pixel is given by
-      $r_\perp^{\rm max}\sim\chi\,\alpha/N_\theta$, where $\chi$ is the comoving
-      distance to the shell and $\alpha=\sqrt{2\pi}$ for CEA\footnote{This is a
-        mere approximation. The largest scale probed by a pixel for CEA corresponds
-        to the width in $\theta$ of the pixel closest to the pole, and in that 
-        case the resolution would scale with ${\rm arccos}(1-2/N_\theta)$ instead
-        of $1/N_\theta$. However, this scales causes an excessive number of pixels
-        at large $\chi$, and thus we use the scaling $\sqrt{2\pi}/N_\theta$,
-        corresponding to the square-root of the pixel area.}, $\alpha=\pi$ for
-      CAR\footnote{The largest angle in this case corresponds to the side of
-        pixels around the equator.} and $\alpha=\sqrt{\pi/3}$ for
-      HEALPix\footnote{Here we use the square root of the pixel area.}. We
-      determine $N_\theta$ as \underline{the smallest power of 2 that satisfies}
-      $r_\perp^{\rm max}\leq f_\theta\Delta x$ (with $f_\theta=1$ by default).
-    \item While doing the interpolation we compute the relevant
-      quantities at $z=0$ that will be used later \TODO{$\delta_G$ is actually
-        linearly evolved at this stage. We should also note the $\sigma_G$
-        calculation}. These are:
-      \begin{itemize}
-        \item The radial velocity $v_r$, proportional to the radial
-          gradient of $\phi$. This is always computed, and is needed
-          for RSDs.
-        \item The second derivatives of $\phi$ in the transverse directions.
-          This is only computed if any lensing quantity (galaxy shear or
-          convergence maps) are required.
-        \item The time derivative of $\phi$, $\dot{\phi}$. This is only
-          computed if ISW maps are required.
-      \end{itemize}
-      All radial and transverse derivatives are estimated by first computing
-      the gradient or Hessian in Cartesian coordinates using finite differences
-      in the box and then rotating into spherical coordinates.
-      
-    \item The interpolation is carried out in three steps:
-      \begin{itemize}
-        \item First, each spherical voxel is sub-divided into 
-          $N_r^{\rm sub}\times (N_\theta^{\rm sub})^2$ sub-voxels, where $N^{\rm sub}_r$
-          is the number of divisions taken in the radial direction and $N^{\rm sub}_\theta$ is
-          the number of divisions in each of the two transverse directions.
-          
-        \item Each sub-voxel is then assigned a value of the corresponding field
-          ($\delta_G$, $v_r$, $\hat{H}_\perp\phi$ or $\dot{\phi}$) by using
-          tri-linear interpolation on the sub-voxel centre. Specifically, let
-          $(x,y,z)$ be comoving Cartesian coordinates of the sub-voxel, and let
-          $(i,j,k)$ denote the cell in the Cartesian grid such that
-          \begin{align}
-            x_i\leq x<x_{i+1},\hspace{12pt}x_j\leq y<x_{j+1},\hspace{12pt}
-            x_k\leq z<x_{k+1},
-          \end{align}
-          where $x_i\equiv i\,\Delta x$. Let $f_{i,j,k}$ be the value of the
-          corresponding field in the Cartesian grid denoted by $(i,j,k)$, and
-          let $h_x=(x-x_i)/\Delta x$ etc.. Then, the field value assigned to the sub-voxel
-          is given by:
-          \begin{align}
-            f(x,y,z)=&
-            f_{i,j,k}(1-h_x)(1-h_y)(1-h_z)+
-            f_{i,j,k+1}(1-h_x)(1-h_y)h_z+\\
-            &f_{i,j+1,k}(1-h_x)h_y(1-h_z)+
-            f_{i,j+1,k+1}(1-h_x)h_yh_z+\\
-            &f_{i+1,j,k}h_x(1-h_y)(1-h_z)+
-            f_{i+1,j,k+1}h_x(1-h_y)h_z+\\
-            &f_{i+1,j+1,k}h_xh_y(1-h_z)+
-            f_{i+1,j+1,k+1}h_xh_yh_z
-          \end{align}
-        \item The field value assigned to the voxel is then computed as an average
-          over sub-voxels.
-      \end{itemize}
-    \item The different fields are evolved according to their linear perturbation growth
-      factors and integrated along the line of sight in the case of lensing and ISW (see 
-      details below).
-    \item The evolved field values are used to Poisson-sample sources, give them RSDs
-      and shapes, produce convergence, ISW and intensity maps.
-  \end{itemize}
+  \begin{enumerate}
+    \item Generate a Gaussian realization of the linear density field $\delta_G$ and
+          the Newtonian potential $\phi$ at $z=0$. This is done by drawing from the
+          matter power spectrum in Fourier space on a Cartesian box large enough to
+          hold a sphere of radius $\chi(z_{\rm max})$ where $z_{\rm max}$ is the
+          maximum redshift of the simulation. From now on $a_g$ is the spacing of
+          the Cartesian grid on which the density field is generated.
+    \item Use $\delta_G$ to produce a physical matter density field $\delta$ (by
+          physical we mean $\delta>-1$) in the lightcone (i.e.
+          $\delta({\bf x})=\delta(t(\chi),\chi\nv)$). Currently two methods are
+	  supported for this: the lognormal transformation and Lagrangian perturbation
+	  theory (LPT).
+    \item Use $\delta$ and $\phi$ to generate a set of spherical shells containing the
+          main quantities needed to compute the necessary cosmological observables.
+          The details regarding the interpolation scheme used to go from Cartesian to
+          spherical coordinates, as well as the methods used to compute the different
+          quantities are described below.
+    \item Transform the lightcone quantities into the main cosmological observables.
+          Currently supported obsevables:
+          \begin{itemize}
+            \item Galaxy angular positions and redshifts (including RSDs).
+            \item Cosmic shear contribution to galaxy shapes.
+            \item Intensity maps for line-emitting species (including RSDs).
+            \item Lensing convergence maps for individual source plane redshifts.
+            \item Integrated Sachs-Wolfe perturbation for individual source plane
+                  redshifts.
+          \end{itemize}
+  \end{enumerate}
 
 \section{Relevant equations}
   Given the Cartesian realization of the Gaussian density field $\delta_G$ at $z=0$,
@@ -159,41 +105,131 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
   and ISW $\Delta^{\rm ISW}$ fields after integrating along the line
   of sight:
   \begin{align}
-    &\left(
+    &\hat{\Gamma}(\chi)\equiv\left(
     \begin{array}{cc}
       \kappa+\gamma_1 & \gamma_2\\
       \gamma_2 & \kappa-\gamma_1
     \end{array}\right)(\chi)=
     2\int_0^\chi d\chi'\chi'\left(1-\frac{\chi'}{\chi}\right)\hat{H}_\perp\phi(\chi')\\
     &\Delta^{\rm ISW}(\chi)=2\int_0^\chi d\chi'a(\chi')\dot{\phi}(\chi')
-  \end{align}    
+  \end{align}
+  
+\section{Generating the physical density field}
+  \subsection{Lognormal transformation}
+    At each cell we compute the physical density field in terms of the Gaussian field
+    as:
+    \begin{equation}
+      1+\delta(\chi\nv)=\exp\left[D(\chi)\delta_G(\chi\nv)-
+                                D^2(\chi)\frac{\sigma_G^2}{2}\right],
+    \end{equation}
+    where $\sigma_G^2$ is the variance of the Gaussian density field at $z=0$ and
+    $D(\chi)$ is the linear growth factor of matter perturbations.
+
+  \subsection{Lagrangian perturbation theory}
+    In this case the density field is generated in two steps:
+    \begin{enumerate}
+      \item Compute the (first- or second-order) displacement field $\disp$
+            corresponding to $\delta_G$ in the lightcone.
+      \item Interpolate the perturbed positions ${\bf x}={\bf q}+\disp$
+            (where ${\bf q}$ is the comoving position of each grid point)
+            into a density grid. The code allows for three different interpolation
+            schemes: NGP, CIC and TSC.
+    \end{enumerate}
+  \subsubsection{LPT notes}
+    Start by writing the displacement in a perturbation series
+    $\disp=\sum_{i=1}\disp^{(i)}$. The first-order displacement can be computed
+    in terms of the linear density field by solving the equation
+    \begin{equation}
+      \nabla\disp^{(1)}=-\delta_G.
+    \end{equation}
+    This is done in Fourier space by assuming zero vorticity:
+    \begin{equation}
+      \disp^{(1)}_{\bf k}=i\frac{{\bf k}}{k^2}\delta_{G,{\bf k}}.
+    \end{equation}
+    The second-order displacement can be computed in terms of the first-order	displacement as 
+    \begin{equation}
+      \disp^{(2)}_{\bf k}=-i\frac{{\bf k}}{k^2}\Upsilon_{\bf k},
+      \hspace{12pt}
+      \Upsilon({\bf x})=\frac{1}{2}\sum_{i\neq j} \left[\partial_i\Psi^{(1)}_i\partial_j\Psi^{(1)}_j - \partial_j\Psi^{(1)}_i\partial_i\Psi^{(1)}_j\right].
+    \end{equation}
+    The total displacement in the lightcone is given by $\disp(\chi\nv)=D(\chi)\disp^{(1)}(\chi\nv)+D_2(\chi)\disp^{(2)}(\chi\nv)$, where $D_2$ is the second-order growth factor, which we approximate as $D_2(a)=-\frac{3}{7}D^2(a)[\Omega_M(a)]^{-1/143}$.
+
+    
+\section{Cartesian to spherical}
+  The Cartesian fields are interpolated into spherical shells as follows. All shells have a comoving width $\Delta r$ and are divided into a $N_{\rm pix}$ pixels, where $N_{\rm pix}$ varies as a function of the shell radius as described below. Three pixelization schemes are supported:
+  \begin{itemize}
+    \item CEA (cylindrical equal-area): with $N_\theta$ divisions at
+      equal intervals in $\cos\theta$, and $2N_\theta$ divisions in
+      $\varphi$ (i.e. $N_{\rm pix}=2N_\theta^2$).
+    \item CAR (equirectangular projection):  with $N_\theta$ divisions at
+      equal intervals in $\theta$, and $2N_\theta$ divisions in
+      $\varphi$ (i.e. $N_{\rm pix}=2N_\theta^2$).
+    \item HEALPix: in this case $N_\theta$ is the {\tt nside} resolution
+      parameter (i.e. $N_{\rm pix}=12N_\theta^2$).
+  \end{itemize}
+  The size of the voxels defined by these pixels is defined by $\Delta r$ and $N_\theta(r)$. These are defined by trying to preserve the resolution of the Cartesian grid after interpolation. Thus
+  \begin{itemize}
+    \item We define $\Delta r=f_r\,a_{\rm grid}$, with $f_r=1$ by default.
+    \item $N_\theta$ is defined for each shell by relating the maximum comoving transverse scale of the voxels at the comoving distance of that shell to the grid spacing. At a shell at comoving distance $\chi$, this is given by $r_\perp^{\rm max}\sim\alpha\chi/N_\theta$, with $\alpha=\sqrt{2\pi}$ for CEA\footnote{This is a mere approximation. The largest scale probed by a pixel for CEA corresponds to the width in $\theta$ of the pixel closest to the pole, and in that case the resolution would scale with ${\rm arccos}(1-2/N_\theta)$ instead of $1/N_\theta$. However, this scaling causes an excessive number of pixels at large $\chi$, and thus we use the scaling $\sqrt{2\pi}/N_\theta$, corresponding to the square-root of the pixel area.}, $\alpha=\pi$ for CAR\footnote{The largest angle in this case corresponds to the side of pixels around the equator.} and $\alpha=\sqrt{\pi/3}$ for HEALPix\footnote{Here we use the square root of the pixel area.}. We determine $N_\theta$ as \underline{the smallest power of 2 that satisfies} $r_\perp^{\rm max}\leq f_\theta\Delta x$ (with $f_\theta=1$ by default). The requirement that $N_\theta$ be a power of $2$ is motivated by the need to compute integrated quantities, for which it is convenient to be able to relate any pixel at a given resolution to another pixel at a lower resolution.
+  \end{itemize}
+
+  While doing the interpolation we compute the relevant quantities in the lightcone that will be used later. These are:
+  \begin{itemize}
+    \item The radial velocity $v_r$, proportional to the radial gradient of $\phi$. This is always computed, and is needed for RSDs.
+    \item The second derivatives of $\phi$ in the transverse directions. This is only computed if any lensing quantity (galaxy shear or convergence maps) is required.
+    \item The time derivative of $\phi$, $\dot{\phi}$. This is only computed if ISW maps are required.
+  \end{itemize}
+  All radial and transverse derivatives are estimated by first computing the gradient or Hessian in Cartesian coordinates using finite differences in the box and then rotating into spherical coordinates (the corresponding equations are given above). In the case of lensing and ISW, the final quantities are integrated along the line of sight after interpolation.
+
+  The interpolation is carried out in three steps:
+  \begin{itemize}
+    \item First, each spherical voxel is sub-divided into $N_r^{\rm sub}\times (N_\theta^{\rm sub})^2$ sub-voxels, where $N^{\rm sub}_r$ is the number of divisions taken in the radial direction and $N^{\rm sub}_\theta$ is the number of divisions in each of the two transverse directions.
+    \item Each sub-voxel is then assigned a value of the corresponding field ($\delta$, $v_r$, $\hat{H}_\perp\phi$ or $\dot{\phi}$) by using tri-linear interpolation on the sub-voxel centre. Specifically, let $(x,y,z)$ be comoving Cartesian coordinates of the sub-voxel, and let $(i,j,k)$ denote the cell in the Cartesian grid such that
+    \begin{align}
+      x_i\leq x<x_{i+1},\hspace{12pt}x_j\leq y<x_{j+1},\hspace{12pt}
+      x_k\leq z<x_{k+1},
+    \end{align}
+    where $x_i\equiv i\,\Delta x$. Let $f_{i,j,k}$ be the value of the corresponding field in the Cartesian grid denoted by $(i,j,k)$, and let $h_x=(x-x_i)/\Delta x$ etc.. Then, the field value assigned to the sub-voxel is given by:
+    \begin{align}
+      f(x,y,z)=&
+       f_{i,j,k}(1-h_x)(1-h_y)(1-h_z)+
+       f_{i,j,k+1}(1-h_x)(1-h_y)h_z+\\
+      &f_{i,j+1,k}(1-h_x)h_y(1-h_z)+
+       f_{i,j+1,k+1}(1-h_x)h_yh_z+\\
+      &f_{i+1,j,k}h_x(1-h_y)(1-h_z)+
+       f_{i+1,j,k+1}h_x(1-h_y)h_z+\\
+      &f_{i+1,j+1,k}h_xh_y(1-h_z)+
+       f_{i+1,j+1,k+1}h_xh_yh_z
+    \end{align}
+    \item The field value assigned to the voxel is then computed as an average over sub-voxels.
+  \end{itemize}
 
 
 \section{Sources}
   At each voxel (defined by its coordinates $\chi,\nv$), we compute the physical source
   density for each source type $a$ as
   \begin{equation}
-    n_a(\chi,\hat{\bf n})=
-    \bar{n}_a(\chi)\,
-    \exp\left[D(\chi)b_a(\chi)\left(\delta_G(\chi,\hat{\bf n})-
-      D(\chi)b_a(\chi)\sigma_G^2/2\right)\right],
+    n_a(\chi\nv)=
+    \bar{n}_a(\chi)\,\frac{1+B(\delta(\chi\nv),b_a(\chi))}{\langle1+B(\delta,b_a(\chi))\rangle},
   \end{equation}
-  where $\bar{n}_a$ is the mean number density of source, and $\sigma_G^2$
-  is the variance of the density field at $z=0$. $\bar{n}$ is related to
-  $dn/(d\Omega dz)$ as $dn/(d\Omega dz)=\bar{n}\,\chi^2/H$.
+  where $B(\delta,b)$ is a bias model relating the matter and source overdensities. The mean number density $\bar{n}$ is related to the counts as a function of redshift $dn/(d\Omega dz)$ as $dn/(d\Omega dz)=\bar{n}\,\chi^2/H$. Currently two bias models are supported:
+  \begin{align}
+    &\text{Model A:}\hspace{12pt}1+B(\delta,b)=(1+\delta)^b,\\
+    &\text{Model B:}\hspace{12pt}1+B(\delta,b)=\frac{(1+\delta)^b}{(1+\delta^2)^{(b-1)/2}}.
+  \end{align}
+  Both bias models satisfy two sanity requirements:
+  \begin{align}
+    &1+B(\delta,b)\geq0\hspace{6pt}\forall\,\delta\in[-1,\infty)\\
+    &B(\delta\rightarrow0,b)=b\,\delta,
+  \end{align}
+  and the second one is designed such that $B(\delta\rightarrow\infty,b)=\delta$ in order to prevent the galaxy density from blowing up in high-density regions for $b>1$. Note that the average $\langle1+B\rangle$ is precomputed in a previous step.
 
-  Then, at each pixel we sample a number of sources from a Poisson distribution with mean
-  $\lambda\equiv V_{\rm vox}n_a$, where $V_{\rm vox}$ is the comoving volume of each
-  spherical voxel. We then place the resulting number of particles inside each voxel at
-  random within it. Each source is given a cosmological redshift $z_c$
-  corresponding to its comoving distance by inverting
+  At each pixel we sample a number of sources from a Poisson distribution with mean $\lambda\equiv V_{\rm vox}n_a$, where $V_{\rm vox}$ is the comoving volume of each spherical voxel. We then place the resulting number of particles inside each voxel at random within it. Each source is given a cosmological redshift $z_c$ corresponding to its comoving distance by inverting
   \begin{equation}
     \chi=\int_0^{z_c}\frac{dz}{H(z)}.
   \end{equation}
 
-  In addition, each source is given a redshift distortion $\Delta z=v_r$ according to the
-  value of the comoving velocity field in their corresponding voxel. Each source is also
-  assigned two ellipticity components based on the value of the local shear field:
+  In addition, each source is given a redshift distortion $\Delta z=v_r$ according to the value of the comoving velocity field in their corresponding voxel. Each source is also assigned two ellipticity components based on the value of the local shear field:
   \begin{equation}
     \epsilon_1=2\gamma_1,\hspace{12pt}\epsilon_2=2\gamma_2.
   \end{equation}
@@ -203,123 +239,93 @@ $\chi$ is comoving radial density. We use units $c=1$ throughout.
   \end{equation}
 
 \section{Intensity mapping}
-  The brightness temperature for a line-emitting species $a$ in a voxel $i$ is
+  The brightness temperature for a line-emitting species $a$ in a voxel is
   \begin{equation}
-    T_a(\nu,\hat{\bf n})=\bar{T}_a(\nu)\left[1+\Delta^a_i(\chi\hat{\bf n})\right].
+    T_a(\nu,\hat{\bf n})=\bar{T}_a(\nu)\left[1+\Delta^a(\chi\hat{\bf n})\right].
   \end{equation}
   where the mean brightness temperature is
   \begin{equation}
     \bar{T}_a(z)=\frac{3\hbar A_{21} x_2 c^2}{32\pi G k_B m_a \nu_{21}^2}
     \frac{H_0^2\Omega_{a}(z)(1+z)^2}{H(z)}
   \end{equation}
-  and $\Delta^a_i$ is the redshift-space overdensity of the line-emitting species
-  smoothed over the voxel. Here $x_2$ is the fraction of atoms in the excited state,
-  $\Omega_a$ is the fractional density of the species, $\nu_{21}$ is the rest-frame
-  frequency of the transition and $A_{21}$ is the corresponding Einstein coefficient
-  for emission.
+  and $\Delta^a_i$ is the redshift-space overdensity of the line-emitting species smoothed over the voxel. Here $x_2$ is the fraction of atoms in the excited state, $\Omega_a$ is the fractional density of the species, $\nu_{21}$ is the rest-frame frequency of the transition and $A_{21}$ is the corresponding Einstein coefficient for emission.
 
   The procedure to generate intensity maps is:
   \begin{itemize}
-    \item We cycle over each voxel in the spherical shells for which we have stored
-      the value of the density and velocity fields.
+    \item We cycle over each voxel in the spherical shells for which we have stored the value of the density and velocity fields.
     \item We compute the overdensity in the voxel using a log-normal model:
       \begin{equation}
-        1+\delta^a=
-        \exp\left[D(\chi)b_a(\chi)\left(\delta_G(\chi,\hat{\bf n})-
-          D(\chi)b_a(\chi)\sigma_G^2/2\right)\right].
+        1+\Delta^a(\chi\nv)=\frac{1+B(\delta(\chi\nv),b_a(\chi))}{\langle1+B(\delta,b_a(\chi))\rangle}
       \end{equation}
-    \item We sub-sample the voxel in $N_{\rm sub}$ random points. Each point is
-      assigned a brightness temperature
+    \item We sub-sample the voxel in $N_{\rm sub}$ random points. Each point is assigned a brightness temperature
       \begin{equation}
-        T_{a,{\rm sub}}=\bar{T_a}(\nu)\,(1+\delta^a_i)\frac{v_{\rm vox}}{N_{\rm sub}v_{\rm IMAP}},
+        T_{a,{\rm sub}}=\bar{T_a}(\nu)\,(1+\Delta^a)\frac{V_{\rm vox}}{N_{\rm sub}V_{\rm IMAP}},
       \end{equation}
-      where $v_{\rm vox}$ is the comoving volume of the voxel and $v_{\rm IMAP}$ is the
-      comoving volume of the intensity mapping pixel. Each point is also assigned a redshift
-      displacement given by $v_r$, the value of the lightcone-evolved radial velocity
-      field in the voxel.
-    \item We compute the frequency channel corresponding to each point from their
-      redshift (computed as the sum of its cosmological redshift and the RSD term),
-      as well as the pixel index in that frequency channel corresponding to the
-      angular coordinates of the point. We then add the brightness temperature of
-      this point computed in the previous step to the total brightness temperature
-      in the pixel.
-    \item Each intensity mapping pixel is finally divided by the total comoving
-      volume covered by the pixel.
+    where $V_{\rm IMAP}$ is the comoving volume of the intensity mapping pixel. Each point is also assigned a redshift displacement given by $v_r$, the value of the lightcone-evolved radial velocity field in the voxel.
+    \item We compute the frequency channel corresponding to each point from their redshift (computed as the sum of its cosmological redshift and the RSD term), as well as the pixel index in that frequency channel corresponding to the angular coordinates of the point. We then add the brightness temperature of this point computed in the previous step to the total brightness temperature in the pixel.
   \end{itemize}
   
 \section{Shear}
-  We compute the shear tensor as
+  The cosmic shear tensor is integrated along the line of sight by breaking it up into two Riemann integrals as ($I$ and $J$) 
   \begin{align}
-    &\hat{T}\equiv\left(
-    \begin{array}{ccc}
-      \phi_{xx}&\phi_{xy}&\phi_{xz}\\
-      \phi_{yx}&\phi_{yy}&\phi_{yz}\\
-      \phi_{zx}&\phi_{zy}&\phi_{zz}\\
-    \end{array}\right),\hspace{12pt} 
-    \hat{R}\equiv\left(
-    \begin{array}{ccc}
-      \sin\theta\,\cos\phi&\sin\theta\,\sin\phi&\cos\theta\\
-      \cos\theta\,\cos\phi&\cos\theta\,\sin\phi&-\sin\theta\\
-      -\sin\phi           &\cos\phi            &0\\
-    \end{array}\right),\\
-    &\hat{t}\equiv \hat{R}\cdot\hat{T}\cdot\hat{R}^T,\hspace{12pt}
-    \hat{\tau}\equiv\left(
-    \begin{array}{cc}
-      t_{11}&t_{12}\\
-      t_{21}&t_{22}
-    \end{array}\right),\\
-    &\hat{\Gamma}(\chi,\hat{\bf n})
-    \equiv\int_0^\chi d\chi'\,\hat{\tau}(\chi'\hat{\bf n})\,
-    \chi'\left(1-\frac{\chi'}{\chi}\right)=
-    \int_0^\chi d\chi'\,\hat{\tau}(\chi'\hat{\bf n})\,\chi'-
-    \frac{1}{\chi}\int_0^\chi d\chi'\,\hat{\tau}(\chi'\hat{\bf n})\,\chi'^2.\\
-    &\hat{\Gamma}(\chi_i)=\hat{I}_{i}-\frac{1}{\chi_{i+1/2}}\hat{J}_{i},\hspace{12pt}
-    \hat{I}_{i}=\hat{I}_{i-1}+\hat{\tau}(\chi_i)\frac{\chi_{i+1/2}^2-\chi_{i-1/2}^2}{2},\hspace{12pt}
-    \hat{J}_{i}=\hat{J}_{i-1}+\hat{\tau}(\chi_i)\frac{\chi_{i+1/2}^3-\chi_{i-1/2}^3}{3}
+    &\hat{\Gamma}(\chi_i)=\hat{I}_{i}-\frac{1}{\chi_{i+1/2}}\hat{J}_{i},\\
+    &\hat{I}_{i}=\hat{I}_{i-1}+[\hat{H}_\perp\phi](\chi_i)\frac{\chi_{i+1/2}^2-\chi_{i-1/2}^2}{2},\hspace{12pt}
+    \hat{J}_{i}=\hat{J}_{i-1}+[\hat{H}_\perp\phi](\chi_i)\frac{\chi_{i+1/2}^3-\chi_{i-1/2}^3}{3},
   \end{align}
+  where $\chi_i\equiv i\,\Delta r$. Note that the pixels two adjacent spherical shells may have different resolutions. However, due to the hyerarchical nature of the pixelization scheme (going up one level in resolution implies sub-dividing a pixel into 4 sub-pixels), it is always possible to relate pixels between adjacent shells.
 
-\section{CMB lensing}
-  For $\kappa\equiv{\rm Tr}(\hat{\Gamma})/2$ we compute, from the simulation, $\kappa(\chi_{\rm max})$,
-  where $\chi_{\rm max}$ is the maximum radial distance that fits in the box. In order to get CMB
-  lensing we need $\kappa(\chi_{\rm LSS})=\tilde{\kappa}_{\rm max}+\Delta\kappa$, where
+\section{Convergence and ISW}
+  The simulations only cover a limited redshift range $z\in[0,z_{\rm max}]$, and therefore for source planes at $z_{\rm src}>z_{\rm max}$, the convergence and ISW maps must be supplemented with fictitious fluctuations beyond $z_{\rm max}$. This is done as follows:
+  
+  Let $f(\chi_{\rm src},\nv)$ be an integrated field (in our case either $\kappa$ or $\Delta^{\rm ISW}$). It is always possible to relate $f$ to the intervening density fluctuations as
+  \begin{equation}
+    f(\chi_{\rm src},\nv)=\int_0^{\chi_{\rm src}}d\chi F_f(t(\chi),\chi\nv)\,w_f(\chi,\chi_{\rm src}),
+  \end{equation}
+  where $w_f$ is the so-called {\sl window function}, and $F_f$ is a fluctuation (e.g. $\delta$ or $\dot{\phi}$. For $\kappa$ and $\Delta^{\rm ISW}$ these are given by:
   \begin{align}
-    \tilde{\kappa}_{\rm max}\equiv\int_0^{\chi_{\rm max}}   d\chi\delta(\chi)\frac{\chi}{2}\left(1-\frac{\chi}{\chi_{\rm LSS}}\right)\\
-    \Delta\kappa\equiv\int_{\chi_{\rm max}}^{\chi_{\rm LSS}}d\chi\delta(\chi)\frac{\chi}{2}\left(1-\frac{\chi}{\chi_{\rm LSS}}\right).
+    F_\kappa\equiv\delta,\hspace{12pt}&w_\kappa(\chi,\chi_{\rm src})=\frac{3}{2}\Omega_MH_0^2\left(1-\frac{\chi}{\chi_{\rm src}}\right)\frac{\chi}{a(\chi)}\\
+    F_{\rm ISW}\equiv\dot{\phi},\hspace{12pt}&w_{\rm ISW}(\chi,\chi_{\rm src})=2a(\chi).
   \end{align}
-  The strategy to compute these is:
-  \begin{itemize}
-    \item We compute $\tilde{\kappa}_{\rm max}$ from $\kappa(\chi_{\rm max})$ using the same
-      strategy used for shear, but taking care to divide by $\chi_{\rm LSS}$ instead of $\chi_{\rm max}$.
-    \item We compute $\Delta\kappa$ as a Gaussian realization constrained to have the right correlation
-      with $\tilde{\kappa}_{\rm max}$. Do do this we start by rewriting the previous equation as
-      \begin{align}
-        &\tilde{\kappa}_{\rm max}\equiv \int d\chi w_1(\chi)\delta(\chi\hat{\bf n}),\hspace{12pt}
-        \Delta \kappa           \equiv \int d\chi w_2(\chi)\delta(\chi\hat{\bf n}),\\
-        &w_1(\chi)\equiv\frac{\chi}{2}\left(1-\frac{\chi}{\chi_{\rm LSS}}\right)
-        \Theta(\chi,0,\chi_{\rm max}),\hspace{12pt}
-        w_2(\chi)\equiv\frac{\chi}{2}\left(1-\frac{\chi}{\chi_{\rm LSS}}\right)
-        \Theta(\chi,\chi_{\rm max},\chi_{\rm LSS}).
-      \end{align}
-      where $\Theta(x,x_0,x_f)$ is a top-hat function.
+  
+  We start by splitting $f$ into the contributions covered by the simulation and everything outside:
+  \begin{align}
+    f(\chi_{\rm src},\nv)=f_1(\nv)+f_2(\nv)\equiv\int_0^{\infty}d\chi F_f(\chi)\,w_{f,1}(\chi)+\int_0^{\infty}d\chi F_f(\chi)\,w_{f,2}(\chi)\\
+    w_{f,1}(\chi)=w_f(\chi,\chi_{\rm src})\Theta(\chi;0,\chi_{\rm max}),\hspace{6pt}
+    w_{f,2}(\chi)=w_f(\chi,\chi_{\rm src})\Theta(\chi;\chi_{\rm max},\chi_{\rm src}),
+  \end{align}
+  where $\Theta(\chi;\chi_1,\chi_2)$ is a top-hat window function between $\chi_1$ and $\chi_2$. Since $f_1$ can be computed from the simulation, and the only remaining task is to draw a random sample of $f_2$ from the distribution $p(f_2|f_1)$. Assuming Gaussian statistics, this distribution is completely determined by the second order moments of $f_1$ and $f_2$, which are given in Fourier space by
+  \begin{align}
+   \langle f_{i,\ell,m}f^*_{j,\ell',m'}\rangle
+   &\equiv C^{f,ij}_\ell\delta_{\ell\ell'}\delta_{mm'}\\
+   &=\delta_{\ell\ell'}\delta_{mm'}\frac{2}{\pi}\int dk k^2\int d\chi_1 w_{f,i}(\chi_1)j_\ell(k\chi_1)\int d\chi_1 w_{f,j}(\chi_2)j_\ell(k\chi_2)\,P_F(t(\chi_1),t(\chi_2),k),
+  \end{align}
+  where
+  \begin{align}
+    \langle F_f(t_1,{\bf k})F^*_f(t_2,{\bf k}')\rangle\equiv\delta({\bf k}-{\bf k}')P_F(t_1,t_2,k).
+  \end{align}
+  Plugging these into $p(f_2|f_1)$ it's straightforward to prove that $f_{2,\ell,m}$ can be drawn as Gaussian numbers with mean and variance:
+  \begin{equation}
+    \langle f_{2,\ell,m}|f_{1,\ell,m}\rangle=\frac{C^{f,12}_\ell}{C^{f,11}_\ell}f_{1,\ell,m},\hspace{12pt}
+    {\rm Var}(f_{2,\ell,m}|f_{1,\ell,m})=C^{f,22}_\ell-\frac{(C^{f,12}_\ell)^2}{C^{f,11}_\ell}.
+  \end{equation}
 
-      The covariance matrix of the two terms is therefore
-      \begin{align}
-        &\langle|\tilde{\kappa}_{{\rm max},\ell m}|^2\rangle=\frac{2}{\pi}\int_0^\infty dk\,k^2\,P(k)\,w^2_{1,\ell}(k),\hspace{12pt}
-        \langle|\Delta\kappa_{\ell m}|^2\rangle=\frac{2}{\pi}\int_0^\infty dk\,k^2\,P(k)\,w^2_{2,\ell}(k)\\
-        &\langle{\rm Re}(\tilde{\kappa}_{{\rm max},\ell m}\Delta\kappa_{\ell m})\rangle=
-        \frac{2}{\pi}\int_0^\infty dk\,k^2\,P(k)\,w_{1,\ell}(k)\,w_{2,\ell}(k),\hspace{12pt}
-        w_{i,\ell}(k)\equiv\int_0^\infty d\chi\,w_i(\chi)\,j_\ell(k\chi)
-      \end{align}
+  For simplicity we will work in the Limber approximation, in which
+  \begin{equation}
+    j_\ell(k\chi)=\frac{1}{k}\sqrt{\frac{\pi}{2\ell+1}}\,\delta\left(\chi-\chi_\ell\right).
+    \hspace{12pt}\chi_\ell\equiv\frac{\ell+1/2}{k}
+  \end{equation}
+  In this case, the second-order moments are
+  \begin{equation}
+   C^{f,ij}_\ell=\frac{2}{2\ell+1}\int dk\,w_{f,i}(\chi_\ell)\,w_{f,j}(\chi_\ell)\,P_F(t(\chi_\ell),t(\chi_\ell),k).
+  \end{equation}
+  Since $w_{f,i}(\chi)\,w_{f,j}(\chi)=\delta_{ij}\left[w_{f,i}(\chi)\right]^2$, the cross-correlation is zero, and thus $f_2$ can be drawn as a zero-mean Gaussian number with variance given by its auto-power spectrum. For lensing convergence and ISW these are given by
+  \begin{align}
+    C^{\kappa,22}_\ell&=\frac{2}{2\ell+1}\int dk\,\left[\frac{3}{2}\Omega_MH_0^2\frac{\ell(\ell+1)}{k^2}\frac{\chi_{\rm src}-\chi_\ell}{\chi_\ell\chi_{\rm src}}\frac{D(\chi_\ell)}{a(\chi_\ell)}\Theta(\chi_\ell;\chi_{\rm max},\chi_{\rm src})\right]^2P(k),\\
+    C^{{\rm ISW},22}_\ell&=\frac{2}{2\ell+1}\int dk\,\left[\frac{3\Omega_MH_0^2}{k^2}D(\chi_\ell)\,H(\chi_\ell)\,[1-f(\chi_\ell)]\,\Theta(\chi_\ell;\chi_{\rm max},\chi_{\rm src})\right]^2P(k),
+  \end{align}
+  where $P(k)$ is the density power spectrum at $z=0$.
 
-      Thus we generate a realization of $\Delta\kappa$ at each multipole order as a Gaussian number
-      with distribution $\mathcal{N}(\mu,\sigma)$, where
-      \begin{align}
-        \mu=\frac{\langle{\rm Re}(\tilde{\kappa}_{{\rm max},\ell m}\Delta\kappa_{\ell m})\rangle}
-        {\langle|\tilde{\kappa}_{{\rm max},\ell m}|^2\rangle}\tilde{\kappa}_{{\rm max},\ell m},\hspace{12pt}
-        \sigma=\langle|\Delta\kappa_{\ell m}|^2\rangle-\frac{\langle{\rm Re}(\tilde{\kappa}_{{\rm max},\ell m}\Delta\kappa_{\ell m})\rangle^2}{\langle|\tilde{\kappa}_{{\rm max},\ell m}|^2\rangle}
-      \end{align}
-  \end{itemize}
-
+  
 \end{document}
 
 \section{Full-sky expressions}
@@ -376,6 +382,7 @@ where
  \frac{D(\chi_\ell)}{a(\chi_\ell)\chi_\ell}\frac{\chi_*-\chi_\ell}{\chi_*}\Theta(\chi_\ell-\chi_*)\longrightarrow
  \frac{3}{2}\Omega_{M,0}H_0^2\,\frac{\chi_\ell D(\chi_\ell)}{a(\chi_\ell)}\frac{\chi_*-\chi_\ell}{\chi_*}\Theta(\chi_\ell-\chi_*)
 \end{align}
+
 
 
 
