@@ -1,9 +1,0 @@
-import numpy as np
-import matplotlib.pyplot as plt
-
-def mk_grid(nside) :
-    fig=plt.figure()
-    ax=fig.add_subplot(111,aspect='equal')
-    ax.plot([-1,1],[-1,1])
-    plt.show()
-mk_grid(16)
