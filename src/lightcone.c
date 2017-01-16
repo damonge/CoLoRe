@@ -21,11 +21,38 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
+static inline int get_ipix_old(int ipix,int nside_ratio,int ratio_oldnew)
+{
+#if PIXTYPE==PT_HPX
+  return ipix/(ratio_oldnew*ratio_oldnew);
+#else
+  int icth=ipix/nside_ratio;
+  int iphi=ipix-icth*nside_ratio;
+  int icth_old=icth/ratio_oldnew;
+  int iphi_old=iphi/ratio_oldnew;
+  return iphi_old+icth_old*nside_ratio/ratio_oldnew;
+#endif //PIXTYPE==PT_HPX
+}
+
+static inline double get_pixel_area(int ipix,int iphi_0,int icth_0,int nside,int nside_ratio)
+{
+#if PIXTYPE==PT_HPX
+  return M_PI/(3*nside*nside);
+#elif PIXTYPE==PT_CEA
+  return 2*M_PI/(nside*nside);
+#elif PIXTYPE==PT_CAR
+  int icth=icth_0+ipix/nside_ratio;
+  return (cos(M_PI-(icth+1)*M_PI/nside)-cos(M_PI-(icth+0)*M_PI/nside))*M_PI/nside;
+#endif //PIXTYPE
+}
+
 static inline double get_cosine(double index,double dx)
 {
 #if PIXTYPE==PT_CEA
   return index*dx-1;
 #elif PIXTYPE==PT_CAR
+  return cos(M_PI-index*dx);
+#else
   return cos(M_PI-index*dx);
 #endif //PIXTYPE
 }
@@ -139,9 +166,8 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
 	  double ndens=ndens_of_z_srcs(par,redshift,ipop);
 	  if(ndens>0) {
 	    double bias=bias_of_z_srcs(par,redshift,ipop);
-	    double gfb=dgrowth_of_r(par,r)*bias;
-	    double lambda=ndens*cell_vol*
-	      exp(gfb*(par->grid_dens[index]-0.5*gfb*par->sigma2_gauss));
+	    double dnorm=norm_srcs_of_z(par,redshift,ipop);
+	    double lambda=ndens*cell_vol*pow(1+par->grid_dens[index],bias)*dnorm;
 	    npp=rng_poisson(lambda,rng_thr);
 	  }
 
@@ -293,36 +319,27 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       double ndens=ndens_of_z_srcs(par,redshift,ipop);
       if(ndens>0) {
 	int ib;
-	int nside=par->oi_beams[0]->nside_arr[ir];
-	double dphi=M_PI/nside;
-#if PIXTYPE==PT_CEA
-	double dcth=2./nside;
-	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
-#elif PIXTYPE==PT_CAR
-	double dth=M_PI/nside;
-#endif //PIXTYPE
 	double bias=bias_of_z_srcs(par,redshift,ipop);
-	double gfb=dgrowth_of_r(par,rm)*bias;
+	double dnorm=norm_srcs_of_z(par,redshift,ipop);
 	for(ib=0;ib<par->n_beams_here;ib++) {
-	  int ind_cth;
-	  int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir]+1;
-	  int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
+	  int ipix;
+	  OnionInfo *oi=par->oi_beams[ib];
 	  flouble *dens_slice=par->dens_beams[ib][ir];
 	  int *nsrc_slice=par->nsrc_beams[ib][ir];
-	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
-	    int ind_phi;
-	    int ind_cth_t=ind_cth*nphi;
-#if PIXTYPE==PT_CAR
-	    double dcth=get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+1.0,dth)-
-	      get_cosine(par->oi_beams[ib]->icth0_arr[ir]+ind_cth+0.0,dth);
-	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3;
+#if PIXTYPE!=PT_CAR
+	  double pixarea=get_pixel_area(0,0,0,oi->nside_arr[ir],0);
+	  double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
 #endif //PIXTYPE
-	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
-	      double lambda=ndens*cell_vol*exp(gfb*(dens_slice[ind_cth_t+ind_phi]-0.5*gfb*par->sigma2_gauss));
-	      int npp=rng_poisson(lambda,rng_thr);
-	      nsrc_slice[ind_cth_t+ind_phi]=npp;
-	      np_tot_thr[ithr]+=npp;
-	    }
+	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+#if PIXTYPE==PT_CAR
+	    double pixarea=get_pixel_area(ipix,oi->iphi0_arr[ir],oi->icth0_arr[ir],
+					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
+	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
+#endif //PIXTYPE
+	    double lambda=ndens*cell_vol*pow(1+dens_slice[ipix],bias)*dnorm;
+	    int npp=rng_poisson(lambda,rng_thr);
+	    nsrc_slice[ipix]=npp;
+	    np_tot_thr[ithr]+=npp;
 	  }
 	}
       }
@@ -386,65 +403,44 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
       double ndens=ndens_of_z_srcs(par,redshift,ipop);
       if(ndens>0) {
 	int ib;
-	int nside=par->oi_beams[0]->nside_arr[ir];
-#if PIXTYPE==PT_CEA
-	double dcth=2./nside;
-#elif PIXTYPE==PT_CAR
-	double dth=M_PI/nside;
-#endif //PIXTYPE
-	double dphi=M_PI/nside;
-	double vg=vgrowth_of_r(par,rm);
 	for(ib=0;ib<par->n_beams_here;ib++) {
-	  int ind_cth;
-	  int icth0=par->oi_beams[ib]->icth0_arr[ir];
-	  int iphi0=par->oi_beams[ib]->iphi0_arr[ir];
-	  int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir]+1;
-	  int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
+	  int ipix;
+	  OnionInfo *oi=par->oi_beams[ib];
 	  flouble *vrad_slice=par->vrad_beams[ib][ir];
 	  int *nsrc_slice=par->nsrc_beams[ib][ir];
-	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
-	    int ind_phi;
-	    int ind_cth_t=ind_cth*nphi;
-#if PIXTYPE==PT_CEA
-	    double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
-#elif PIXTYPE==PT_CAR
-	    double cth0=get_cosine(ind_cth+icth0+0.0,dth);
-	    double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
-#endif //PIXTYPE
-	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
-	      int ip;
-	      double e1=0,e2=0;
-	      double phi0=(ind_phi+iphi0)*dphi;
-	      int npp=nsrc_slice[ind_cth_t+ind_phi];
-	      double dz_rsd=vg*vrad_slice[ind_cth_t+ind_phi];
-	      if(par->shear_srcs[ipop]) {
-		double pxx=par->p_xx_beams[ib][ir][ind_cth_t+ind_phi];
-		double pxy=par->p_xy_beams[ib][ir][ind_cth_t+ind_phi];
-		double pyy=par->p_yy_beams[ib][ir][ind_cth_t+ind_phi];
-		double g1=pxx-pyy;
-		double g2=2*pxy;
+	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+	    int ip;
+	    double e1=0,e2=0;
+	    int npp=nsrc_slice[ipix];
+	    double dz_rsd=vrad_slice[ipix];
+	    if(par->shear_srcs[ipop]) {
+	      double pxx=par->p_xx_beams[ib][ir][ipix];
+	      double pxy=par->p_xy_beams[ib][ir][ipix];
+	      double pyy=par->p_yy_beams[ib][ir][ipix];
+	      double g1=pxx-pyy;
+	      double g2=2*pxy;
 #ifdef _NONLINEAR_ELLIPTICITIES
-		double kappa=pxx+pyy;
-		double fac=2*(1-kappa)/((1-kappa)*(1-kappa)+g1*g1+g2*g2);
+	      double kappa=pxx+pyy;
+	      double fac=2*(1-kappa)/((1-kappa)*(1-kappa)+g1*g1+g2*g2);
 #else //_NONLINEAR_ELLIPTICITIES
-		double fac=2;
+	      double fac=2;
 #endif //_NONLINEAR_ELLIPTICITIES
-		e1=fac*g1;
-		e2=fac*g2;
-	      }
-	      for(ip=0;ip<npp;ip++) {
-		double cth=cth0+dcth*rng_01(rng_thr);
-		double phi=phi0+dphi*rng_01(rng_thr);
-		double r=r0+dr*rng_01(rng_thr); //TODO: this is not completely correct
-		lint pid=np_tot_thr[ithr];
-		par->srcs[ipop][pid].ra=RTOD*phi;
-		par->srcs[ipop][pid].dec=90-RTOD*acos(cth);
-		par->srcs[ipop][pid].z0=z_of_r(par,r);
-		par->srcs[ipop][pid].dz_rsd=dz_rsd;
-		par->srcs[ipop][pid].e1=e1;
-		par->srcs[ipop][pid].e2=e2;
-		np_tot_thr[ithr]++;
-	      }
+	      e1=fac*g1;
+	      e2=fac*g2;
+	    }
+	    for(ip=0;ip<npp;ip++) {
+	      double th,phi;
+	      double r=r0+dr*rng_01(rng_thr); //TODO: this is not completely correct
+	      lint pid=np_tot_thr[ithr];
+	      get_random_angles(rng_thr,ipix,oi->iphi0_arr[ir],oi->icth0_arr[ir],
+				oi->nside_arr[ir],oi->nside_ratio_arr[ir],&th,&phi);
+	      par->srcs[ipop][pid].ra=RTOD*phi;
+	      par->srcs[ipop][pid].dec=90-RTOD*th;
+	      par->srcs[ipop][pid].z0=z_of_r(par,r);
+	      par->srcs[ipop][pid].dz_rsd=dz_rsd;
+	      par->srcs[ipop][pid].e1=e1;
+	      par->srcs[ipop][pid].e2=e2;
+	      np_tot_thr[ithr]++;
 	    }
 	  }
 	}
@@ -470,35 +466,23 @@ void integrate_isw(ParamCoLoRe *par)
 #endif //_DEBUG
   for(ib=0;ib<par->n_beams_here;ib++) {
     int ir;
-    int nside_old=par->oi_beams[ib]->nside_arr[0];
-    double *pdot_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pdot_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    for(ir=0;ir<par->oi_beams[ib]->nr;ir++) {
-      int icth;
-      int nside_new=par->oi_beams[ib]->nside_arr[ir];
-      int nside_ratio=nside_new/nside_old;
-      int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir]+1;
-      int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
-      int nphi_old=nphi/nside_ratio;
-      double r0=par->oi_beams[ib]->r0_arr[ir];
-      double rf=par->oi_beams[ib]->rf_arr[ir];
-      double rm=0.5*(r0+rf),dr=rf-r0;
-      double g_phi=2*dr*pdgrowth_of_r(par,rm);
-      if(ncth*nphi!=par->oi_beams[ib]->num_pix[ir])
-	report_error(1,"WTF\n");
-      for(icth=0;icth<ncth;icth++) {
-	int iphi;
-	int icth_old=icth/nside_ratio;
-	for(iphi=0;iphi<nphi;iphi++) {
-	  int iphi_old=iphi/nside_ratio;
-	  int index_new=iphi+nphi*icth;
-	  int index_old=iphi_old+nphi_old*icth_old;
-	  pdot_new[index_new]=pdot_old[index_old]+g_phi*par->pdot_beams[ib][ir][index_new];
-	  par->pdot_beams[ib][ir][index_new]=pdot_new[index_new];
-	}
+    OnionInfo *oi=par->oi_beams[ib];
+    int nside_old=oi->nside_arr[0];
+    double *pdot_old=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pdot_new=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    for(ir=0;ir<oi->nr;ir++) {
+      int ipix;
+      int nside_new=oi->nside_arr[ir];
+      int ratio_oldnew=nside_new/nside_old;
+      double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
+      double g_phi=2*dr;
+      for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+	int ipix_old=get_ipix_old(ipix,oi->nside_ratio_arr[ir],ratio_oldnew);
+	pdot_new[ipix]=pdot_old[ipix_old]+g_phi*par->pdot_beams[ib][ir][ipix];
+	par->pdot_beams[ib][ir][ipix]=pdot_new[ipix];
       }
       nside_old=nside_new;
-      memcpy(pdot_old,pdot_new,par->oi_beams[ib]->num_pix[ir]*sizeof(double));
+      memcpy(pdot_old,pdot_new,oi->num_pix[ir]*sizeof(double));
     }
     free(pdot_new); free(pdot_old);
   }
@@ -520,63 +504,50 @@ void integrate_lensing(ParamCoLoRe *par)
 #endif //_DEBUG
   for(ib=0;ib<par->n_beams_here;ib++) {
     int ir;
-    int nside_old=par->oi_beams[ib]->nside_arr[0];
-    double *pxx1_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pxx1_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pxx2_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pxx2_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pxy1_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pxy1_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pxy2_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pxy2_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pyy1_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pyy1_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pyy2_old=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    double *pyy2_new=my_calloc(par->oi_beams[ib]->num_pix[par->oi_beams[ib]->nr-1],sizeof(double));
-    for(ir=0;ir<par->oi_beams[ib]->nr;ir++) {
-      int icth;
-      int nside_new=par->oi_beams[ib]->nside_arr[ir];
-      int nside_ratio=nside_new/nside_old;
-      int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir]+1;
-      int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
-      int nphi_old=nphi/nside_ratio;
-      double r0=par->oi_beams[ib]->r0_arr[ir];
-      double rf=par->oi_beams[ib]->rf_arr[ir];
+    OnionInfo *oi=par->oi_beams[ib];
+    int nside_old=oi->nside_arr[0];
+    double *pxx1_old=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pxx1_new=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pxx2_old=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pxx2_new=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pxy1_old=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pxy1_new=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pxy2_old=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pxy2_new=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pyy1_old=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pyy1_new=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pyy2_old=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    double *pyy2_new=my_calloc(oi->num_pix[oi->nr-1],sizeof(double));
+    for(ir=0;ir<oi->nr;ir++) {
+      int ipix;
+      int nside_new=oi->nside_arr[ir];
+      int ratio_oldnew=nside_new/nside_old;
+      double r0=oi->r0_arr[ir];
+      double rf=oi->rf_arr[ir];
       double rm=0.5*(r0+rf),dr=rf-r0;
-      
-      double redshift=z_of_r(par,rm);
-      double g_phi=dgrowth_of_r(par,rm)*(1+redshift);
-      //      double integ1=g_phi*0.5*(rf*rf-r0*r0);
-      //      double integ2=g_phi*(rf*rf*rf-r0*r0*r0)/3;
-      double integ1=g_phi*rm*dr;
-      double integ2=g_phi*rm*rm*dr;
-      if(ncth*nphi!=par->oi_beams[ib]->num_pix[ir])
-	report_error(1,"WTF\n");
-      for(icth=0;icth<ncth;icth++) {
-	int iphi;
-	int icth_old=icth/nside_ratio;
-	for(iphi=0;iphi<nphi;iphi++) {
-	  int iphi_old=iphi/nside_ratio;
-	  int index_new=iphi+nphi*icth;
-	  int index_old=iphi_old+nphi_old*icth_old;
-	  pxx1_new[index_new]=pxx1_old[index_old]+integ1*par->p_xx_beams[ib][ir][index_new];
-	  pxx2_new[index_new]=pxx2_old[index_old]+integ2*par->p_xx_beams[ib][ir][index_new];
-	  par->p_xx_beams[ib][ir][index_new]=pxx1_new[index_new]-pxx2_new[index_new]/rf;
-	  pxy1_new[index_new]=pxy1_old[index_old]+integ1*par->p_xy_beams[ib][ir][index_new];
-	  pxy2_new[index_new]=pxy2_old[index_old]+integ2*par->p_xy_beams[ib][ir][index_new];
-	  par->p_xy_beams[ib][ir][index_new]=pxy1_new[index_new]-pxy2_new[index_new]/rf;
-	  pyy1_new[index_new]=pyy1_old[index_old]+integ1*par->p_yy_beams[ib][ir][index_new];
-	  pyy2_new[index_new]=pyy2_old[index_old]+integ2*par->p_yy_beams[ib][ir][index_new];
-	  par->p_yy_beams[ib][ir][index_new]=pyy1_new[index_new]-pyy2_new[index_new]/rf;
-	}
+      double integ1=rm*dr;
+      double integ2=rm*rm*dr;
+      //      double integ1=0.5*(rf*rf-r0*r0);
+      //      double integ2=(rf*rf*rf-r0*r0*r0)/3;
+      for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+	int ipix_old=get_ipix_old(ipix,oi->nside_ratio_arr[ir],ratio_oldnew);
+	pxx1_new[ipix]=pxx1_old[ipix_old]+integ1*par->p_xx_beams[ib][ir][ipix];
+	pxx2_new[ipix]=pxx2_old[ipix_old]+integ2*par->p_xx_beams[ib][ir][ipix];
+	par->p_xx_beams[ib][ir][ipix]=pxx1_new[ipix]-pxx2_new[ipix]/rf;
+	pxy1_new[ipix]=pxy1_old[ipix_old]+integ1*par->p_xy_beams[ib][ir][ipix];
+	pxy2_new[ipix]=pxy2_old[ipix_old]+integ2*par->p_xy_beams[ib][ir][ipix];
+	par->p_xy_beams[ib][ir][ipix]=pxy1_new[ipix]-pxy2_new[ipix]/rf;
+	pyy1_new[ipix]=pyy1_old[ipix_old]+integ1*par->p_yy_beams[ib][ir][ipix];
+	pyy2_new[ipix]=pyy2_old[ipix_old]+integ2*par->p_yy_beams[ib][ir][ipix];
+	par->p_yy_beams[ib][ir][ipix]=pyy1_new[ipix]-pyy2_new[ipix]/rf;
       }
       nside_old=nside_new;
-      memcpy(pxx1_old,pxx1_new,par->oi_beams[ib]->num_pix[ir]*sizeof(double));
-      memcpy(pxx2_old,pxx2_new,par->oi_beams[ib]->num_pix[ir]*sizeof(double));
-      memcpy(pxy1_old,pxy1_new,par->oi_beams[ib]->num_pix[ir]*sizeof(double));
-      memcpy(pxy2_old,pxy2_new,par->oi_beams[ib]->num_pix[ir]*sizeof(double));
-      memcpy(pyy1_old,pyy1_new,par->oi_beams[ib]->num_pix[ir]*sizeof(double));
-      memcpy(pyy2_old,pyy2_new,par->oi_beams[ib]->num_pix[ir]*sizeof(double));
+      memcpy(pxx1_old,pxx1_new,oi->num_pix[ir]*sizeof(double));
+      memcpy(pxx2_old,pxx2_new,oi->num_pix[ir]*sizeof(double));
+      memcpy(pxy1_old,pxy1_new,oi->num_pix[ir]*sizeof(double));
+      memcpy(pxy2_old,pxy2_new,oi->num_pix[ir]*sizeof(double));
+      memcpy(pyy1_old,pyy1_new,oi->num_pix[ir]*sizeof(double));
+      memcpy(pyy2_old,pyy2_new,oi->num_pix[ir]*sizeof(double));
     }
     free(pxx1_new); free(pxx1_old);
     free(pxx2_new); free(pxx2_old);
@@ -637,13 +608,27 @@ static int get_r_index_imap(HealpixShells *sh,double r,int ir_start)
 static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
 {
   long ip,npx=he_nside2npix(shell->nside);
+#if PIXTYPE!=PT_HPX
   double pixsize=2*sqrt(4*M_PI/npx);
+#endif //PIXTYPE
   shell->num_pix=0;
   shell->listpix=my_malloc(npx*sizeof(long));
 
   for(ip=0;ip<npx;ip++) {
     int ib;
     int goodpix=0;
+
+#if PIXTYPE==PT_HPX
+    long ip_nest,ip_base;
+    int nside_ratio=shell->nside/par->oi_beams[0]->nside_arr[0];
+    ring2nest(shell->nside,ip,&ip_nest);
+    ip_base=ip_nest/(nside_ratio*nside_ratio);
+    for(ib=0;ib<par->n_beams_here;ib++) {
+      if(ip_base==par->oi_beams[ib]->iphi0_arr[0])
+	goodpix=1;
+    }
+#else //PIXTYPE
+
     double phi0,phif,phim;
     double th0,thf,thm,cth0,cthf;
     pix2ang_ring(shell->nside,ip,&thm,&phim);
@@ -672,12 +657,15 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
       cthf_b=get_cosine(beam->icth0_arr[0]+1.0,M_PI/beam->nside_arr[0]);
 #endif //PIXTYPE
       phi0_b=beam->iphi0_arr[0]*M_PI/beam->nside_arr[0];
-      phif_b=(beam->iphif_arr[0]+1)*M_PI/beam->nside_arr[0];
+      phif_b=(beam->iphi0_arr[0]+1)*M_PI/beam->nside_arr[0];
       if(((cth0<=cthf_b)&&(cth0>=cth0_b)) || ((cthf<=cthf_b)&&(cthf>=cth0_b))) { //cth in range
 	if(((phi0<=phif_b)&&(phi0>=phi0_b)) || ((phif<=phif_b)&&(phif>=phi0_b))) //phi in range
 	  goodpix=1;
       }
     }
+
+#endif //PIXTYPE
+
     if(goodpix) {
       shell->listpix[ip]=shell->num_pix;
       shell->num_pix++;
@@ -717,8 +705,8 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 #endif //_HAVE_OMP
     unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_imap*IThread0);
     gsl_rng *rng_thr=init_rng(seed_thr);
-    double *disp=my_calloc(3*N_RAN_IMAP,sizeof(double));
-    for(ir=0;ir<3*N_RAN_IMAP;ir++)
+    double *disp=my_calloc(NSUB_IMAP_PERP*NSUB_IMAP_PERP,sizeof(double));
+    for(ir=0;ir<NSUB_IMAP_PERP*NSUB_IMAP_PERP;ir++)
       disp[ir]=rng_01(rng_thr);
     end_rng(rng_thr);
 
@@ -735,57 +723,51 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
       if(tmean>0) {
 	int ib;
 	int irad=0;
-	int nside=par->oi_beams[0]->nside_arr[ir];
-	double dphi=M_PI/nside;
-#if PIXTYPE==PT_CEA
-	double dcth=2./nside;
-	double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_RAN_IMAP;
-#elif PIXTYPE==PT_CAR
-	double dth=M_PI/nside;
-#endif //PIXTYPE
 	double bias=bias_of_z_imap(par,redshift,ipop);
-	double gfb=dgrowth_of_r(par,rm)*bias;
-	double prefac_rsd=ihub_of_r(par,rm)*vgrowth_of_r(par,rm);
+	double dnorm=norm_imap_of_z(par,redshift,ipop);
+	double prefac_rsd=ihub_of_r(par,rm);
 	for(ib=0;ib<par->n_beams_here;ib++) {
-	  int ind_cth;
-	  int icth0=par->oi_beams[ib]->icth0_arr[ir];
-	  int iphi0=par->oi_beams[ib]->iphi0_arr[ir];
-	  int ncth=par->oi_beams[ib]->icthf_arr[ir]-par->oi_beams[ib]->icth0_arr[ir]+1;
-	  int nphi=par->oi_beams[ib]->iphif_arr[ir]-par->oi_beams[ib]->iphi0_arr[ir]+1;
+	  int ipix;
+	  OnionInfo *oi=par->oi_beams[ib];
 	  flouble *dens_slice=par->dens_beams[ib][ir];
 	  flouble *vrad_slice=par->vrad_beams[ib][ir];
-	  for(ind_cth=0;ind_cth<ncth;ind_cth++) {
-	    int ind_phi;
-	    int ind_cth_t=ind_cth*nphi;
-#if PIXTYPE==PT_CEA
-	    double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
-#elif PIXTYPE==PT_CAR
-	    double cth0=get_cosine(ind_cth+icth0+0.0,dth);
-	    double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
-	    double cell_vol=(rf*rf*rf-r0*r0*r0)*dcth*dphi/3/N_RAN_IMAP;
+#if PIXTYPE!=PT_CAR
+	  double pixarea=get_pixel_area(0,0,0,oi->nside_arr[ir],0);
+	  double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
 #endif //PIXTYPE
-	    for(ind_phi=0;ind_phi<nphi;ind_phi++) {
-	      int ip;
-	      double phi0=(ind_phi+iphi0)*dphi;
-	      double temp=tmean*cell_vol*exp(gfb*(dens_slice[ind_cth_t+ind_phi]-0.5*gfb*par->sigma2_gauss));
-	      double dr_rsd=prefac_rsd*vrad_slice[ind_cth_t+ind_phi];
-	      for(ip=0;ip<N_RAN_IMAP;ip++) {
-		double r=r0+dr_rsd+dr*disp[3*ip+0];
-		irad=get_r_index_imap(par->imap[ipop],r,irad);
-		if((irad>=0) && (irad<par->imap[ipop]->nr)) {
-		  long pix_id;
-		  long irad_t=irad*par->imap[ipop]->num_pix;
-		  double cth=cth0+dcth*disp[3*ip+1];
-		  double phi=phi0+dphi*disp[3*ip+2];
-		  long ipix=he_ang2pix(par->imap[ipop]->nside,cth,phi);
-		  pix_id=par->imap[ipop]->listpix[ipix];
-		  if(pix_id<0)
-		    report_error(1,"NOOOO %lE %lE\n",cth,phi);
+	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+	    int ipix_sub;
+#if PIXTYPE==PT_CAR
+	    double pixarea=get_pixel_area(ipix,oi->iphi0_arr[ir],oi->icth0_arr[ir],
+					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
+	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
+#endif //PIXTYPE
+	    double temp=tmean*cell_vol*pow(1+dens_slice[ipix],bias)*dnorm;
+	    double dr_rsd=prefac_rsd*vrad_slice[ipix];
+
+	    for(ipix_sub=0;ipix_sub<NSUB_IMAP_PERP*NSUB_IMAP_PERP;ipix_sub++) {
+	      double r=r0+dr_rsd+dr*disp[ipix_sub];
+	      irad=get_r_index_imap(par->imap[ipop],r,irad);
+	      if((irad>=0) && (irad<par->imap[ipop]->nr)) {
+		int iphi0;
+		double u[3];
+		long ip_shell,pix_id;
+		long irad_t=irad*par->imap[ipop]->num_pix;
+#if PIXTYPE == PT_HPX
+		iphi0=oi->iphi0_arr[ir]*NSUB_IMAP_PERP*NSUB_IMAP_PERP;
+#else
+		iphi0=oi->iphi0_arr[ir]*NSUB_IMAP_PERP;
+#endif //PIXTYPE
+		get_vec(ipix*NSUB_IMAP_PERP*NSUB_IMAP_PERP+ipix_sub,iphi0,oi->icth0_arr[ir]*NSUB_IMAP_PERP,
+			oi->nside_arr[ir]*NSUB_IMAP_PERP,oi->nside_ratio_arr[ir]*NSUB_IMAP_PERP,u);
+		vec2pix_ring(par->imap[ipop]->nside,u,&ip_shell);
+		pix_id=par->imap[ipop]->listpix[ip_shell];
+		if(pix_id<0)
+		  report_error(1,"NOOOO %lE %lE %lE\n",u[0],u[1],u[2]);
 #ifdef _HAVE_OMP
 #pragma omp atomic
 #endif //_HAVE_OMP
-		  par->imap[ipop]->data[irad_t+pix_id]+=temp;
-		}
+		par->imap[ipop]->data[irad_t+pix_id]+=temp;
 	      }
 	    }
 	  }
@@ -861,49 +843,45 @@ void get_kappa(ParamCoLoRe *par)
       }
 
       for(ib=0;ib<par->n_beams_here;ib++) {
-	int ind_cth;
-	int icth0=par->oi_beams[ib]->icth0_arr[irb];
-	int iphi0=par->oi_beams[ib]->iphi0_arr[irb];
-	int ncth=par->oi_beams[ib]->icthf_arr[irb]-par->oi_beams[ib]->icth0_arr[irb]+1;
-	int nphi=par->oi_beams[ib]->iphif_arr[irb]-par->oi_beams[ib]->iphi0_arr[irb]+1;
-	int nside=par->oi_beams[ib]->nside_arr[irb];
-	double dphi=M_PI/nside;
-#if PIXTYPE==PT_CEA
-	double dcth=2./nside;
-#elif PIXTYPE==PT_CAR
-	double dth=M_PI/nside;
+	int ipix;
+	OnionInfo *oi=par->oi_beams[ib];
+#if PIXTYPE!=PT_CAR
+	double pixarea=get_pixel_area(0,0,0,oi->nside_arr[irb],0);
 #endif //PIXTYPE
-	for(ind_cth=0;ind_cth<ncth;ind_cth++) {
-	  int ind_phi;
-	  int ind_cth_t=ind_cth*nphi;
-#if PIXTYPE==PT_CEA
-	  double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
-#elif PIXTYPE==PT_CAR
-	  double cth0=get_cosine(ind_cth+icth0+0.0,dth);
-	  double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
+	for(ipix=0;ipix<oi->num_pix[irb];ipix++) {
+	  int ipix_sub;
+#if PIXTYPE==PT_CAR
+	  double pixarea=get_pixel_area(ipix,oi->iphi0_arr[irb],oi->icth0_arr[irb],
+					oi->nside_arr[irb],oi->nside_ratio_arr[irb]);
 #endif //PIXTYPE
-	  int nsub_perside=(int)(sqrt(dcth*dphi*inv_hpix_area)+1);
-	  double dcth_sub=dcth/nsub_perside;
-	  double dphi_sub=dphi/nsub_perside;
-	  for(ind_phi=0;ind_phi<nphi;ind_phi++) {
-	    int icth_sub;
-	    double phi0=(ind_phi+iphi0)*dphi;
-	    double pxx=par->p_xx_beams[ib][irb][ind_cth_t+ind_phi];
-	    double pyy=par->p_yy_beams[ib][irb][ind_cth_t+ind_phi];
-	    double kappa=pxx+pyy;
-	    for(icth_sub=0;icth_sub<nsub_perside;icth_sub++) {
-	      int iphi_sub;
-	      double cth=cth0+(icth_sub+0.5)*dcth_sub;
-	      for(iphi_sub=0;iphi_sub<nsub_perside;iphi_sub++) {
-		double phi=phi0+(iphi_sub+0.5)*dphi_sub;
-		long ipix=he_ang2pix(par->kmap->nside,cth,phi);
-		long pix_id=par->kmap->listpix[ipix];
-		if(pix_id<0)
-		  report_error(1,"NOOO %lE, %lE\n",cth,phi/M_PI);
-		par->kmap->data[irad_t+pix_id]+=kappa;
-		par->kmap->nadd[irad_t+pix_id]++;
-	      }
-	    }
+	  double pxx=par->p_xx_beams[ib][irb][ipix];
+	  double pyy=par->p_yy_beams[ib][irb][ipix];
+	  double kappa=pxx+pyy;
+
+	  int nsub_perside=1;
+	  double pixarea_sub=pixarea;
+	  while(pixarea_sub*inv_hpix_area>1) {
+	    pixarea_sub*=0.25;
+	    nsub_perside*=2;
+	  }
+
+	  for(ipix_sub=0;ipix_sub<nsub_perside*nsub_perside;ipix_sub++) {
+	    int iphi0;
+	    double u[3];
+	    long ip_shell,pix_id;
+#if PIXTYPE == PT_HPX
+	    iphi0=oi->iphi0_arr[irb]*nsub_perside*nsub_perside;
+#else
+	    iphi0=oi->iphi0_arr[irb]*nsub_perside;
+#endif //PIXTYPE
+	    get_vec(ipix*nsub_perside*nsub_perside+ipix_sub,iphi0,oi->icth0_arr[irb]*nsub_perside,
+		    oi->nside_arr[irb]*nsub_perside,oi->nside_ratio_arr[irb]*nsub_perside,u);
+	    vec2pix_ring(par->kmap->nside,u,&ip_shell);
+	    pix_id=par->kmap->listpix[ip_shell];
+	    if(pix_id<0)
+	      report_error(1,"NOOOO %lE %lE %lE\n",u[0],u[1],u[2]);
+	    par->kmap->data[irad_t+pix_id]+=kappa;
+	    par->kmap->nadd[irad_t+pix_id]++;
 	  }
 	}
       }
@@ -950,47 +928,43 @@ void get_isw(ParamCoLoRe *par)
       }
 
       for(ib=0;ib<par->n_beams_here;ib++) {
-	int ind_cth;
-	int icth0=par->oi_beams[ib]->icth0_arr[irb];
-	int iphi0=par->oi_beams[ib]->iphi0_arr[irb];
-	int ncth=par->oi_beams[ib]->icthf_arr[irb]-par->oi_beams[ib]->icth0_arr[irb]+1;
-	int nphi=par->oi_beams[ib]->iphif_arr[irb]-par->oi_beams[ib]->iphi0_arr[irb]+1;
-	int nside=par->oi_beams[ib]->nside_arr[irb];
-	double dphi=M_PI/nside;
-#if PIXTYPE==PT_CEA
-	double dcth=2./nside;
-#elif PIXTYPE==PT_CAR
-	double dth=M_PI/nside;
+	int ipix;
+	OnionInfo *oi=par->oi_beams[ib];
+#if PIXTYPE!=PT_CAR
+	double pixarea=get_pixel_area(0,0,0,oi->nside_arr[irb],0);
 #endif //PIXTYPE
-	for(ind_cth=0;ind_cth<ncth;ind_cth++) {
-	  int ind_phi;
-	  int ind_cth_t=ind_cth*nphi;
-#if PIXTYPE==PT_CEA
-	  double cth0=get_cosine(ind_cth+icth0+0.0,dcth);
-#elif PIXTYPE==PT_CAR
-	  double cth0=get_cosine(ind_cth+icth0+0.0,dth);
-	  double dcth=get_cosine(ind_cth+icth0+1.0,dth)-cth0;
+	for(ipix=0;ipix<oi->num_pix[irb];ipix++) {
+	  int ipix_sub;
+#if PIXTYPE==PT_CAR
+	  double pixarea=get_pixel_area(ipix,oi->iphi0_arr[irb],oi->icth0_arr[irb],
+					oi->nside_arr[irb],oi->nside_ratio_arr[irb]);
 #endif //PIXTYPE
-	  int nsub_perside=(int)(sqrt(dcth*dphi*inv_hpix_area)+1);
-	  double dcth_sub=dcth/nsub_perside;
-	  double dphi_sub=dphi/nsub_perside;
-	  for(ind_phi=0;ind_phi<nphi;ind_phi++) {
-	    int icth_sub;
-	    double phi0=(ind_phi+iphi0)*dphi;
-	    double isw=par->pdot_beams[ib][irb][ind_cth_t+ind_phi];
-	    for(icth_sub=0;icth_sub<nsub_perside;icth_sub++) {
-	      int iphi_sub;
-	      double cth=cth0+(icth_sub+0.5)*dcth_sub;
-	      for(iphi_sub=0;iphi_sub<nsub_perside;iphi_sub++) {
-		double phi=phi0+(iphi_sub+0.5)*dphi_sub;
-		long ipix=he_ang2pix(par->pd_map->nside,cth,phi);
-		long pix_id=par->pd_map->listpix[ipix];
-		if(pix_id<0)
-		  report_error(1,"NOOO %lE, %lE\n",cth,phi/M_PI);
-		par->pd_map->data[irad_t+pix_id]+=isw;
-		par->pd_map->nadd[irad_t+pix_id]++;
-	      }
-	    }
+	  double isw=par->pdot_beams[ib][irb][ipix];
+
+	  int nsub_perside=1;
+	  double pixarea_sub=pixarea;
+	  while(pixarea_sub*inv_hpix_area>1) {
+	    pixarea_sub*=0.25;
+	    nsub_perside*=2;
+	  }
+
+	  for(ipix_sub=0;ipix_sub<nsub_perside*nsub_perside;ipix_sub++) {
+	    int iphi0;
+	    double u[3];
+	    long ip_shell,pix_id;
+#if PIXTYPE == PT_HPX
+	    iphi0=oi->iphi0_arr[irb]*nsub_perside*nsub_perside;
+#else
+	    iphi0=oi->iphi0_arr[irb]*nsub_perside;
+#endif //PIXTYPE
+	    get_vec(ipix*nsub_perside*nsub_perside+ipix_sub,iphi0,oi->icth0_arr[irb]*nsub_perside,
+		    oi->nside_arr[irb]*nsub_perside,oi->nside_ratio_arr[irb]*nsub_perside,u);
+	    vec2pix_ring(par->pd_map->nside,u,&ip_shell);
+	    pix_id=par->pd_map->listpix[ip_shell];
+	    if(pix_id<0)
+	      report_error(1,"NOOOO %lE %lE %lE\n",u[0],u[1],u[2]);
+	    par->pd_map->data[irad_t+pix_id]+=isw;
+	    par->pd_map->nadd[irad_t+pix_id]++;
 	  }
 	}
       }

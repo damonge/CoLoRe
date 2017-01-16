@@ -318,6 +318,19 @@ static void gfac(Csm_bg_params *par,
   }
 }
 
+double csm_omega_m(Csm_params *par,double aa)
+{
+  if(par->bg->normalDE)
+    return par->bg->OM/(par->bg->OM+par->bg->OL*aa*aa*aa+par->bg->OK*aa);
+  else if(par->bg->constantw) {
+    return par->bg->OM/(par->bg->OM+par->bg->OL*pow(aa,-3*par->bg->w0)+par->bg->OK*aa);
+  }
+  else {
+    return par->bg->OM/(par->bg->OM+par->bg->OL*pow(aa,-3*(par->bg->w0+par->bg->wa))*
+			exp(3*par->bg->wa*(aa-1))+par->bg->OK*aa);
+  }
+}  
+
 double csm_hubble(Csm_params *par,double aa)
 {
   //////

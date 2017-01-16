@@ -65,13 +65,15 @@
 // Interpolation parameters
 #define PT_CEA 0
 #define PT_CAR 1
+#define PT_HPX 2
 
 #define INTERP_NGP 0
 #define INTERP_CIC 1
+#define INTERP_TSC 2
 
 //Pixelization type
 #ifndef PIXTYPE
-#define PIXTYPE PT_CAR
+#define PIXTYPE PT_HPX
 #endif //PIXTYPE
 
 //Interpolation type
@@ -104,10 +106,17 @@
 #define NSUB_PERP 1
 #endif //NSUB_PERP
 
-//#random points per voxel for IM
-#ifndef N_RAN_IMAP
-#define N_RAN_IMAP 10
-#endif //N_RAN_IMAP
+//sqrt(#random points per pixel for IM)
+#ifndef NSUB_IMAP_PERP
+#define NSUB_IMAP_PERP 4
+#endif //NSUB_IMAP_PERP
+
+
+//Density field parameters
+#define DZ_SIGMA 0.05
+#define DENS_TYPE_LGNR 0
+#define DENS_TYPE_1LPT 1
+#define DENS_TYPE_2LPT 2
 
 // End of interpolation parameters
 /////////
@@ -178,10 +187,9 @@ typedef struct {
   flouble *r0_arr;
   flouble *rf_arr;
   int *nside_arr;
+  int *nside_ratio_arr;
   int *iphi0_arr;
-  int *iphif_arr;
   int *icth0_arr;
-  int *icthf_arr;
   int *num_pix;
 } OnionInfo;
 
@@ -216,6 +224,10 @@ typedef struct {
   double r2_smooth; //Square of the smoothing scale
   int smooth_potential; //Do we smooth the newtonian potential as well?
   int do_smoothing; //Are we smoothing the density field?
+  int dens_type; //Method to produce the density field
+  double lpt_buffer_fraction; //Fraction of memory saved for buffer particles
+  int lpt_interp_type;
+  int output_lpt;
 
 #ifdef _DEBUG
   FILE *f_dbg; //File into which all debug info is written
@@ -233,6 +245,7 @@ typedef struct {
   double z_arr_r2z[NA]; //Array of redshifts used to compute z(r)
   double r_arr_r2z[NA]; //Array of comoving distances used to compute z(r), D_d(r), D_v(r), 1/H(z)
   double growth_d_arr[NA]; //Array of density growth factors used to compute D_d(r)
+  double growth_d2_arr[NA]; //Array of density growth factors used to compute D_d(r)
   double growth_v_arr[NA]; //Array of velocity growth factors used to compute D_v(r)
   double growth_pd_arr[NA]; //Array of potential derivative factors used to compute \dot{\phi}
   double ihub_arr[NA]; //Array of 1/H(z)
@@ -241,7 +254,7 @@ typedef struct {
   unsigned int seed_rng; //RNG seed
 
   int n_grid; //Number of cells per side for the Cartesian grid
-  double l_box; //Box size for the cartesian grid
+  flouble l_box; //Box size for the cartesian grid
   int nz_here; //Number of cells in the z-direction stored in this node
   int iz0_here; //index of the first cell in the z-direction stored in this node
   int nz_max;
@@ -259,7 +272,10 @@ typedef struct {
   flouble *grid_npot; //Real-space grid for the Newtonian potential
   flouble *slice_left; //Dummy array to store grid cells coming from the left node
   flouble *slice_right; //Dummy array to store grid cells coming from the right node
+
   double sigma2_gauss; //Variance of the cartesian density field
+  double z0_norm;
+  double zf_norm;
 
   int need_onions; //Do we need spherical voxels at all?
   int do_lensing; //Do we need to compute the lensing potential?
@@ -282,6 +298,10 @@ typedef struct {
   gsl_spline *spline_srcs_bz[NPOP_MAX]; //Spline for b(z)
   gsl_spline *spline_srcs_nz[NPOP_MAX]; //Spline for n(z)
   gsl_interp_accel *intacc_srcs[NPOP_MAX]; //Spline accelerator for sources
+  gsl_spline *spline_norm_srcs[NPOP_MAX]; //Spline for density normalization
+  gsl_interp_accel *intacc_norm_srcs; //Spline accelerator for density normalization
+  double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
+  double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
   int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
   lint *nsources_this; //Number of sources found in this node
   Src **srcs; //Galaxy objects stored in this node
@@ -293,7 +313,11 @@ typedef struct {
   char fnameNuImap[NPOP_MAX][256]; //Files containing frequency table for each IM species
   gsl_spline *spline_imap_bz[NPOP_MAX]; //Spline for b(z)
   gsl_spline *spline_imap_tz[NPOP_MAX]; //Spline for T(z)
-  gsl_interp_accel *intacc_imap[NPOP_MAX]; //Spline accelerator for IM
+  gsl_interp_accel *intacc_imap[NPOP_MAX]; //Spline accelerator for imap
+  gsl_spline *spline_norm_imap[NPOP_MAX]; //Spline for density normalization
+  gsl_interp_accel *intacc_norm_imap; //Spline accelerator for density normalization
+  double norm_imap_0[NPOP_MAX]; //Bottom edge of spline for density normalization
+  double norm_imap_f[NPOP_MAX]; //Top edge of spline for density normalization
   int nside_imap[NPOP_MAX]; //Output angular resolution for each IM species
   double nu0_imap[NPOP_MAX]; //Rest-frame frequency for each IM species
   HealpixShells **imap; //intensity maps for each IM species
@@ -343,17 +367,26 @@ void rng_gauss(gsl_rng *rng,double *r1,double *r2);
 void end_rng(gsl_rng *rng);
 OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
 void free_onion_info(OnionInfo *oi);
+unsigned long long get_max_memory(ParamCoLoRe *par);
 void alloc_beams(ParamCoLoRe *par);
 void free_beams(ParamCoLoRe *par);
+flouble get_res(int nside);
+long get_npix(int nside);
+void get_vec(int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,double *u);
+void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,
+		       double *th,double *phi);
 
 
 //////
 // Functions defined in cosmo.c
 double pk_linear0(ParamCoLoRe *par,double lgk);
 void cosmo_set(ParamCoLoRe *par);
+double norm_srcs_of_z(ParamCoLoRe *par,double z,int ipop);
+double norm_imap_of_z(ParamCoLoRe *par,double z,int ipop);
 double r_of_z(ParamCoLoRe *par,double z);
 double z_of_r(ParamCoLoRe *par,double r);
 double dgrowth_of_r(ParamCoLoRe *par,double r);
+double d2growth_of_r(ParamCoLoRe *par,double r);
 double vgrowth_of_r(ParamCoLoRe *par,double r);
 double pdgrowth_of_r(ParamCoLoRe *par,double r);
 double ihub_of_r(ParamCoLoRe *par,double r);
@@ -372,7 +405,8 @@ void write_catalog(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
 void write_isw(ParamCoLoRe *par);
-void write_grids(ParamCoLoRe *par);
+void write_density_grid(ParamCoLoRe *par,char *prefix_dens);
+void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z);
 void param_colore_free(ParamCoLoRe *par);
 
 
@@ -386,11 +420,19 @@ void write_predictions(ParamCoLoRe *par);
 void init_fftw(ParamCoLoRe *par);
 void create_cartesian_fields(ParamCoLoRe *par);
 void end_fftw(ParamCoLoRe *par);
+void fftw_wrap_c2r(int ng,dftw_complex *pin,flouble *pout);
+void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout);
 
 
 //////
 // Functions defined in pixelization.c
 void pixelize(ParamCoLoRe *par);
+
+
+//////
+// Functions defined in density.c
+void compute_physical_density_field(ParamCoLoRe *par);
+void compute_density_normalization(ParamCoLoRe *par);
 
 
 //////

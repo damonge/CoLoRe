@@ -47,6 +47,10 @@ static ParamCoLoRe *param_colore_new(void)
   par->r_min=-1;
   par->r2_smooth=2.0;
   par->do_smoothing=1;
+  par->dens_type=DENS_TYPE_LGNR;
+  par->lpt_interp_type=INTERP_CIC;
+  par->lpt_buffer_fraction=0.2;
+  par->output_lpt=0;
   par->smooth_potential=0;
   par->numk=0;
   par->logkmax=1;
@@ -72,6 +76,8 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
   par->sigma2_gauss=0;
+  par->z0_norm=0;
+  par->zf_norm=0;
 
   par->do_lensing=0;
   par->do_isw=0;
@@ -114,7 +120,11 @@ static ParamCoLoRe *param_colore_new(void)
     par->z_kappa_out[ii]=-1;
     par->z_isw_out[ii]=-1;
     par->nu0_imap[ii]=-1;
+    par->spline_norm_srcs[ii]=NULL;
+    par->spline_norm_imap[ii]=NULL;
   }
+  par->intacc_norm_srcs=NULL;
+  par->intacc_norm_imap=NULL;
   par->srcs=NULL;
   par->imap=NULL;
   par->kmap=NULL;
@@ -204,16 +214,21 @@ ParamCoLoRe *read_run_params(char *fname)
 
   conf_read_string(conf,"global","prefix_out",par->prefixOut);
   conf_read_string(conf,"global","pk_filename",par->fnamePk);
-  conf_read_double(conf,"global","r_smooth",&(par->r2_smooth));
-  conf_read_bool(conf,"global","smooth_potential",&(par->smooth_potential));
   conf_read_double(conf,"global","z_min",&(par->z_min));
   conf_read_double(conf,"global","z_max",&(par->z_max));
-  conf_read_int(conf,"global","n_grid",&(par->n_grid));
   conf_read_bool(conf,"global","output_density",&(par->output_density));
   conf_read_int(conf,"global","seed",&i_dum);
   conf_read_bool(conf,"global","write_pred",&(par->do_pred));
   if (par->do_pred) 
     conf_read_double(conf,"global","pred_dz",&(par->pred_dz));
+
+  conf_read_double(conf,"field_par","r_smooth",&(par->r2_smooth));
+  conf_read_bool(conf,"field_par","smooth_potential",&(par->smooth_potential));
+  conf_read_int(conf,"field_par","n_grid",&(par->n_grid));
+  conf_read_int(conf,"field_par","dens_type",&(par->dens_type));
+  conf_read_double(conf,"field_par","lpt_buffer_fraction",&(par->lpt_buffer_fraction));
+  conf_read_int(conf,"field_par","lpt_interp_type",&(par->lpt_interp_type));
+  conf_read_int(conf,"field_par","output_lpt",&(par->output_lpt));
 
   par->seed_rng=i_dum;
   conf_read_string(conf,"global","output_format",c_dum);
@@ -363,22 +378,22 @@ ParamCoLoRe *read_run_params(char *fname)
 
   init_fftw(par);
 
-  par->nside_base=1;
-  while(2*par->nside_base*par->nside_base<NNodes)
+  par->nside_base=2;
+  while(get_npix(par->nside_base)<NNodes)
     par->nside_base*=2;
 
   par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
   if(par->need_onions) {
     par->oi_beams=alloc_onion_info_beams(par);
     par->nside_base=par->oi_beams[0]->nside_arr[0];
-    alloc_beams(par);
   }
+  get_max_memory(par);
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");
   print_info("  %.3lf < z < %.3lf\n",par->z_min,par->z_max);
   print_info("  %.3lf < r/(Mpc/h) < %.3lf\n",par->r_min,par->r_max);
-  print_info("  L_box = %.3lf Mpc/h, N_grid = %d \n",par->l_box,par->n_grid);
+  print_info("  L_box = %.3lf Mpc/h, N_grid = %d \n",(double)(par->l_box),par->n_grid);
   print_info("  Scales resolved: %.3lE < k < %.3lE h/Mpc\n",dk,0.5*(par->n_grid-1)*dk);
   print_info("  Fourier-space resolution: dk = %.3lE h/Mpc\n",dk);
   print_info("  Real-space resolution: dx = %.3lE Mpc/h\n",par->l_box/par->n_grid);
@@ -403,22 +418,23 @@ ParamCoLoRe *read_run_params(char *fname)
   return par;
 }
 
-void write_grids(ParamCoLoRe *par)
+void write_density_grid(ParamCoLoRe *par,char *prefix_dens)
 {
   FILE *fo;
   char fname[256];
   int iz;
   int ngx=2*(par->n_grid/2+1);
   int size_flouble=sizeof(flouble);
+  double lb=par->l_box;
 
   if(NodeThis==0) timer(0);
   print_info("*** Writing density field (native format)\n");
-  sprintf(fname,"%s_dens_%d.dat",par->prefixOut,NodeThis);
+  sprintf(fname,"%s_dens_%s_%d.dat",par->prefixOut,prefix_dens,NodeThis);
   fo=fopen(fname,"wb");
   if(fo==NULL) error_open_file(fname);
   my_fwrite(&NNodes,sizeof(int),1,fo);
   my_fwrite(&size_flouble,sizeof(int),1,fo);
-  my_fwrite(&(par->l_box),sizeof(double),1,fo);
+  my_fwrite(&lb,sizeof(double),1,fo);
   my_fwrite(&(par->n_grid),sizeof(int),1,fo);
   my_fwrite(&(par->nz_here),sizeof(int),1,fo);
   my_fwrite(&(par->iz0_here),sizeof(int),1,fo);
@@ -432,6 +448,106 @@ void write_grids(ParamCoLoRe *par)
   fclose(fo);
   if(NodeThis==0) timer(2);
   print_info("\n");
+}
+
+typedef struct {
+  int    np[6];
+  double mass[6];
+  double time;
+  double redshift;
+  int    flag_sfr;
+  int    flag_feedback;
+  unsigned int np_total[6];
+  int    flag_cooling;
+  int    num_files;
+  double boxsize;
+  double omega0;
+  double omega_lambda;
+  double hubble_param;
+  int flag_stellarage;
+  int flag_metals;
+  unsigned int np_total_highword[6];
+  int  flag_entropy_instead_u;
+  int flag_gadgetformat;
+  char fill[56];
+} GadgetHeader;
+
+void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z)
+{
+  GadgetHeader header;
+  FILE *fo;
+  char fname[256];
+  unsigned long long ipart,np_total;
+  unsigned long long np_send=npart;
+  unsigned long long np_total_expected=par->n_grid*((lint)(par->n_grid*par->n_grid));
+
+  sprintf(fname,"%s_lpt_out.%d",par->prefixOut,NodeThis);
+  fo=fopen(fname,"w");
+  if(fo==NULL) error_open_file(fname);
+
+#ifdef _HAVE_MPI
+  MPI_Reduce(&np_send,&np_total,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,0,MPI_COMM_WORLD);
+  MPI_Bcast(&np_total,1,MPI_UNSIGNED_LONG_LONG,0,MPI_COMM_WORLD);
+#else //_HAVE_MPI
+  np_total=npart;
+#endif //_HAVE_MPI
+
+  if(np_total!=np_total_expected)
+    report_error(1,"Only %llu particles found, but there should be %ull\n",np_total,np_total_expected);
+
+  double m=27.7455*par->OmegaM*pow(par->l_box,3.)/np_total;
+  memset(&header,0,sizeof(GadgetHeader));
+
+  header.np[1]=npart;
+  header.mass[1]=m;
+  header.time=1.;
+  header.redshift=0.;
+  header.np_total[1]=(unsigned int)np_total;
+  header.np_total_highword[1]=(unsigned int)(np_total >> 32);
+  header.num_files=NNodes;
+  header.boxsize=par->l_box;
+  header.omega0=par->OmegaM;
+  header.omega_lambda=par->OmegaL;
+  header.hubble_param=par->hhub;
+  header.flag_gadgetformat=1;
+
+  int blklen=sizeof(GadgetHeader);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  my_fwrite(&header,sizeof(GadgetHeader),1,fo);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  float x0[3];
+  // position
+  blklen=npart*sizeof(float)*3;
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  for(ipart=0;ipart<npart;ipart++) {
+    x0[0]=x[ipart];
+    x0[1]=y[ipart];
+    x0[2]=z[ipart];
+    my_fwrite(x0,sizeof(float),3,fo);
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  // velocity
+  x0[0]=0; x0[1]=0; x0[2]=0;
+  blklen=npart*sizeof(float)*3;
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  for(ipart=0;ipart<npart;ipart++) {
+    my_fwrite(x0,sizeof(float),3,fo);
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  // id
+  blklen=npart*sizeof(unsigned long long);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  long long id0=(long long)(par->iz0_here*((lint)(par->n_grid*par->n_grid)));
+  for(ipart=0;ipart<npart;ipart++) {
+    unsigned long long id_out=id0+ipart;
+    my_fwrite(&id_out,sizeof(unsigned long long),1,fo); 
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  fclose(fo);
 }
 
 void write_imap(ParamCoLoRe *par)
@@ -541,12 +657,12 @@ void write_kappa(ParamCoLoRe *par)
 	  int lmax=3*par->kmap->nside;
 	  flouble *map_extra;
 	  flouble *map_mean=my_calloc(npx,sizeof(flouble));
-	  //	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
+	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
 	  print_info("Adding perturbations to kappa shell #%d\n",ir+1);
-	  //	  he_map2alm(par->kmap->nside,lmax,1,&map_write,&alm);
-	  //	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_kappa[ir]);
-	  //	  he_alm2map(par->kmap->nside,lmax,1,&map_mean,&alm);
-	  //	  free(alm);
+	  he_map2alm(par->kmap->nside,lmax,1,&map_write,&alm);
+	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_kappa[ir]);
+	  he_alm2map(par->kmap->nside,lmax,1,&map_mean,&alm);
+	  free(alm);
 	  map_extra=he_synfast(par->cl_extra_kappa[ir],par->kmap->nside,lmax,par->seed_rng);
 	  for(ip=0;ip<npx;ip++)
 	    map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
@@ -616,12 +732,12 @@ void write_isw(ParamCoLoRe *par)
 	  int lmax=3*par->pd_map->nside;
 	  flouble *map_extra;
 	  flouble *map_mean=my_calloc(npx,sizeof(flouble));
-	  //	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
+	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
 	  print_info("Adding perturbations to isw shell #%d\n",ir+1);
-	  //	  he_map2alm(par->pd_map->nside,lmax,1,&map_write,&alm);
-	  //	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_isw[ir]);
-	  //	  he_alm2map(par->pd_map->nside,lmax,1,&map_mean,&alm);
-	  //	  free(alm);
+	  he_map2alm(par->pd_map->nside,lmax,1,&map_write,&alm);
+	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_isw[ir]);
+	  he_alm2map(par->pd_map->nside,lmax,1,&map_mean,&alm);
+	  free(alm);
 	  map_extra=he_synfast(par->cl_extra_isw[ir],par->pd_map->nside,lmax,par->seed_rng);
 	  for(ip=0;ip<npx;ip++)
 	    map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
@@ -814,10 +930,12 @@ void param_colore_free(ParamCoLoRe *par)
     for(ii=0;ii<par->n_srcs;ii++) {
       gsl_spline_free(par->spline_srcs_bz[ii]);
       gsl_spline_free(par->spline_srcs_nz[ii]);
+      gsl_spline_free(par->spline_norm_srcs[ii]);
       gsl_interp_accel_free(par->intacc_srcs[ii]);
       if(par->srcs[ii]!=NULL)
       	free(par->srcs[ii]);
     }
+    gsl_interp_accel_free(par->intacc_norm_srcs);
     if(par->srcs!=NULL)
       free(par->srcs);
     free(par->nsources_this);
@@ -827,9 +945,11 @@ void param_colore_free(ParamCoLoRe *par)
     for(ii=0;ii<par->n_imap;ii++) {
       gsl_spline_free(par->spline_imap_bz[ii]);
       gsl_spline_free(par->spline_imap_tz[ii]);
+      gsl_spline_free(par->spline_norm_imap[ii]);
       gsl_interp_accel_free(par->intacc_imap[ii]);
       free_hp_shell(par->imap[ii]);
     }
+    gsl_interp_accel_free(par->intacc_norm_imap);
     if(par->imap!=NULL)
       free(par->imap);
   }

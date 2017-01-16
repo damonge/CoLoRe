@@ -28,15 +28,6 @@
 #define IND_YZ 4
 #define IND_ZZ 5
 
-static inline double get_cosine(double index,double dx)
-{
-#if PIXTYPE==PT_CEA
-  return index*dx-1;
-#elif PIXTYPE==PT_CAR
-  return cos(M_PI-index*dx);
-#endif //PIXTYPE
-}
-
 static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
 			flouble *d,flouble v[3],flouble t[6],flouble *pdot)
 {
@@ -144,179 +135,173 @@ void pixelize(ParamCoLoRe *par)
 #pragma omp for nowait schedule(dynamic)
 #endif //_HAVE_OMP
 	for(ir=0;ir<oi->nr;ir++) {
-	  int icth;
+	  int ipix;
+	  double r0=oi->r0_arr[ir];
 	  double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
-#if PIXTYPE==PT_CEA
-	  flouble dcth=2.0/oi->nside_arr[ir];
-	  flouble dcth_sub=dcth/NSUB_PERP;
-#elif PIXTYPE==PT_CAR
-	  flouble dth=M_PI/oi->nside_arr[ir];
-#endif //PIXTYPE
-	  flouble dphi=M_PI/oi->nside_arr[ir];
 	  flouble dr_sub=dr/NSUB_PAR;
-	  flouble dphi_sub=dphi/NSUB_PERP;
-	  int ncth=oi->icthf_arr[ir]-oi->icth0_arr[ir]+1;
-	  int nphi=oi->iphif_arr[ir]-oi->iphi0_arr[ir]+1;
-	  flouble r0=oi->r0_arr[ir];
-	  for(icth=0;icth<ncth;icth++) {
-	    int iphi;
-	    int index_cth=nphi*icth;
-#if PIXTYPE==PT_CEA
-	    flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dcth);
-#elif PIXTYPE==PT_CAR
-	    flouble cth0=get_cosine(oi->icth0_arr[ir]+icth+0.0,dth);
-	    flouble dcth=get_cosine(oi->icth0_arr[ir]+icth+1.0,dth)-cth0;
-	    flouble dcth_sub=dcth/NSUB_PERP;
-#endif //PIXTYPE
-	    flouble cth_h=cth0+dcth*0.5;
-	    flouble sth_h=sqrt(1-cth_h*cth_h);
-	    for(iphi=0;iphi<nphi;iphi++) {
+	  double rm=r0+dr*0.5;
+	  double dg=dgrowth_of_r(par,rm);
+	  double vg=vgrowth_of_r(par,rm);
+	  double pg=dg*(1+z_of_r(par,rm));
+	  double pdg=pdgrowth_of_r(par,rm);
+	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
+	    int ipix_sub;
+	    double cth_h=1,sth_h=0,cph_h=1,sph_h=0,u[3];
+	    int added_anything=0;
+	    flouble d=0,v[3]={0,0,0},t[6]={0,0,0,0,0,0},pd=0;
+
+	    get_vec(ipix,oi->iphi0_arr[ir],oi->icth0_arr[ir],
+		    oi->nside_arr[ir],oi->nside_ratio_arr[ir],u);
+	    if(par->do_lensing) {
+	      cth_h=u[2]; sth_h=sqrt((1+cth_h)*(1-cth_h));
+	      if(sth_h!=0) {
+		cph_h=u[0]/sth_h;
+		sph_h=u[1]/sth_h;
+	      }
+	    }
+
+	    for(ipix_sub=0;ipix_sub<NSUB_PERP*NSUB_PERP;ipix_sub++) {
 	      int ir2;
-	      flouble u[3];
-	      int added_anything=0;
-	      int index=index_cth+iphi;
-	      flouble phi0=(oi->iphi0_arr[ir]+iphi)*dphi;
-	      flouble phi_h=phi0+dphi*0.5;
-	      flouble cph_h=cos(phi_h),sph_h=sin(phi_h);
-	      flouble d=0,v[3]={0,0,0},t[6]={0,0,0,0,0,0},pd=0;
-	      u[0]=sth_h*cph_h; u[1]=sth_h*sph_h; u[2]=cth_h;
-
-	      //Make sub-voxels
+	      double x[3];
+	      if(NSUB_PERP==1) {
+		x[0]=u[0]; x[1]=u[1]; x[2]=u[2];
+	      }
+	      else {
+		int iphi0;
+#if PIXTYPE == PT_HPX
+		iphi0=oi->iphi0_arr[ir]*NSUB_PERP*NSUB_PERP;
+#else
+		iphi0=oi->iphi0_arr[ir]*NSUB_PERP;
+#endif //PIXTYPE
+		get_vec(ipix*NSUB_PERP*NSUB_PERP+ipix_sub,iphi0,oi->icth0_arr[ir]*NSUB_PERP,
+			oi->nside_arr[ir]*NSUB_PERP,oi->nside_ratio_arr[ir]*NSUB_PERP,x);
+	      }
 	      for(ir2=0;ir2<NSUB_PAR;ir2++) {
-		int icth2;
+		int ax;
+		lint ix0[3];
+		double h0x[3];
 		flouble r=r0+(ir2+0.5)*dr_sub;
-		for(icth2=0;icth2<NSUB_PERP;icth2++) {
-		  int iphi2;
-		  flouble cth=cth0+(icth2+0.5)*dcth_sub;
-		  flouble sth=sqrt(1-cth*cth);
-		  for(iphi2=0;iphi2<NSUB_PERP;iphi2++) {
-		    flouble phi=phi0+(iphi2+0.5)*dphi_sub;
-		    int ax;
-		    lint ix0[3];
-		    flouble x[3],h0x[3];
-		    x[0]=r*sth*cos(phi); x[1]=r*sth*sin(phi); x[2]=r*cth;
-#if INTERP_TYPE==INTERP_NGP
-		    //Trilinear interpolation
-		    for(ax=0;ax<3;ax++) {
-		      x[ax]+=par->pos_obs[ax];
-		      ix0[ax]=(int)(x[ax]*idx+0.5);
-		      if(ix0[ax]>=par->n_grid)
-			ix0[ax]-=par->n_grid;
-		      else if(ix0[ax]<0)
-			ix0[ax]+=par->n_grid;
-		    }
-		    ix0[2]-=par->iz0_here;
-		    
-		    if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-		      flouble d_000,v_000[3],t_000[6],pd_000;
-		      flouble w_000=h0x[2]*h0x[1]*h0x[0];
-		      
-		      added_anything=1;
-		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000);
-		      d+=d_000*w_000;
-		      for(ax=0;ax<3;ax++)
-			v[ax]+=v_000[ax]*w_000;
-		      if(par->do_isw)
-			pd+=pd_000*w_000;
-		      if(par->do_lensing) {
-			for(ax=0;ax<6;ax++)
-			  t[ax]+=t_000[ax]*w_000;
-		      }
-		    }
-#elif INTERP_TYPE==INTERP_CIC
-		    lint ix1[3];
-		    flouble h1x[3];
+		x[0]*=r; x[1]*=r; x[2]*=r; 
 
-		    //Trilinear interpolation
-		    for(ax=0;ax<3;ax++) {
-		      x[ax]+=par->pos_obs[ax];
-		      ix0[ax]=(int)(x[ax]*idx);
-		      h0x[ax]=x[ax]*idx-ix0[ax];
-		      h1x[ax]=1-h0x[ax];
-		      ix1[ax]=ix0[ax]+1;
-		      if(ix0[ax]>=par->n_grid)
-			ix0[ax]-=par->n_grid;
-		      else if(ix0[ax]<0)
-			ix0[ax]+=par->n_grid;
-		      if(ix1[ax]>=par->n_grid)
-			ix1[ax]-=par->n_grid;
-		      else if(ix1[ax]<0)
-			ix1[ax]+=par->n_grid;
-		    }
-		    ix0[2]-=par->iz0_here;
-		    ix1[2]-=par->iz0_here;
-		    
-		    if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-		      flouble d_000,v_000[3],t_000[6],pd_000;
-		      flouble d_001,v_001[3],t_001[6],pd_001;
-		      flouble d_010,v_010[3],t_010[6],pd_010;
-		      flouble d_011,v_011[3],t_011[6],pd_011;
-		      flouble w_000=h1x[2]*h1x[1]*h1x[0];
-		      flouble w_001=h1x[2]*h1x[1]*h0x[0];
-		      flouble w_010=h1x[2]*h0x[1]*h1x[0];
-		      flouble w_011=h1x[2]*h0x[1]*h0x[0];
-		      
-		      added_anything=1;
-		      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000);
-		      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001,&pd_001);
-		      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010,&pd_010);
-		      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011,&pd_011);
-		      d+=(d_000*w_000+d_001*w_001+d_010*w_010+d_011*w_011);
-		      for(ax=0;ax<3;ax++)
-			v[ax]+=(v_000[ax]*w_000+v_001[ax]*w_001+v_010[ax]*w_010+v_011[ax]*w_011);
-		      if(par->do_lensing) {
-			for(ax=0;ax<6;ax++)
-			  t[ax]+=(t_000[ax]*w_000+t_001[ax]*w_001+t_010[ax]*w_010+t_011[ax]*w_011);
-		      }
-		      if(par->do_isw)
-			pd+=(pd_000*w_000+pd_001*w_001+pd_010*w_010+pd_011*w_011);
-		    }
-		    if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
-		      flouble d_100,v_100[3],t_100[6],pd_100;
-		      flouble d_101,v_101[3],t_101[6],pd_101;
-		      flouble d_110,v_110[3],t_110[6],pd_110;
-		      flouble d_111,v_111[3],t_111[6],pd_111;
-		      flouble w_100=h0x[2]*h1x[1]*h1x[0];
-		      flouble w_101=h0x[2]*h1x[1]*h0x[0];
-		      flouble w_110=h0x[2]*h0x[1]*h1x[0];
-		      flouble w_111=h0x[2]*h0x[1]*h0x[0];
-		      
-		      added_anything=1;
-		      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100,&pd_100);
-		      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101,&pd_101);
-		      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110,&pd_110);
-		      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111,&pd_111);
-		      d+=(d_100*w_100+d_101*w_101+d_110*w_110+d_111*w_111);
-		      for(ax=0;ax<3;ax++)
-			v[ax]+=(v_100[ax]*w_100+v_101[ax]*w_101+v_110[ax]*w_110+v_111[ax]*w_111);
-		      if(par->do_lensing) {
-			for(ax=0;ax<6;ax++)
-			  t[ax]+=(t_100[ax]*w_100+t_101[ax]*w_101+t_110[ax]*w_110+t_111[ax]*w_111);
-		      }
-		      if(par->do_isw)
-			pd+=(pd_100*w_100+pd_101*w_101+pd_110*w_110+pd_111*w_111);
-		    }
-#endif //INTERP_TYPE
+#if INTERP_TYPE==INTERP_NGP
+		//Trilinear interpolation
+		for(ax=0;ax<3;ax++) {
+		  x[ax]+=par->pos_obs[ax];
+		  ix0[ax]=(int)(x[ax]*idx+0.5);
+		  if(ix0[ax]>=par->n_grid)
+		    ix0[ax]-=par->n_grid;
+		  else if(ix0[ax]<0)
+		    ix0[ax]+=par->n_grid;
+		}
+		ix0[2]-=par->iz0_here;
+
+		if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
+		  flouble d_000,v_000[3],t_000[6],pd_000;
+		  flouble w_000=h0x[2]*h0x[1]*h0x[0];
+
+		  added_anything=1;
+		  get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000);
+		  d+=d_000*w_000;
+		  for(ax=0;ax<3;ax++)
+		    v[ax]+=v_000[ax]*w_000;
+		  if(par->do_isw)
+		    pd+=pd_000*w_000;
+		  if(par->do_lensing) {
+		    for(ax=0;ax<6;ax++)
+		      t[ax]+=t_000[ax]*w_000;
 		  }
 		}
-	      }
+#elif INTERP_TYPE==INTERP_CIC
+		lint ix1[3];
+		flouble h1x[3];
 
-	      if(added_anything) {
-		double mean_norm=1./(NSUB_PAR*NSUB_PERP*NSUB_PERP);
-		par->dens_beams[ib][ir][index]+=d*mean_norm;
-		par->vrad_beams[ib][ir][index]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])*mean_norm;
-		if(par->do_isw)
-		  par->pdot_beams[ib][ir][index]+=pd*mean_norm;
-		if(par->do_lensing) {
-		  par->p_xx_beams[ib][ir][index]+=idx*idx*
-		    (cth_h*cth_h*(t[IND_XX]*cph_h*cph_h+2*t[IND_XY]*cph_h*sph_h+t[IND_YY]*sph_h*sph_h)+
-		     t[IND_ZZ]*sth_h*sth_h-2*cth_h*sth_h*(t[IND_XZ]*cph_h+t[IND_YZ]*sph_h))*mean_norm;
-		  par->p_xy_beams[ib][ir][index]+=idx*idx*
-		    (t[IND_XY]*(cph_h*cph_h-sph_h*sph_h)*cth_h+t[IND_XZ]*sph_h*sth_h-
-		     cph_h*((t[IND_XX]-t[IND_YY])*cth_h*sph_h+t[IND_YZ]*sth_h))*mean_norm;
-		  par->p_yy_beams[ib][ir][index]+=idx*idx*
-		    (t[IND_XX]*sph_h*sph_h+t[IND_YY]*cph_h*cph_h-2*t[IND_XY]*cph_h*sph_h)*mean_norm;
+		//Trilinear interpolation
+		for(ax=0;ax<3;ax++) {
+		  x[ax]+=par->pos_obs[ax];
+		  ix0[ax]=(int)(x[ax]*idx);
+		  h0x[ax]=x[ax]*idx-ix0[ax];
+		  h1x[ax]=1-h0x[ax];
+		  ix1[ax]=ix0[ax]+1;
+		  if(ix0[ax]>=par->n_grid)
+		    ix0[ax]-=par->n_grid;
+		  else if(ix0[ax]<0)
+		    ix0[ax]+=par->n_grid;
+		  if(ix1[ax]>=par->n_grid)
+		    ix1[ax]-=par->n_grid;
+		  else if(ix1[ax]<0)
+		    ix1[ax]+=par->n_grid;
 		}
+		ix0[2]-=par->iz0_here;
+		ix1[2]-=par->iz0_here;
+
+		if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
+		  flouble d_000,v_000[3],t_000[6],pd_000;
+		  flouble d_001,v_001[3],t_001[6],pd_001;
+		  flouble d_010,v_010[3],t_010[6],pd_010;
+		  flouble d_011,v_011[3],t_011[6],pd_011;
+		  flouble w_000=h1x[2]*h1x[1]*h1x[0];
+		  flouble w_001=h1x[2]*h1x[1]*h0x[0];
+		  flouble w_010=h1x[2]*h0x[1]*h1x[0];
+		  flouble w_011=h1x[2]*h0x[1]*h0x[0];
+
+		  added_anything=1;
+		  get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000);
+		  get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001,&pd_001);
+		  get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010,&pd_010);
+		  get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011,&pd_011);
+		  d+=(d_000*w_000+d_001*w_001+d_010*w_010+d_011*w_011);
+		  for(ax=0;ax<3;ax++)
+		    v[ax]+=(v_000[ax]*w_000+v_001[ax]*w_001+v_010[ax]*w_010+v_011[ax]*w_011);
+		  if(par->do_lensing) {
+		    for(ax=0;ax<6;ax++)
+		      t[ax]+=(t_000[ax]*w_000+t_001[ax]*w_001+t_010[ax]*w_010+t_011[ax]*w_011);
+		  }
+		  if(par->do_isw)
+		    pd+=(pd_000*w_000+pd_001*w_001+pd_010*w_010+pd_011*w_011);
+		}
+		if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
+		  flouble d_100,v_100[3],t_100[6],pd_100;
+		  flouble d_101,v_101[3],t_101[6],pd_101;
+		  flouble d_110,v_110[3],t_110[6],pd_110;
+		  flouble d_111,v_111[3],t_111[6],pd_111;
+		  flouble w_100=h0x[2]*h1x[1]*h1x[0];
+		  flouble w_101=h0x[2]*h1x[1]*h0x[0];
+		  flouble w_110=h0x[2]*h0x[1]*h1x[0];
+		  flouble w_111=h0x[2]*h0x[1]*h0x[0];
+
+		  added_anything=1;
+		  get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100,&pd_100);
+		  get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101,&pd_101);
+		  get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110,&pd_110);
+		  get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111,&pd_111);
+		  d+=(d_100*w_100+d_101*w_101+d_110*w_110+d_111*w_111);
+		  for(ax=0;ax<3;ax++)
+		    v[ax]+=(v_100[ax]*w_100+v_101[ax]*w_101+v_110[ax]*w_110+v_111[ax]*w_111);
+		  if(par->do_lensing) {
+		    for(ax=0;ax<6;ax++)
+		      t[ax]+=(t_100[ax]*w_100+t_101[ax]*w_101+t_110[ax]*w_110+t_111[ax]*w_111);
+		  }
+		  if(par->do_isw)
+		    pd+=(pd_100*w_100+pd_101*w_101+pd_110*w_110+pd_111*w_111);
+		}
+#endif //INTERP_TYPE
+	      }
+	    }
+	    if(added_anything) {
+	      double mean_norm=1./(NSUB_PAR*NSUB_PERP*NSUB_PERP);
+	      par->dens_beams[ib][ir][ipix]+=d*mean_norm;
+	      par->vrad_beams[ib][ir][ipix]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])*mean_norm*vg;
+	      if(par->do_isw)
+		par->pdot_beams[ib][ir][ipix]+=pd*mean_norm*pdg;
+	      if(par->do_lensing) {
+		par->p_xx_beams[ib][ir][ipix]+=idx*idx*
+		  (cth_h*cth_h*(t[IND_XX]*cph_h*cph_h+2*t[IND_XY]*cph_h*sph_h+t[IND_YY]*sph_h*sph_h)+
+		   t[IND_ZZ]*sth_h*sth_h-2*cth_h*sth_h*(t[IND_XZ]*cph_h+t[IND_YZ]*sph_h))*mean_norm*pg;
+		par->p_xy_beams[ib][ir][ipix]+=idx*idx*
+		  (t[IND_XY]*(cph_h*cph_h-sph_h*sph_h)*cth_h+t[IND_XZ]*sph_h*sth_h-
+		   cph_h*((t[IND_XX]-t[IND_YY])*cth_h*sph_h+t[IND_YZ]*sth_h))*mean_norm*pg;
+		par->p_yy_beams[ib][ir][ipix]+=idx*idx*
+		  (t[IND_XX]*sph_h*sph_h+t[IND_YY]*cph_h*cph_h-2*t[IND_XY]*cph_h*sph_h)*mean_norm*pg;
 	      }
 	    }
 	  }

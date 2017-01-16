@@ -24,6 +24,7 @@
 static void compute_sigma_dens(ParamCoLoRe *par)
 {
   double mean_gauss=0;
+  double s2_save=par->sigma2_gauss;
   par->sigma2_gauss=0;
 
   //Compute Gaussian variance
@@ -73,9 +74,11 @@ static void compute_sigma_dens(ParamCoLoRe *par)
 
   par->sigma2_gauss-=mean_gauss*mean_gauss;
   print_info(" <d>=%.3lE, <d^2>=%.3lE\n",mean_gauss,sqrt(par->sigma2_gauss));
+  if(par->need_onions)
+    par->sigma2_gauss=s2_save;
 }
 
-static void fftw_wrap(int ng,dftw_complex *pin,flouble *pout)
+void fftw_wrap_c2r(int ng,dftw_complex *pin,flouble *pout)
 {
 #ifdef _SPREC
   fftwf_plan plan_ft;
@@ -92,6 +95,29 @@ static void fftw_wrap(int ng,dftw_complex *pin,flouble *pout)
   plan_ft=fftw_mpi_plan_dft_c2r_3d(ng,ng,ng,pin,pout,MPI_COMM_WORLD,FFTW_ESTIMATE);
 #else //_HAVE_MPI
   plan_ft=fftw_plan_dft_c2r_3d(ng,ng,ng,pin,pout,FFTW_ESTIMATE);
+#endif //_HAVE_MPI
+  fftw_execute(plan_ft);
+  fftw_destroy_plan(plan_ft);
+#endif //_SPREC
+}
+
+void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout)
+{
+#ifdef _SPREC
+  fftwf_plan plan_ft;
+#ifdef _HAVE_MPI
+  plan_ft=fftwf_mpi_plan_dft_r2c_3d(ng,ng,ng,pin,pout,MPI_COMM_WORLD,FFTW_ESTIMATE);
+#else //_HAVE_MPI
+  plan_ft=fftwf_plan_dft_r2c_3d(ng,ng,ng,pin,pout,FFTW_ESTIMATE);
+#endif //_HAVE_MPI
+  fftwf_execute(plan_ft);
+  fftwf_destroy_plan(plan_ft);
+#else //_SPREC
+  fftw_plan plan_ft;
+#ifdef _HAVE_MPI
+  plan_ft=fftw_mpi_plan_dft_r2c_3d(ng,ng,ng,pin,pout,MPI_COMM_WORLD,FFTW_ESTIMATE);
+#else //_HAVE_MPI
+  plan_ft=fftw_plan_dft_r2c_3d(ng,ng,ng,pin,pout,FFTW_ESTIMATE);
 #endif //_HAVE_MPI
   fftw_execute(plan_ft);
   fftw_destroy_plan(plan_ft);
@@ -192,12 +218,6 @@ void init_fftw(ParamCoLoRe *par)
     report_error(1,"Ran out of memory\n");
   par->grid_dens=(flouble *)(par->grid_dens_f);
 
-#ifdef _DEBUG
-  double total_GB_d=0;
-  unsigned long long  total_GB=0;
-  total_GB+=dsize*sizeof(dftw_complex);
-#endif //_DEBUG
-
 #ifdef _SPREC
   par->grid_npot_f=fftwf_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
 #else //_SPREC
@@ -207,15 +227,7 @@ void init_fftw(ParamCoLoRe *par)
     report_error(1,"Ran out of memory\n");
   par->grid_npot=(flouble *)(par->grid_npot_f);
 
-#ifdef _DEBUG
-  total_GB+=(dsize+2*par->n_grid*(par->n_grid/2+1))*sizeof(dftw_complex);
-  total_GB_d=total_GB/pow(1024.,3);
-  printf("Node %d: Have allocated %.3lf GB for grids\n",NodeThis,total_GB_d);
-#endif //_DEBUG
-
 #ifdef _HAVE_MPI
-  //  par->slice_left=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
-  //  par->slice_right=my_malloc(2*(par->n_grid/2+1)*par->n_grid*sizeof(flouble));
   par->slice_left =&(par->grid_npot[2*dsize]);
   par->slice_right=&(par->grid_npot[2*(dsize+par->n_grid*(par->n_grid/2+1))]);
 #endif //_HAVE_MPI
@@ -361,8 +373,8 @@ void create_cartesian_fields(ParamCoLoRe *par)
 
   print_info("Transforming density and Newtonian potential\n");
   if(NodeThis==0) timer(0);
-  fftw_wrap(par->n_grid,par->grid_dens_f,par->grid_dens);
-  fftw_wrap(par->n_grid,par->grid_npot_f,par->grid_npot);
+  fftw_wrap_c2r(par->n_grid,par->grid_dens_f,par->grid_dens);
+  fftw_wrap_c2r(par->n_grid,par->grid_npot_f,par->grid_npot);
   if(NodeThis==0) timer(2);
 
   print_info("Normalizing density and Newtonian potential \n");
@@ -406,5 +418,5 @@ void create_cartesian_fields(ParamCoLoRe *par)
 
   //Output density field if necessary
   if(par->output_density)
-    write_grids(par);
+    write_density_grid(par,"gaussian");
 }

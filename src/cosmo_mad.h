@@ -72,6 +72,7 @@ void csm_unset_gsl_eh(void);
 void csm_set_verbosity(int verb);
 void csm_params_free(Csm_params *par);
 Csm_params *csm_params_new(void);
+double csm_omega_m(Csm_params *par,double aa);
 double csm_hubble(Csm_params *par,double aa);
 double csm_particle_horizon(Csm_params *par,double aa);
 double csm_radial_comoving_distance(Csm_params *par,double aa);
