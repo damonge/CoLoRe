@@ -1064,7 +1064,7 @@ void compute_physical_density_field(ParamCoLoRe *par)
     write_density_grid(par,"lightcone");
 }
 
-static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,int idz,double *zarr,
+static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,double idz,double *zarr,
 						    unsigned long long *narr,
 						    double **norm_srcs_arr,double **norm_imap_arr)
 {
@@ -1138,7 +1138,7 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,int 
   } //end omp parallel
 }
 
-static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,int idz,double *zarr,
+static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,double idz,double *zarr,
 						      unsigned long long *narr,
 						      double **norm_srcs_arr,double **norm_imap_arr)
 {
