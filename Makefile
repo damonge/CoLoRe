@@ -8,6 +8,8 @@ OPTIONS = -Wall -O3 -std=c99
 ### Behavioural flags
 #Use double precision integer (enable in general)
 DEFINEFLAGS += -D_LONGIDS
+#Use normalized bias model
+#DEFINEFLAGS += -D_BIAS_MODEL_2
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
