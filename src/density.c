@@ -1102,13 +1102,13 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	  double redshift=z_of_r(par,r);
 	  int ind_z=(int)(redshift*idz)+1;
 	  if((ind_z>=0) && (ind_z<nz)) {
-	    double d=1+par->grid_dens[index];
+	    double d=par->grid_dens[index];
 	    narr_thr[ind_z]++;
 	    zarr_thr[ind_z]+=redshift;
 	    for(ipop=0;ipop<par->n_srcs;ipop++)
-	      norm_srcs_arr_thr[ipop][ind_z]+=pow(d,bias_of_z_srcs(par,redshift,ipop));
+	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,bias_of_z_srcs(par,redshift,ipop));
 	    for(ipop=0;ipop<par->n_imap;ipop++)
-	      norm_imap_arr_thr[ipop][ind_z]+=pow(d,bias_of_z_imap(par,redshift,ipop));
+	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,bias_of_z_imap(par,redshift,ipop));
 	  }
 	}
       }
@@ -1178,11 +1178,11 @@ static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,do
 	narr_thr[iz]+=oi->num_pix[ir];
 	zarr_thr[iz]+=redshift*oi->num_pix[ir];
 	for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
-	  double d=1+par->dens_beams[ib][ir][ipix];
+	  double d=par->dens_beams[ib][ir][ipix];
 	  for(ipop=0;ipop<par->n_srcs;ipop++)
-	    norm_srcs_arr_thr[ipop][iz]+=pow(d,barr_srcs[ipop]);
+	    norm_srcs_arr_thr[ipop][iz]+=bias_model(d,barr_srcs[ipop]);
 	  for(ipop=0;ipop<par->n_imap;ipop++)
-	    norm_imap_arr_thr[ipop][iz]+=pow(d,barr_imap[ipop]);
+	    norm_imap_arr_thr[ipop][iz]+=bias_model(d,barr_imap[ipop]);
 	}
       } //end omp for
 #ifdef _HAVE_OMP

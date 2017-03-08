@@ -167,7 +167,7 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
 	  if(ndens>0) {
 	    double bias=bias_of_z_srcs(par,redshift,ipop);
 	    double dnorm=norm_srcs_of_z(par,redshift,ipop);
-	    double lambda=ndens*cell_vol*pow(1+par->grid_dens[index],bias)*dnorm;
+	    double lambda=ndens*cell_vol*bias_model(par->grid_dens[index],bias)*dnorm;
 	    npp=rng_poisson(lambda,rng_thr);
 	  }
 
@@ -336,7 +336,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
 #endif //PIXTYPE
-	    double lambda=ndens*cell_vol*pow(1+dens_slice[ipix],bias)*dnorm;
+	    double lambda=ndens*cell_vol*bias_model(dens_slice[ipix],bias)*dnorm;
 	    int npp=rng_poisson(lambda,rng_thr);
 	    nsrc_slice[ipix]=npp;
 	    np_tot_thr[ithr]+=npp;
@@ -742,7 +742,7 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 					  oi->nside_arr[ir],oi->nside_ratio_arr[ir]);
 	    double cell_vol=(rf*rf*rf-r0*r0*r0)*pixarea/3;
 #endif //PIXTYPE
-	    double temp=tmean*cell_vol*pow(1+dens_slice[ipix],bias)*dnorm;
+	    double temp=tmean*cell_vol*bias_model(dens_slice[ipix],bias)*dnorm;
 	    double dr_rsd=prefac_rsd*vrad_slice[ipix];
 
 	    for(ipix_sub=0;ipix_sub<NSUB_IMAP_PERP*NSUB_IMAP_PERP;ipix_sub++) {

@@ -376,6 +376,17 @@ void get_vec(int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,doubl
 void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,
 		       double *th,double *phi);
 
+static inline double bias_model(double d,double b)
+{
+  if(d<=-1)
+    return 0;
+#ifdef _BIAS_MODEL_2
+  return pow(1+d,b)/pow(1+d*d,0.5*(b-1));
+#else //_BIAS_MODEL_2
+  return pow(1+d,b);
+#endif //_BIAS_MODEL_2
+}
+
 
 //////
 // Functions defined in cosmo.c
