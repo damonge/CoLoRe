@@ -1,0 +1,28 @@
+import numpy as np
+import py_cosmo_mad as csm
+from scipy.optimize import brentq
+
+pcs=csm.PcsPar()
+pcs.background_set(0.3,0.7,0.05,-1.,0.,0.7,2.7255)
+
+def get_nu_next(nu0,dr) :
+    a0=nu0/1420.
+    r0=pcs.radial_comoving_distance(a0)
+    def f_min(a) :
+        return pcs.radial_comoving_distance(a)+dr-r0
+    a_next=brentq(f_min,0.1,1.)
+    
+    return a_next*1420.
+
+nu0_arr=[]
+nuf_arr=[]
+
+nu0=740.
+while nu0<=1049. :
+    nu0_arr.append(nu0)
+    nu0=get_nu_next(nu0,5.)
+    nuf_arr.append(nu0)
+nu0_arr=np.array(nu0_arr)
+nuf_arr=np.array(nuf_arr)
+
+np.savetxt("nus.txt",np.transpose([nu0_arr,nuf_arr]))
