@@ -15,14 +15,19 @@ def read_grid(prefix) :
     else :
         f_type=np.float64
 
-    grid_out=np.zeros([ngrid,ngrid,ngrid])
+    grid_out=np.zeros([3,ngrid,ngrid])
     for ifil in np.arange(nfiles) :
         f=open(prefix+"_%d.dat"%ifil,"rb")
         nf,sz=np.fromfile(f,dtype=np.int32,count=2)
         lb=np.fromfile(f,dtype=np.float64,count=1)
         ng,nz_here,iz0_here=np.fromfile(f,dtype=np.int32,count=3)
         for iz in np.arange(nz_here) :
-            grid_out[iz0_here+iz,:,:]=np.fromfile(f,dtype=f_type,count=ng*ng).reshape([ng,ng])
+            print ifil,iz
+            g=np.fromfile(f,dtype=f_type,count=ng*ng).reshape([ng,ng])
+            if iz0_here+iz==ngrid/2 :
+                grid_out[2,:,:]=g
+            grid_out[0,:,iz0_here+iz]=g[ngrid/2,:]
+            grid_out[1,:,iz0_here+iz]=g[:,ngrid/2]
         f.close()
 
     return ngrid,lbox,np.array(grid_out)
@@ -39,7 +44,9 @@ def plot_slice(slic) :
     plt.figure()
     plt.imshow(slic,origin='lower',interpolation='nearest');
     plt.colorbar()
-plot_slice(dens[ng/2,:,:])
-plot_slice(dens[:,ng/2,:])
-plot_slice(dens[:,:,ng/2])
-plt.show()
+    plt.savefig("sl%d.png"%ib,bbox_inches='tigh')
+for ib in [0,1,2] :
+    plot_slice(dens[ib,:,:],ib) 
+#plot_slice(dens[1,:,:])
+#plot_slice(dens[2,:,:])
+#plt.show()

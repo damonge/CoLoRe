@@ -142,7 +142,8 @@
 #endif //_SPREC
 
 #ifdef _LONGIDS
-#define LINT_MPI MPI_INT
+//#define LINT_MPI MPI_INT
+#define LINT_MPI MPI_LONG
 #else //_LONGIDS
 #define LINT_MPI MPI_LONG
 #endif //_LONGIDS
@@ -152,7 +153,8 @@
 #ifdef _LONGIDS
 typedef long lint;
 #else //_LONGIDS
-typedef int lint;
+//typedef int lint;
+typedef long lint;
 #endif //_LONGIDS
 
 #ifdef _SPREC

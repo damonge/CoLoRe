@@ -586,7 +586,7 @@ static int get_r_index_imap(HealpixShells *sh,double r,int ir_start)
     ir0=sh->nr-1;
   else
     ir0=ir_start;
-
+  
   while(!gotit) {
     if((ir0==-1) || (ir0==sh->nr))
       gotit=1;
@@ -594,78 +594,84 @@ static int get_r_index_imap(HealpixShells *sh,double r,int ir_start)
       if(r<sh->r0[ir0])
 	ir0++;
       else {
-        if(r>=sh->rf[ir0])
-          ir0--;
+	if(r>=sh->rf[ir0])
+	  ir0--;
 	else
-          gotit=1;
+	  gotit=1;
       }
     }
   }
-
+  
   return ir0;
 }
 
 static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
 {
   long ip,npx=he_nside2npix(shell->nside);
+
 #if PIXTYPE!=PT_HPX
   double pixsize=2*sqrt(4*M_PI/npx);
 #endif //PIXTYPE
   shell->num_pix=0;
   shell->listpix=my_malloc(npx*sizeof(long));
-
+  
   for(ip=0;ip<npx;ip++) {
     int ib;
     int goodpix=0;
-
+    
+    if(par->need_onions) {
 #if PIXTYPE==PT_HPX
-    long ip_nest,ip_base;
-    int nside_ratio=shell->nside/par->oi_beams[0]->nside_arr[0];
-    ring2nest(shell->nside,ip,&ip_nest);
-    ip_base=ip_nest/(nside_ratio*nside_ratio);
-    for(ib=0;ib<par->n_beams_here;ib++) {
-      if(ip_base==par->oi_beams[ib]->iphi0_arr[0])
-	goodpix=1;
-    }
-#else //PIXTYPE
-
-    double phi0,phif,phim;
-    double th0,thf,thm,cth0,cthf;
-    pix2ang_ring(shell->nside,ip,&thm,&phim);
-    phi0=phim-pixsize;
-    if(phi0>=2*M_PI)
-      phi0-=2*M_PI;
-    if(phi0<0)
-      phi0+=2*M_PI;
-    phif=phim+pixsize;
-    if(phif>=2*M_PI)
-      phif-=2*M_PI;
-    if(phif<0)
-      phif+=2*M_PI;
-    th0=CLAMP(thm-pixsize,0,M_PI);
-    thf=CLAMP(thm+pixsize,0,M_PI);
-    cthf=cos(th0);
-    cth0=cos(thf);
-    for(ib=0;ib<par->n_beams_here;ib++) {
-      OnionInfo *beam=par->oi_beams[ib];
-      double cth0_b,cthf_b,phi0_b,phif_b;
-#if PIXTYPE==PT_CEA
-      cth0_b=get_cosine(beam->icth0_arr[0]+0.0,2./beam->nside_arr[0]);
-      cthf_b=get_cosine(beam->icth0_arr[0]+1.0,2./beam->nside_arr[0]);
-#elif PIXTYPE==PT_CAR
-      cth0_b=get_cosine(beam->icth0_arr[0]+0.0,M_PI/beam->nside_arr[0]);
-      cthf_b=get_cosine(beam->icth0_arr[0]+1.0,M_PI/beam->nside_arr[0]);
-#endif //PIXTYPE
-      phi0_b=beam->iphi0_arr[0]*M_PI/beam->nside_arr[0];
-      phif_b=(beam->iphi0_arr[0]+1)*M_PI/beam->nside_arr[0];
-      if(((cth0<=cthf_b)&&(cth0>=cth0_b)) || ((cthf<=cthf_b)&&(cthf>=cth0_b))) { //cth in range
-	if(((phi0<=phif_b)&&(phi0>=phi0_b)) || ((phif<=phif_b)&&(phif>=phi0_b))) //phi in range
+      long ip_nest,ip_base;
+      int nside_ratio=shell->nside/par->oi_beams[0]->nside_arr[0];
+      ring2nest(shell->nside,ip,&ip_nest);
+      ip_base=ip_nest/(nside_ratio*nside_ratio);
+      for(ib=0;ib<par->n_beams_here;ib++) {
+	if(ip_base==par->oi_beams[ib]->iphi0_arr[0])
 	  goodpix=1;
       }
-    }
-
+#else //PIXTYPE
+      
+      double phi0,phif,phim;
+      double th0,thf,thm,cth0,cthf;
+      pix2ang_ring(shell->nside,ip,&thm,&phim);
+      phi0=phim-pixsize;
+      if(phi0>=2*M_PI)
+	phi0-=2*M_PI;
+      if(phi0<0)
+	phi0+=2*M_PI;
+      phif=phim+pixsize;
+      if(phif>=2*M_PI)
+	phif-=2*M_PI;
+      if(phif<0)
+	phif+=2*M_PI;
+      th0=CLAMP(thm-pixsize,0,M_PI);
+      thf=CLAMP(thm+pixsize,0,M_PI);
+      cthf=cos(th0);
+      cth0=cos(thf);
+      for(ib=0;ib<par->n_beams_here;ib++) {
+	OnionInfo *beam=par->oi_beams[ib];
+	double cth0_b,cthf_b,phi0_b,phif_b;
+#if PIXTYPE==PT_CEA
+	cth0_b=get_cosine(beam->icth0_arr[0]+0.0,2./beam->nside_arr[0]);
+	cthf_b=get_cosine(beam->icth0_arr[0]+1.0,2./beam->nside_arr[0]);
+#elif PIXTYPE==PT_CAR
+	cth0_b=get_cosine(beam->icth0_arr[0]+0.0,M_PI/beam->nside_arr[0]);
+	cthf_b=get_cosine(beam->icth0_arr[0]+1.0,M_PI/beam->nside_arr[0]);
 #endif //PIXTYPE
-
+	phi0_b=beam->iphi0_arr[0]*M_PI/beam->nside_arr[0];
+	phif_b=(beam->iphi0_arr[0]+1)*M_PI/beam->nside_arr[0];
+	if(((cth0<=cthf_b)&&(cth0>=cth0_b)) || ((cthf<=cthf_b)&&(cthf>=cth0_b))) { //cth in range
+	  if(((phi0<=phif_b)&&(phi0>=phi0_b)) || ((phif<=phif_b)&&(phif>=phi0_b))) //phi in range
+	    goodpix=1;
+	}
+      }
+      
+#endif //PIXTYPE
+    }
+    else {
+      goodpix=1;
+    }
+    
     if(goodpix) {
       shell->listpix[ip]=shell->num_pix;
       shell->num_pix++;
@@ -673,10 +679,124 @@ static void find_shell_pixels(ParamCoLoRe *par,HealpixShells *shell)
     else
       shell->listpix[ip]=-1;
   }
-
+  
   shell->data=my_calloc(shell->nr*shell->num_pix,sizeof(flouble));
   shell->nadd=my_calloc(shell->nr*shell->num_pix,sizeof(int));
 }
+
+static double get_min_vol(HealpixShells *sh)
+{
+  int ir;
+  double pixel_area=4*M_PI/he_nside2npix(sh->nside);
+  double volmin=1E60;
+
+  for(ir=0;ir<sh->nr;ir++) {
+    double r0=sh->r0[ir];
+    double rf=sh->rf[ir];
+    double vol=pixel_area*(rf*rf*rf-r0*r0*r0)*0.33333333;
+    if(vol<volmin)
+      volmin=vol;
+  }
+
+  return volmin;
+}
+
+static void get_imap_cartesian_single(ParamCoLoRe *par,int ipop)
+{
+  int ii,nthr;
+  int ngx=2*(par->n_grid/2+1);
+
+#ifdef _HAVE_OMP
+  nthr=omp_get_max_threads();
+#else //_HAVE_OMP
+  nthr=1;
+#endif //_HAVE_OMP
+  //  np_tot_thr=my_calloc(nthr,sizeof(lint));
+
+  print_info(" %d-th IM species\n",ipop);
+  if(NodeThis==0) timer(0);
+  find_shell_pixels(par,par->imap[ipop]);
+
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none)		\
+  shared(par,IThread0,ipop,nthr)
+#endif //_HAVE_OMP
+  {
+    lint iz;
+    double dx=par->l_box/par->n_grid;
+    int ngx=2*(par->n_grid/2+1);
+    double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
+
+    double volmin=get_min_vol(par->imap[ipop]);
+    int n_resample=(int)(MAX((8*dx*dx*dx/volmin),1.));
+    double *disp=my_calloc(n_resample*3,sizeof(double));
+#ifdef _HAVE_OMP
+    int ithr=omp_get_thread_num();
+#else //_HAVE_OMP
+    int ithr=0;
+#endif //_HAVE_OMP
+    unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_imap*IThread0);
+    gsl_rng *rng_thr=init_rng(seed_thr);
+    for(iz=0;iz<3*n_resample;iz++)
+      disp[iz]=rng_01(rng_thr);
+    end_rng(rng_thr);
+
+#ifdef _HAVE_OMP
+#pragma omp for schedule(static)
+#endif //_HAVE_OMP
+    for(iz=0;iz<par->nz_here;iz++) {
+      int iy;
+      int irad=0;
+      lint indexz=iz*((lint)(ngx*par->n_grid));
+      double z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      for(iy=0;iy<par->n_grid;iy++) {
+	int ix;
+	lint indexy=iy*ngx;
+	double y0=(iy+0.5)*dx-par->pos_obs[1];
+	for(ix=0;ix<par->n_grid;ix++) {
+	  int npp=0;
+	  lint index=ix+indexy+indexz;
+	  double x0=(ix+0.5)*dx-par->pos_obs[0];
+	  double r0=sqrt(x0*x0+y0*y0+z0*z0);
+	  double redshift=z_of_r(par,r0);
+	  double tmean=temp_of_z_imap(par,redshift,ipop);
+	  if(tmean>0) {
+	    int isub;
+	    double bias=bias_of_z_imap(par,redshift,ipop);
+	    double dnorm=norm_imap_of_z(par,redshift,ipop);
+	    double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,r0);
+	    double prefac_rsd=ihub_of_r(par,r0);
+	    double dr_rsd=rvel*vgrowth_of_r(par,r0)*prefac_rsd;
+	    double temp=tmean*bias_model(par->grid_dens[index],bias)*dnorm;
+	    for(isub=0;isub<n_resample;isub++) {
+	      double cth,phi,r;
+	      double x=x0+(disp[3*isub+0]-0.5)*dx;
+	      double y=y0+(disp[3*isub+1]-0.5)*dx;
+	      double z=z0+(disp[3*isub+2]-0.5)*dx;
+	      cart2sph(x,y,z,&r,&cth,&phi);
+	      irad=get_r_index_imap(par->imap[ipop],r+dr_rsd,irad);
+	      if((irad>=0) && (irad<par->imap[ipop]->nr)) {
+		long irad_t=irad*par->imap[ipop]->num_pix;
+		long pix_id=he_ang2pix(par->imap[ipop]->nside,cth,phi);
+#ifdef _HAVE_OMP
+#pragma omp atomic
+#endif //_HAVE_OMP
+		par->imap[ipop]->data[irad_t+pix_id]+=temp;
+#ifdef _HAVE_OMP
+#pragma omp atomic
+#endif //_HAVE_OMP
+		par->imap[ipop]->nadd[irad_t+pix_id]++;
+	      }
+	    }
+	  }
+	}
+      }
+    }//end omp for
+    free(disp);
+
+  }//end omp parallel
+  if(NodeThis==0) timer(2);
+}  
 
 static void get_imap_single(ParamCoLoRe *par,int ipop)
 {
@@ -802,8 +922,12 @@ void get_imap(ParamCoLoRe *par)
 
   //First, compute lensing Hessian
   print_info("*** Getting intensity maps\n");
-  for(ipop=0;ipop<par->n_imap;ipop++)
-    get_imap_single(par,ipop);
+  for(ipop=0;ipop<par->n_imap;ipop++) {
+    if(par->need_onions)
+      get_imap_single(par,ipop);
+    else
+      get_imap_cartesian_single(par,ipop);
+  }
   print_info("\n");
 }
 

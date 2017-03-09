@@ -382,7 +382,8 @@ ParamCoLoRe *read_run_params(char *fname)
   while(get_npix(par->nside_base)<NNodes)
     par->nside_base*=2;
 
-  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
+  //  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
+  par->need_onions=par->do_lensing+par->do_kappa+par->do_isw;
   if(par->need_onions) {
     par->oi_beams=alloc_onion_info_beams(par);
     par->nside_base=par->oi_beams[0]->nside_arr[0];
@@ -562,20 +563,20 @@ void write_imap(ParamCoLoRe *par)
       int ir;
       long npx=he_nside2npix(par->imap[i_pop]->nside);
       flouble *map_write=my_malloc(npx*sizeof(flouble));
-      //      int *map_nadd=my_malloc(npx*sizeof(int));
+      int *map_nadd=my_malloc(npx*sizeof(int));
       for(ir=0;ir<par->imap[i_pop]->nr;ir++) {
 	long ip;
 	long ir_t=ir*par->imap[i_pop]->num_pix;
 
 	//Write local pixels to dummy map
 	memset(map_write,0,npx*sizeof(flouble));
-	//	memset(map_nadd,0,npx*sizeof(int));
+	memset(map_nadd,0,npx*sizeof(int));
 	sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,i_pop,ir);
 	for(ip=0;ip<npx;ip++) {
 	  int id_pix=par->imap[i_pop]->listpix[ip];
 	  if(id_pix>0) {
 	    map_write[ip]+=par->imap[i_pop]->data[ir_t+id_pix];
-	    //	    map_nadd[ip]+=par->imap[i_pop]->nadd[ir_t+id_pix];
+	    map_nadd[ip]+=par->imap[i_pop]->nadd[ir_t+id_pix];
 	  }
 	}
 
@@ -585,23 +586,23 @@ void write_imap(ParamCoLoRe *par)
 	  MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
 	else
 	  MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
-	//	if(NodeThis==0)
-	//	  MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-	//	else
-	//	  MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+	if(NodeThis==0)
+	  MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+	else
+	  MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
 
-	//	for(ip=0;ip<npx;ip++) {
-	//	  if(map_nadd[ip]>0)
-	//	    map_write[ip]/=map_nadd[ip];
-	//	}
-	//	
+	for(ip=0;ip<npx;ip++) {
+	  if(map_nadd[ip]>0)
+	    map_write[ip]/=map_nadd[ip];
+	}
+
 	//Write dummy map
 	if(NodeThis==0)
 	  he_write_healpix_map(&map_write,1,par->imap[i_pop]->nside,fname);
       }
       free(map_write);
-      //      free(map_nadd);
+      free(map_nadd);
     }
     if(NodeThis==0) timer(2);
     print_info("\n");

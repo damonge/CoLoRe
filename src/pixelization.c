@@ -28,10 +28,10 @@
 #define IND_YZ 4
 #define IND_ZZ 5
 
-static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
+static void get_element(ParamCoLoRe *par,lint ix,lint iy,lint iz,
 			flouble *d,flouble v[3],flouble t[6],flouble *pdot)
 {
-  int ngx=2*(par->n_grid/2+1);
+  lint ngx=2*(par->n_grid/2+1);
   lint iz_hi=iz+1,iz_lo=iz-1,iz_0=iz;
   lint iy_hi=iy+1,iy_lo=iy-1,iy_0=iy;
   lint ix_hi=ix+1,ix_lo=ix-1,ix_0=ix;
@@ -113,10 +113,32 @@ void pixelize(ParamCoLoRe *par)
 #ifdef _DEBUG
     print_info("Communication %d, Node %d is now Node %d\n",i,NodeThis,node_i_am_now);
 #endif //_DEBUG
-    MPI_Sendrecv_replace(par->grid_npot,size_slice_npot,FLOUBLE_MPI,
+#define SENDRECV_BATCH 536870912 //1073741824
+    long i_sofar;
+    int remainder;
+
+    //    MPI_Sendrecv_replace(par->grid_npot,size_slice_npot,FLOUBLE_MPI,
+    //			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    i_sofar=0;
+    while(i_sofar+SENDRECV_BATCH<size_slice_npot) {
+      MPI_Sendrecv_replace(&(par->grid_npot[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,
+			   NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    }
+    remainder=(size_slice_npot-i_sofar);
+    MPI_Sendrecv_replace(&(par->grid_npot[i_sofar]),remainder,FLOUBLE_MPI,
 			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-    MPI_Sendrecv_replace(par->grid_dens,size_slice_dens,FLOUBLE_MPI,
+
+    //    MPI_Sendrecv_replace(par->grid_dens,size_slice_dens,FLOUBLE_MPI,
+    //			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    i_sofar=0;
+    while(i_sofar+SENDRECV_BATCH<size_slice_dens) {
+      MPI_Sendrecv_replace(&(par->grid_dens[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,
+			   NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    }
+    remainder=(size_slice_dens-i_sofar);
+    MPI_Sendrecv_replace(&(par->grid_dens[i_sofar]),remainder,FLOUBLE_MPI,
 			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+
 #endif //_HAVE_MPI
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
