@@ -111,6 +111,19 @@
 #define NSUB_IMAP_PERP 4
 #endif //NSUB_IMAP_PERP
 
+//Background tags
+#define BG_Z 1000
+#define BG_D1 1001
+#define BG_D2 1002
+#define BG_V1 1003
+#define BG_PD 1004
+#define BG_IH 1005
+#define BG_NZ_SRCS 1006
+#define BG_BZ_SRCS 1007
+#define BG_NORM_SRCS 1008
+#define BG_TZ_IMAP 1009
+#define BG_BZ_IMAP 1010
+#define BG_NORM_IMAP 1011
 
 //Density field parameters
 #define DZ_SIGMA 0.05
@@ -295,13 +308,10 @@ typedef struct {
   int do_sources; //Do we include sources
   int n_srcs; //Number of source types
   char fnameBzSrcs[NPOP_MAX][256]; //Files containing b(z) for each source type
-  char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega 
-                                   //(number of sources per redshift interval and square degree)
-  gsl_spline *spline_srcs_bz[NPOP_MAX]; //Spline for b(z)
-  gsl_spline *spline_srcs_nz[NPOP_MAX]; //Spline for n(z)
-  gsl_interp_accel *intacc_srcs[NPOP_MAX]; //Spline accelerator for sources
-  gsl_spline *spline_norm_srcs[NPOP_MAX]; //Spline for density normalization
-  gsl_interp_accel *intacc_norm_srcs; //Spline accelerator for density normalization
+  char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega (in deg^-2)
+  double *srcs_nz_arr[NPOP_MAX];
+  double *srcs_bz_arr[NPOP_MAX];
+  double *srcs_norm_arr[NPOP_MAX];
   double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
   double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
   int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
@@ -313,11 +323,9 @@ typedef struct {
   char fnameBzImap[NPOP_MAX][256]; //Files containing b(z) for each IM species
   char fnameTzImap[NPOP_MAX][256]; //Files containing T(z) for each IM species
   char fnameNuImap[NPOP_MAX][256]; //Files containing frequency table for each IM species
-  gsl_spline *spline_imap_bz[NPOP_MAX]; //Spline for b(z)
-  gsl_spline *spline_imap_tz[NPOP_MAX]; //Spline for T(z)
-  gsl_interp_accel *intacc_imap[NPOP_MAX]; //Spline accelerator for imap
-  gsl_spline *spline_norm_imap[NPOP_MAX]; //Spline for density normalization
-  gsl_interp_accel *intacc_norm_imap; //Spline accelerator for density normalization
+  double *imap_tz_arr[NPOP_MAX];
+  double *imap_bz_arr[NPOP_MAX];
+  double *imap_norm_arr[NPOP_MAX];
   double norm_imap_0[NPOP_MAX]; //Bottom edge of spline for density normalization
   double norm_imap_f[NPOP_MAX]; //Top edge of spline for density normalization
   int nside_imap[NPOP_MAX]; //Output angular resolution for each IM species
@@ -377,6 +385,8 @@ long get_npix(int nside);
 void get_vec(int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,double *u);
 void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,
 		       double *th,double *phi);
+void free_hp_shell(HealpixShells *shell);
+HealpixShells *new_hp_shell(int nside,int nr);
 
 static inline double bias_model(double d,double b)
 {
@@ -394,21 +404,8 @@ static inline double bias_model(double d,double b)
 // Functions defined in cosmo.c
 double pk_linear0(ParamCoLoRe *par,double lgk);
 void cosmo_set(ParamCoLoRe *par);
-double norm_srcs_of_z(ParamCoLoRe *par,double z,int ipop);
-double norm_imap_of_z(ParamCoLoRe *par,double z,int ipop);
 double r_of_z(ParamCoLoRe *par,double z);
-double z_of_r(ParamCoLoRe *par,double r);
-double dgrowth_of_r(ParamCoLoRe *par,double r);
-double d2growth_of_r(ParamCoLoRe *par,double r);
-double vgrowth_of_r(ParamCoLoRe *par,double r);
-double pdgrowth_of_r(ParamCoLoRe *par,double r);
-double ihub_of_r(ParamCoLoRe *par,double r);
-double ndens_of_z_srcs(ParamCoLoRe *par,double z,int ipop);
-double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop);
-double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop);
-double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop);
-void free_hp_shell(HealpixShells *shell);
-HealpixShells *new_hp_shell(int nside,int nr);
+double get_bg(ParamCoLoRe *par,double r,int tag,int ipop);
 
 
 //////

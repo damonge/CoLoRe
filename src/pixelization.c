@@ -113,7 +113,8 @@ void pixelize(ParamCoLoRe *par)
 #ifdef _DEBUG
     print_info("Communication %d, Node %d is now Node %d\n",i,NodeThis,node_i_am_now);
 #endif //_DEBUG
-#define SENDRECV_BATCH 536870912 //1073741824
+    //#define SENDRECV_BATCH 536870912 //1073741824
+#define SENDRECV_BATCH 1073741824
     long i_sofar;
     int remainder;
 
@@ -123,10 +124,13 @@ void pixelize(ParamCoLoRe *par)
     while(i_sofar+SENDRECV_BATCH<size_slice_npot) {
       MPI_Sendrecv_replace(&(par->grid_npot[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,
 			   NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+      i_sofar+=SENDRECV_BATCH;
     }
     remainder=(size_slice_npot-i_sofar);
-    MPI_Sendrecv_replace(&(par->grid_npot[i_sofar]),remainder,FLOUBLE_MPI,
-			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    if(remainder>0) {
+      MPI_Sendrecv_replace(&(par->grid_npot[i_sofar]),remainder,FLOUBLE_MPI,
+			   NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    }
 
     //    MPI_Sendrecv_replace(par->grid_dens,size_slice_dens,FLOUBLE_MPI,
     //			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
@@ -134,10 +138,13 @@ void pixelize(ParamCoLoRe *par)
     while(i_sofar+SENDRECV_BATCH<size_slice_dens) {
       MPI_Sendrecv_replace(&(par->grid_dens[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,
 			   NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+      i_sofar+=SENDRECV_BATCH;
     }
     remainder=(size_slice_dens-i_sofar);
-    MPI_Sendrecv_replace(&(par->grid_dens[i_sofar]),remainder,FLOUBLE_MPI,
-			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    if(remainder>0) {
+      MPI_Sendrecv_replace(&(par->grid_dens[i_sofar]),remainder,FLOUBLE_MPI,
+			   NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    }
 
 #endif //_HAVE_MPI
     par->nz_here=par->nz_all[node_i_am_now];
@@ -162,10 +169,10 @@ void pixelize(ParamCoLoRe *par)
 	  double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
 	  flouble dr_sub=dr/NSUB_PAR;
 	  double rm=r0+dr*0.5;
-	  double dg=dgrowth_of_r(par,rm);
-	  double vg=vgrowth_of_r(par,rm);
-	  double pg=dg*(1+z_of_r(par,rm));
-	  double pdg=pdgrowth_of_r(par,rm);
+	  double dg=get_bg(par,rm,BG_D1,0);
+	  double vg=get_bg(par,rm,BG_V1,0);
+	  double pg=dg*(1+get_bg(par,rm,BG_Z,0));
+	  double pdg=get_bg(par,rm,BG_PD,0);
 	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	    int ipix_sub;
 	    double cth_h=1,sth_h=0,cph_h=1,sph_h=0,u[3];
@@ -209,7 +216,7 @@ void pixelize(ParamCoLoRe *par)
 		//Trilinear interpolation
 		for(ax=0;ax<3;ax++) {
 		  x[ax]+=par->pos_obs[ax];
-		  ix0[ax]=(int)(x[ax]*idx+0.5);
+		  ix0[ax]=(lint)(x[ax]*idx+0.5);
 		  if(ix0[ax]>=par->n_grid)
 		    ix0[ax]-=par->n_grid;
 		  else if(ix0[ax]<0)
@@ -240,7 +247,7 @@ void pixelize(ParamCoLoRe *par)
 		//Trilinear interpolation
 		for(ax=0;ax<3;ax++) {
 		  x[ax]+=par->pos_obs[ax];
-		  ix0[ax]=(int)(x[ax]*idx);
+		  ix0[ax]=(lint)(x[ax]*idx);
 		  h0x[ax]=x[ax]*idx-ix0[ax];
 		  h1x[ax]=1-h0x[ax];
 		  ix1[ax]=ix0[ax]+1;

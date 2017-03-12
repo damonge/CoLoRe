@@ -59,7 +59,7 @@ void write_predictions(ParamCoLoRe *par)
   // outter loop is over redshifts
   for (double z=0; z<=par->z_max; z+=par->pred_dz) {
     double r=r_of_z(par,z);
-    double g=dgrowth_of_r(par,r);
+    double g=get_bg(par,r,BG_D1,0);
     fprintf (fg,"%g %g %g ",z,r,g);
     for (int i=0; i<Nk; i++) pklin[i]=pk_linear0(par,log10(ka[i]))*g*g;
     pk2xi(Nk,ka,pklin,ra,xilin);
@@ -68,7 +68,7 @@ void write_predictions(ParamCoLoRe *par)
 
     if(par->do_sources) {
       for (int ipop=0; ipop<par->n_srcs; ipop++) {
-	double bias=bias_of_z_srcs(par,z,ipop);
+	double bias=get_bg(par,r,BG_BZ_SRCS,ipop);
 	fprintf(fg,"%g ",bias);
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
 	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2*ka[i]*ka[i]);
@@ -94,7 +94,7 @@ void write_predictions(ParamCoLoRe *par)
     }
     if(par->do_imap) {
       for (int ipop=0; ipop<par->n_imap; ipop++) {
-	double bias=bias_of_z_imap(par,z,ipop);
+	double bias=get_bg(par,r,BG_BZ_IMAP,ipop);
 	fprintf(fg,"%g ",bias);
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
 	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2*ka[i]*ka[i]);

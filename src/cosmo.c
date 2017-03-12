@@ -26,24 +26,54 @@
 #define CL_TYPE_KAPPA 0
 #define CL_TYPE_ISW 1
 
-double norm_srcs_of_z(ParamCoLoRe *par,double z,int ipop)
+static double f_of_r_linear(ParamCoLoRe *par,double r,double *f,double f0,double ff)
 {
-  if(z<par->z0_norm)
-    return par->norm_srcs_0[ipop];
-  else if(z>=par->zf_norm)
-    return par->norm_srcs_f[ipop];
-  else
-    return gsl_spline_eval(par->spline_norm_srcs[ipop],z,par->intacc_norm_srcs);
+  if(r<=0) return f0;
+  else if(r>=par->r_arr_r2z[NA-1]) return ff;
+  else {
+    int ir=(int)(r*par->glob_idr);
+    return  f[ir]+(f[ir+1]-f[ir])*(r-par->r_arr_r2z[ir])*par->glob_idr;
+  }
 }
 
-double norm_imap_of_z(ParamCoLoRe *par,double z,int ipop)
+double get_bg(ParamCoLoRe *par,double r,int tag,int ipop)
 {
-  if(z<par->z0_norm)
-    return par->norm_imap_0[ipop];
-  else if(z>=par->zf_norm)
-    return par->norm_imap_f[ipop];
-  else
-    return gsl_spline_eval(par->spline_norm_imap[ipop],z,par->intacc_norm_imap);
+  if(tag==BG_Z)
+    return f_of_r_linear(par,r,par->z_arr_r2z,0,par->z_arr_r2z[NA-1]);
+  else if(tag==BG_D1)
+    return f_of_r_linear(par,r,par->growth_d_arr,1,par->growth_d_arr[NA-1]);
+  else if(tag==BG_D2) {
+    return f_of_r_linear(par,r,par->growth_d2_arr,par->growth_d2_arr[0],
+			 par->growth_d2_arr[NA-1]);
+  }
+  else if(tag==BG_V1)
+    return f_of_r_linear(par,r,par->growth_v_arr,par->growth_v_arr[0],par->growth_v_arr[NA-1]);
+  else if(tag==BG_PD) {
+    return f_of_r_linear(par,r,par->growth_pd_arr,par->growth_pd_arr[0],
+			 par->growth_pd_arr[NA-1]);
+  }
+  else if(tag==BG_IH)
+    return f_of_r_linear(par,r,par->ihub_arr,par->ihub_arr[0],par->ihub_arr[NA-1]);
+  else if(tag==BG_NZ_SRCS)
+    return f_of_r_linear(par,r,par->srcs_nz_arr[ipop],0,0);
+  else if(tag==BG_BZ_SRCS)
+    return f_of_r_linear(par,r,par->srcs_bz_arr[ipop],par->srcs_bz_arr[ipop][0],1);
+  else if(tag==BG_NORM_SRCS) {
+    return f_of_r_linear(par,r,par->srcs_norm_arr[ipop],par->norm_srcs_0[ipop],
+			 par->norm_srcs_f[ipop]);
+  }
+  else if(tag==BG_TZ_IMAP)
+    return f_of_r_linear(par,r,par->imap_tz_arr[ipop],0,0);
+  else if(tag==BG_BZ_IMAP)
+    return f_of_r_linear(par,r,par->imap_bz_arr[ipop],par->imap_bz_arr[ipop][0],1);
+  else if(tag==BG_NORM_IMAP) {
+    return f_of_r_linear(par,r,par->imap_norm_arr[ipop],par->norm_imap_0[ipop],
+			 par->norm_imap_f[ipop]);
+  }
+  else {
+    report_error(1,"Unknown background quantity tag %d\n",tag);
+    return -1;
+  }
 }
 
 static double a_of_r_provisional(ParamCoLoRe *par,double r)
@@ -72,110 +102,6 @@ double r_of_z(ParamCoLoRe *par,double z)
   }
 }
 
-double z_of_r(ParamCoLoRe *par,double r)
-{
-  if(r<=0) return 0;
-  else if(r>=par->r_arr_r2z[NA-1]) return par->z_arr_r2z[NA-1];
-  else {
-    int ir=(int)(r*par->glob_idr);
-    double z=par->z_arr_r2z[ir]+(par->z_arr_r2z[ir+1]-par->z_arr_r2z[ir])*
-      (r-par->r_arr_r2z[ir])*par->glob_idr;
-    return z;
-  }
-}
-
-double dgrowth_of_r(ParamCoLoRe *par,double r)
-{
-  if(r<=0) return 1;
-  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_d_arr[NA-1];
-  else {
-    int ir=(int)(r*par->glob_idr);
-    double gd=par->growth_d_arr[ir]+(par->growth_d_arr[ir+1]-par->growth_d_arr[ir])*
-      (r-par->r_arr_r2z[ir])*par->glob_idr;
-    return gd;
-  }
-}
-
-double d2growth_of_r(ParamCoLoRe *par,double r)
-{
-  if(r<=0) return 1;
-  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_d2_arr[NA-1];
-  else {
-    int ir=(int)(r*par->glob_idr);
-    double gd=par->growth_d2_arr[ir]+(par->growth_d2_arr[ir+1]-par->growth_d2_arr[ir])*
-      (r-par->r_arr_r2z[ir])*par->glob_idr;
-    return gd;
-  }
-}
-
-double vgrowth_of_r(ParamCoLoRe *par,double r)
-{
-  if(r<=0) return par->growth_v_arr[0];
-  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_v_arr[NA-1];
-  else {
-    int ir=(int)(r*par->glob_idr);
-    double gv=par->growth_v_arr[ir]+(par->growth_v_arr[ir+1]-par->growth_v_arr[ir])*
-      (r-par->r_arr_r2z[ir])*par->glob_idr;
-    return gv;
-  }
-}
-
-double pdgrowth_of_r(ParamCoLoRe *par,double r)
-{
-  if(r<=0) return par->growth_pd_arr[0];
-  else if(r>=par->r_arr_r2z[NA-1]) return par->growth_pd_arr[NA-1];
-  else {
-    int ir=(int)(r*par->glob_idr);
-    double gpd=par->growth_pd_arr[ir]+(par->growth_pd_arr[ir+1]-par->growth_pd_arr[ir])*
-      (r-par->r_arr_r2z[ir])*par->glob_idr;
-    return gpd;
-  }
-}
-
-double ihub_of_r(ParamCoLoRe *par,double r)
-{
-  if(r<=0) return par->ihub_arr[NA-1];
-  else if(r>=par->r_arr_r2z[NA-1]) return par->ihub_arr[NA-1];
-  else {
-    int ir=(int)(r*par->glob_idr);
-    double gv=par->ihub_arr[ir]+(par->ihub_arr[ir+1]-par->ihub_arr[ir])*
-      (r-par->r_arr_r2z[ir])*par->glob_idr;
-    return gv;
-  }
-}
-
-double bias_of_z_srcs(ParamCoLoRe *par,double z,int ipop)
-{
-  if((z<par->z_min) || (z>par->z_max))
-    return 1.;
-  else
-    return gsl_spline_eval(par->spline_srcs_bz[ipop],z,par->intacc_srcs[ipop]);
-}
-
-double bias_of_z_imap(ParamCoLoRe *par,double z,int ipop)
-{
-  if((z<par->z_min) || (z>par->z_max))
-    return 1.;
-  else
-    return gsl_spline_eval(par->spline_imap_bz[ipop],z,par->intacc_imap[ipop]);
-}
-
-double ndens_of_z_srcs(ParamCoLoRe *par,double z,int ipop)
-{
-  if((z<par->z_min) || (z>par->z_max))
-    return 0;
-  else
-    return gsl_spline_eval(par->spline_srcs_nz[ipop],z,par->intacc_srcs[ipop]);
-}
-
-double temp_of_z_imap(ParamCoLoRe *par,double z,int ipop)
-{
-  if((z<par->z_min) || (z>par->z_max))
-    return 0;
-  else
-    return gsl_spline_eval(par->spline_imap_tz[ipop],z,par->intacc_imap[ipop]);
-}
-
 typedef struct {
   ParamCoLoRe *par;
   int l;
@@ -194,8 +120,8 @@ static double window_kappa_limber(ParamCoLoRe *par,int l,double k,double chi_0,d
   if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
     return 0;
   else {
-    double gf=dgrowth_of_r(par,chi_l);
-    double aa=1/(1+z_of_r(par,chi_l));
+    double gf=get_bg(par,chi_l,BG_D1,0);
+    double aa=1/(1+get_bg(par,chi_l,BG_Z,0));
   
     return par->prefac_lensing*l*(l+1.)*gf*(chi_s-chi_l)/(k*k*chi_s*chi_l*aa);
   }
@@ -208,7 +134,7 @@ static double window_isw_limber(ParamCoLoRe *par,int l,double k,double chi_0,dou
   if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
     return 0;
   else
-    return -2*par->prefac_lensing*pdgrowth_of_r(par,chi_l)/(k*k);
+    return -2*par->prefac_lensing*get_bg(par,chi_l,BG_PD,0)/(k*k);
 }
 
 static double cl_integrand(double lk,void *params)
@@ -569,6 +495,12 @@ void cosmo_set(ParamCoLoRe *par)
   int ii,ipop,nz;
   double *zarr,*fzarr;
   FILE *fi;
+  gsl_spline *spline_srcs_bz[NPOP_MAX];
+  gsl_spline *spline_srcs_nz[NPOP_MAX];
+  gsl_interp_accel *intacc_srcs=gsl_interp_accel_alloc();
+  gsl_spline *spline_imap_bz[NPOP_MAX];
+  gsl_spline *spline_imap_tz[NPOP_MAX];
+  gsl_interp_accel *intacc_imap=gsl_interp_accel_alloc();
 
   Csm_params *pars=csm_params_new();
   csm_unset_gsl_eh();
@@ -599,8 +531,8 @@ void cosmo_set(ParamCoLoRe *par)
     }
     if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
       report_error(1,"Bias z-range is too small\n");
-    par->spline_srcs_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_srcs_bz[ipop],zarr,fzarr,nz);
+    spline_srcs_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(spline_srcs_bz[ipop],zarr,fzarr,nz);
     free(zarr); free(fzarr);
     fclose(fi);
 
@@ -623,12 +555,13 @@ void cosmo_set(ParamCoLoRe *par)
       fzarr[0]=fzarr[1];
     if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
       report_error(1,"N(z) z-range is too small\n");
-    par->spline_srcs_nz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_srcs_nz[ipop],zarr,fzarr,nz);
+    spline_srcs_nz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(spline_srcs_nz[ipop],zarr,fzarr,nz);
     free(zarr); free(fzarr);
     fclose(fi);
 
-    par->intacc_srcs[ipop]=gsl_interp_accel_alloc();
+    par->srcs_nz_arr[ipop]=my_malloc(NA*sizeof(double));
+    par->srcs_bz_arr[ipop]=my_malloc(NA*sizeof(double));
   }
 
   for(ipop=0;ipop<par->n_imap;ipop++) {
@@ -643,8 +576,8 @@ void cosmo_set(ParamCoLoRe *par)
     }
     if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
       report_error(1,"Bias z-range is too small\n");
-    par->spline_imap_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_imap_bz[ipop],zarr,fzarr,nz);
+    spline_imap_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(spline_imap_bz[ipop],zarr,fzarr,nz);
     free(zarr); free(fzarr);
     fclose(fi);
 
@@ -659,15 +592,15 @@ void cosmo_set(ParamCoLoRe *par)
     }
     if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
       report_error(1,"T(z) z-range is too small\n");
-    par->spline_imap_tz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_imap_tz[ipop],zarr,fzarr,nz);
+    spline_imap_tz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(spline_imap_tz[ipop],zarr,fzarr,nz);
     free(zarr); free(fzarr);
     fclose(fi);
 
-    par->intacc_imap[ipop]=gsl_interp_accel_alloc();
-
     compute_hp_shell_distances_imap(par->imap[ipop],par->nu0_imap[ipop],
 				    par->fnameNuImap[ipop],pars);
+    par->imap_tz_arr[ipop]=my_malloc(NA*sizeof(double));
+    par->imap_bz_arr[ipop]=my_malloc(NA*sizeof(double));
   }
 
   //Set z-dependent functions
@@ -695,6 +628,33 @@ void cosmo_set(ParamCoLoRe *par)
     par->growth_v_arr[ii]=(gz*hhz*fz)/(par->fgrowth_0*par->hubble_0); //This is for the comoving velocity
     par->growth_pd_arr[ii]=gz*hhz*(fz-1);
     par->ihub_arr[ii]=1./hhz;
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      if((z<par->z_min) || (z>par->z_max)) {
+	par->srcs_nz_arr[ipop][ii]=0;
+	par->srcs_bz_arr[ipop][ii]=1.;
+      }
+      par->srcs_nz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_nz[ipop],z,intacc_srcs);
+      par->srcs_bz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_bz[ipop],z,intacc_srcs);
+    }
+    for(ipop=0;ipop<par->n_imap;ipop++) {
+      if((z<par->z_min) || (z>par->z_max)) {
+	par->imap_tz_arr[ipop][ii]=0;
+	par->imap_bz_arr[ipop][ii]=1.;
+      }
+      par->imap_tz_arr[ipop][ii]=gsl_spline_eval(spline_imap_tz[ipop],z,intacc_imap);
+      par->imap_bz_arr[ipop][ii]=gsl_spline_eval(spline_imap_bz[ipop],z,intacc_imap);
+    }
+  }
+
+  gsl_interp_accel_free(intacc_srcs);
+  for(ipop=0;ipop<par->n_imap;ipop++) {
+    gsl_spline_free(spline_imap_tz[ipop]);
+    gsl_spline_free(spline_imap_bz[ipop]);
+  }
+  gsl_interp_accel_free(intacc_imap);
+  for(ipop=0;ipop<par->n_srcs;ipop++) {
+    gsl_spline_free(spline_srcs_nz[ipop]);
+    gsl_spline_free(spline_srcs_bz[ipop]);
   }
 
   pk_linear_set(par);
@@ -784,4 +744,7 @@ void cosmo_set(ParamCoLoRe *par)
   }
 
   csm_params_free(pars);
+
+
+  //FREEE SLPINES!
 }

@@ -469,7 +469,7 @@ static void lpt_1(ParamCoLoRe *par)
 	  lint index=ix+indexy+indexz;
 	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
 	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
-	  dg=dgrowth_of_r(par,r);
+	  dg=get_bg(par,r,BG_D1,0);
 	  for(ax=0;ax<3;ax++) {
 #ifdef _DEBUG
 	    d_mean_1_thr[ax]+=disp[ax][index];
@@ -843,8 +843,8 @@ static void lpt_2(ParamCoLoRe *par)
 	  lint index_nopad=ix+par->n_grid*((lint)(iy+par->n_grid*iz));
 	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
 	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
-	  dg=dgrowth_of_r(par,r);
-	  d2g=d2growth_of_r(par,r);
+	  dg=get_bg(par,r,BG_D1,0);
+	  d2g=get_bg(par,r,BG_D2,0);
 	  for(ax=0;ax<3;ax++) {
 #ifdef _DEBUG
 	    d_mean_1_thr[ax]+=disp[ax][index];
@@ -1034,7 +1034,7 @@ static void lognormalize(ParamCoLoRe *par)
 	  lint index=ix+indexy+indexz;
 	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
-	  double dg=dgrowth_of_r(par,r);
+	  double dg=get_bg(par,r,BG_D1,0);
 	  double delta=par->grid_dens[index];
 	  par->grid_dens[index]=exp(dg*(delta-0.5*dg*par->sigma2_gauss))-1;
 	}
@@ -1099,16 +1099,16 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	  lint index=ix+iy0+iz0;
 	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
-	  double redshift=z_of_r(par,r);
+	  double redshift=get_bg(par,r,BG_Z,0);
 	  int ind_z=(int)(redshift*idz)+1;
 	  if((ind_z>=0) && (ind_z<nz)) {
 	    double d=par->grid_dens[index];
 	    narr_thr[ind_z]++;
 	    zarr_thr[ind_z]+=redshift;
 	    for(ipop=0;ipop<par->n_srcs;ipop++)
-	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,bias_of_z_srcs(par,redshift,ipop));
+	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop));
 	    for(ipop=0;ipop<par->n_imap;ipop++)
-	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,bias_of_z_imap(par,redshift,ipop));
+	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop));
 	  }
 	}
       }
@@ -1168,12 +1168,12 @@ static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,do
       for(ir=0;ir<oi->nr;ir++) {
 	int ipix;
 	double r=0.5*(oi->rf_arr[ir]+oi->r0_arr[ir]);
-	double redshift=z_of_r(par,r);
+	double redshift=get_bg(par,r,BG_Z,0);
 	int iz=(int)(redshift*idz)+1;
 	for(ipop=0;ipop<par->n_srcs;ipop++)
-	  barr_srcs[ipop]=bias_of_z_srcs(par,redshift,ipop);
+	  barr_srcs[ipop]=get_bg(par,r,BG_BZ_SRCS,ipop);
 	for(ipop=0;ipop<par->n_imap;ipop++)
-	  barr_imap[ipop]=bias_of_z_imap(par,redshift,ipop);
+	  barr_imap[ipop]=get_bg(par,r,BG_BZ_IMAP,ipop);
 
 	narr_thr[iz]+=oi->num_pix[ir];
 	zarr_thr[iz]+=redshift*oi->num_pix[ir];
@@ -1226,11 +1226,15 @@ static void collect_density_normalization(ParamCoLoRe *par,int nz,double idz,dou
 //Computes sigma2(z) for physical density field
 void compute_density_normalization(ParamCoLoRe *par)
 {
-  int nz,iz,ipop;
+  int nz,iz,ii,ipop;
   double idz;
   double *zarr,**norm_imap_arr,**norm_srcs_arr;
   unsigned long long *narr;
-  double zmax=z_of_r(par,par->l_box*0.5);
+  double zmax=get_bg(par,par->l_box*0.5,BG_Z,0);
+  gsl_spline *spline_norm_srcs[NPOP_MAX];
+  gsl_interp_accel *intacc_srcs=gsl_interp_accel_alloc(); 
+  gsl_spline *spline_norm_imap[NPOP_MAX];
+  gsl_interp_accel *intacc_imap=gsl_interp_accel_alloc();
 
   print_info("*** Computing normalization of density field\n");
   if(NodeThis==0) timer(0);
@@ -1269,7 +1273,7 @@ void compute_density_normalization(ParamCoLoRe *par)
   }
 
   zarr[0]=0;
-  zarr[nz-1]=z_of_r(par,0.5*par->l_box);
+  zarr[nz-1]=get_bg(par,0.5*par->l_box,BG_Z,0);
   for(ipop=0;ipop<par->n_srcs;ipop++) {
     norm_srcs_arr[ipop][0]=norm_srcs_arr[ipop][1];
     norm_srcs_arr[ipop][nz-1]=norm_srcs_arr[ipop][nz-2];
@@ -1284,27 +1288,48 @@ void compute_density_normalization(ParamCoLoRe *par)
   for(ipop=0;ipop<par->n_srcs;ipop++) {
     par->norm_srcs_0[ipop]=norm_srcs_arr[ipop][0];
     par->norm_srcs_f[ipop]=norm_srcs_arr[ipop][nz-1];
-    par->spline_norm_srcs[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_norm_srcs[ipop],zarr,norm_srcs_arr[ipop],nz);
+    spline_norm_srcs[ipop]=gsl_spline_alloc(gsl_interp_linear,nz);
+    gsl_spline_init(spline_norm_srcs[ipop],zarr,norm_srcs_arr[ipop],nz);
+    par->srcs_norm_arr[ipop]=my_malloc(NA*sizeof(double));
   }
-  if(par->n_srcs>0)
-    par->intacc_norm_srcs=gsl_interp_accel_alloc();
   for(ipop=0;ipop<par->n_imap;ipop++) {
     par->norm_imap_0[ipop]=norm_imap_arr[ipop][0];
     par->norm_imap_f[ipop]=norm_imap_arr[ipop][nz-1];
-    par->spline_norm_imap[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(par->spline_norm_imap[ipop],zarr,norm_imap_arr[ipop],nz);
+    spline_norm_imap[ipop]=gsl_spline_alloc(gsl_interp_linear,nz);
+    gsl_spline_init(spline_norm_imap[ipop],zarr,norm_imap_arr[ipop],nz);
+    par->imap_norm_arr[ipop]=my_malloc(NA*sizeof(double));
   }
-  if(par->n_imap>0)
-    par->intacc_norm_imap=gsl_interp_accel_alloc();
+
+  for(ii=0;ii<NA;ii++) {
+    double z=get_bg(par,par->r_arr_r2z[ii],BG_Z,0);
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      double nm;
+      if(z<par->z0_norm)
+	nm=par->norm_srcs_0[ipop];
+      else if(z>=par->zf_norm)
+	nm=par->norm_srcs_f[ipop];
+      else
+	par->srcs_norm_arr[ipop][ii]=gsl_spline_eval(spline_norm_srcs[ipop],z,intacc_srcs);
+    }
+    for(ipop=0;ipop<par->n_imap;ipop++) {
+      double nm;
+      if(z<par->z0_norm)
+	nm=par->norm_imap_0[ipop];
+      else if(z>=par->zf_norm)
+	nm=par->norm_imap_f[ipop];
+      else
+	par->imap_norm_arr[ipop][ii]=gsl_spline_eval(spline_norm_imap[ipop],z,intacc_imap);
+    }
+  }
 
 #ifdef _DEBUG
   for(iz=0;iz<nz;iz++) {
+    double rz=r_of_z(par,zarr[iz]);
     print_info("z=%.3lE, ",zarr[iz]);
     for(ipop=0;ipop<par->n_srcs;ipop++)
-      print_info("<d^2_%d>=%.3lE, ",ipop,norm_srcs_of_z(par,zarr[iz],ipop));
+      print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_SRCS,ipop));
     for(ipop=0;ipop<par->n_imap;ipop++)
-      print_info("<d^2_%d>=%.3lE, ",ipop,norm_imap_of_z(par,zarr[iz],ipop));
+      print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_IMAP,ipop));
     print_info("%llu\n",narr[iz]);
   }
 #endif //_DEBUG
@@ -1313,8 +1338,14 @@ void compute_density_normalization(ParamCoLoRe *par)
 
   free(zarr);
   free(narr);
-  for(ipop=0;ipop<par->n_srcs;ipop++)
+  for(ipop=0;ipop<par->n_srcs;ipop++) {
     free(norm_srcs_arr[ipop]);
-  for(ipop=0;ipop<par->n_imap;ipop++)
+    gsl_spline_free(spline_norm_srcs[ipop]);
+  }
+  gsl_interp_accel_free(intacc_srcs);
+  for(ipop=0;ipop<par->n_imap;ipop++) {
     free(norm_imap_arr[ipop]);
+    gsl_spline_free(spline_norm_imap[ipop]);
+  }
+  gsl_interp_accel_free(intacc_imap);
 }

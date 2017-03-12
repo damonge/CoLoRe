@@ -106,25 +106,21 @@ static ParamCoLoRe *param_colore_new(void)
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzSrcs[ii],"default");
     sprintf(par->fnameNzSrcs[ii],"default");
-    par->spline_srcs_bz[ii]=NULL;
-    par->spline_srcs_nz[ii]=NULL;
-    par->intacc_srcs[ii]=NULL;
+    par->srcs_bz_arr[ii]=NULL;
+    par->srcs_nz_arr[ii]=NULL;
+    par->srcs_norm_arr[ii]=NULL;
     par->shear_srcs[ii]=0;
     sprintf(par->fnameBzImap[ii],"default");
     sprintf(par->fnameTzImap[ii],"default");
     sprintf(par->fnameNuImap[ii],"default");
-    par->spline_imap_bz[ii]=NULL;
-    par->spline_imap_tz[ii]=NULL;
-    par->intacc_imap[ii]=NULL;
+    par->imap_bz_arr[ii]=NULL;
+    par->imap_tz_arr[ii]=NULL;
+    par->imap_norm_arr[ii]=NULL;
     par->nside_imap[ii]=-1;
     par->z_kappa_out[ii]=-1;
     par->z_isw_out[ii]=-1;
     par->nu0_imap[ii]=-1;
-    par->spline_norm_srcs[ii]=NULL;
-    par->spline_norm_imap[ii]=NULL;
   }
-  par->intacc_norm_srcs=NULL;
-  par->intacc_norm_imap=NULL;
   par->srcs=NULL;
   par->imap=NULL;
   par->kmap=NULL;
@@ -929,14 +925,12 @@ void param_colore_free(ParamCoLoRe *par)
 
   if(par->do_sources) {
     for(ii=0;ii<par->n_srcs;ii++) {
-      gsl_spline_free(par->spline_srcs_bz[ii]);
-      gsl_spline_free(par->spline_srcs_nz[ii]);
-      gsl_spline_free(par->spline_norm_srcs[ii]);
-      gsl_interp_accel_free(par->intacc_srcs[ii]);
+      free(par->srcs_bz_arr[ii]);
+      free(par->srcs_nz_arr[ii]);
+      free(par->srcs_norm_arr[ii]);
       if(par->srcs[ii]!=NULL)
       	free(par->srcs[ii]);
     }
-    gsl_interp_accel_free(par->intacc_norm_srcs);
     if(par->srcs!=NULL)
       free(par->srcs);
     free(par->nsources_this);
@@ -944,13 +938,11 @@ void param_colore_free(ParamCoLoRe *par)
 
   if(par->do_imap) {
     for(ii=0;ii<par->n_imap;ii++) {
-      gsl_spline_free(par->spline_imap_bz[ii]);
-      gsl_spline_free(par->spline_imap_tz[ii]);
-      gsl_spline_free(par->spline_norm_imap[ii]);
-      gsl_interp_accel_free(par->intacc_imap[ii]);
+      free(par->imap_bz_arr[ii]);
+      free(par->imap_tz_arr[ii]);
+      free(par->imap_norm_arr[ii]);
       free_hp_shell(par->imap[ii]);
     }
-    gsl_interp_accel_free(par->intacc_norm_imap);
     if(par->imap!=NULL)
       free(par->imap);
   }
