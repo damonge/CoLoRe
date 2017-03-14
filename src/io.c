@@ -321,7 +321,7 @@ ParamCoLoRe *read_run_params(char *fname)
 
   if(par->do_sources) {
     par->srcs=my_malloc(par->n_srcs*sizeof(Src *));
-    par->nsources_this=my_malloc(par->n_srcs*sizeof(lint));
+    par->nsources_this=my_malloc(par->n_srcs*sizeof(long));
   }
 
   if(par->do_imap) {
@@ -375,7 +375,7 @@ ParamCoLoRe *read_run_params(char *fname)
   init_fftw(par);
 
   par->nside_base=2;
-  while(get_npix(par->nside_base)<NNodes)
+  while(he_nside2npix(par->nside_base)<NNodes)
     par->nside_base*=2;
 
   //  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
@@ -438,7 +438,7 @@ void write_density_grid(ParamCoLoRe *par,char *prefix_dens)
   for(iz=0;iz<par->nz_here;iz++) {
     int iy;
     for(iy=0;iy<par->n_grid;iy++) {
-      lint index0=ngx*((lint)(iy+iz*par->n_grid));
+      long index0=ngx*((long)(iy+iz*par->n_grid));
       my_fwrite(&(par->grid_dens[index0]),sizeof(flouble),par->n_grid,fo);
     }
   }
@@ -476,7 +476,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   char fname[256];
   unsigned long long ipart,np_total;
   unsigned long long np_send=npart;
-  unsigned long long np_total_expected=par->n_grid*((lint)(par->n_grid*par->n_grid));
+  unsigned long long np_total_expected=par->n_grid*((long)(par->n_grid*par->n_grid));
 
   sprintf(fname,"%s_lpt_out.%d",par->prefixOut,NodeThis);
   fo=fopen(fname,"w");
@@ -537,7 +537,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   // id
   blklen=npart*sizeof(unsigned long long);
   my_fwrite(&blklen,sizeof(blklen),1,fo);
-  long long id0=(long long)(par->iz0_here*((lint)(par->n_grid*par->n_grid)));
+  long long id0=(long long)(par->iz0_here*((long)(par->n_grid*par->n_grid)));
   for(ipart=0;ipart<npart;ipart++) {
     unsigned long long id_out=id0+ipart;
     my_fwrite(&id_out,sizeof(unsigned long long),1,fo); 
@@ -570,7 +570,7 @@ void write_imap(ParamCoLoRe *par)
 	sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,i_pop,ir);
 	for(ip=0;ip<npx;ip++) {
 	  int id_pix=par->imap[i_pop]->listpix[ip];
-	  if(id_pix>0) {
+	  if(id_pix>=0) {
 	    map_write[ip]+=par->imap[i_pop]->data[ir_t+id_pix];
 	    map_nadd[ip]+=par->imap[i_pop]->nadd[ir_t+id_pix];
 	  }
@@ -595,7 +595,7 @@ void write_imap(ParamCoLoRe *par)
 
 	//Write dummy map
 	if(NodeThis==0)
-	  he_write_healpix_map(&map_write,1,par->imap[i_pop]->nside,fname);
+	  he_write_healpix_map(&map_write,1,par->imap[i_pop]->nside,fname,1);
       }
       free(map_write);
       free(map_nadd);
@@ -625,7 +625,7 @@ void write_kappa(ParamCoLoRe *par)
       sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
       for(ip=0;ip<npx;ip++) {
 	int id_pix=par->kmap->listpix[ip];
-	if(id_pix>0) {
+	if(id_pix>=0) {
 	  map_write[ip]+=par->kmap->data[ir_t+id_pix];
 	  map_nadd[ip]+=par->kmap->nadd[ir_t+id_pix];
 	}
@@ -671,7 +671,7 @@ void write_kappa(ParamCoLoRe *par)
 
       //Write dummy map
       if(NodeThis==0)
-	he_write_healpix_map(&map_write,1,par->nside_kappa,fname);
+	he_write_healpix_map(&map_write,1,par->nside_kappa,fname,1);
     }
     free(map_write);
     free(map_nadd);
@@ -700,7 +700,7 @@ void write_isw(ParamCoLoRe *par)
       sprintf(fname,"!%s_isw_z%03d.fits",par->prefixOut,ir);
       for(ip=0;ip<npx;ip++) {
 	int id_pix=par->pd_map->listpix[ip];
-	if(id_pix>0) {
+	if(id_pix>=0) {
 	  map_write[ip]+=par->pd_map->data[ir_t+id_pix];
 	  map_nadd[ip]+=par->pd_map->nadd[ir_t+id_pix];
 	}
@@ -746,7 +746,7 @@ void write_isw(ParamCoLoRe *par)
 
       //Write dummy map
       if(NodeThis==0)
-	he_write_healpix_map(&map_write,1,par->nside_isw,fname);
+	he_write_healpix_map(&map_write,1,par->nside_isw,fname,1);
     }
     free(map_write);
     free(map_nadd);
@@ -882,7 +882,7 @@ void write_catalog(ParamCoLoRe *par)
       print_info("*** Writing catalog (ASCII)\n");
       sprintf(fname,"%s_srcs_%d.txt",par->prefixOut,NodeThis);
 
-      lint jj;
+      long jj;
       FILE *fil=fopen(fname,"w");
       if(fil==NULL) error_open_file(fname);
       fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");

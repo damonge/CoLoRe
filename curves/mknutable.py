@@ -29,7 +29,7 @@ nuf_arr=np.array(nuf_arr)
 np.savetxt("nus.txt",np.transpose([nu0_arr,nuf_arr]))
 
 zDESI_in,nzDESI_in=np.loadtxt("nz_DESI_coarse.txt",unpack=True); 
-nzf=interp1d(zDESI_in,nzDESI_in,bounds_error=False,fill_value=0)
+nzf=interp1d(zDESI_in,60*60*nzDESI_in,bounds_error=False,fill_value=0)
 zDESI=zDESI_in[-1]*np.arange(256)/255.
 nzDESI=nzf(zDESI)
 bzDESI=0.84*pcs.growth_factor(1.)/np.array([pcs.growth_factor(1./(1+z)) for z in zDESI])

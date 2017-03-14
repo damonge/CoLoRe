@@ -63,18 +63,10 @@
 
 /////////
 // Interpolation parameters
-#define PT_CEA 0
-#define PT_CAR 1
-#define PT_HPX 2
 
 #define INTERP_NGP 0
 #define INTERP_CIC 1
 #define INTERP_TSC 2
-
-//Pixelization type
-#ifndef PIXTYPE
-#define PIXTYPE PT_HPX
-#endif //PIXTYPE
 
 //Interpolation type
 #ifndef INTERP_TYPE
@@ -147,28 +139,12 @@
 #define NPOP_MAX 10
 
 #ifdef _HAVE_MPI
-
 #ifdef _SPREC
 #define FLOUBLE_MPI MPI_FLOAT
 #else //_SPREC
 #define FLOUBLE_MPI MPI_DOUBLE
 #endif //_SPREC
-
-#ifdef _LONGIDS
-//#define LINT_MPI MPI_INT
-#define LINT_MPI MPI_LONG
-#else //_LONGIDS
-#define LINT_MPI MPI_LONG
-#endif //_LONGIDS
-
 #endif //_HAVE_MPI
-
-#ifdef _LONGIDS
-typedef long lint;
-#else //_LONGIDS
-//typedef int lint;
-typedef long lint;
-#endif //_LONGIDS
 
 #ifdef _SPREC
 typedef float flouble;
@@ -203,8 +179,7 @@ typedef struct {
   flouble *rf_arr;
   int *nside_arr;
   int *nside_ratio_arr;
-  int *iphi0_arr;
-  int *icth0_arr;
+  int *ipix0_arr;
   int *num_pix;
 } OnionInfo;
 
@@ -315,7 +290,7 @@ typedef struct {
   double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
   double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
   int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
-  lint *nsources_this; //Number of sources found in this node
+  long *nsources_this; //Number of sources found in this node
   Src **srcs; //Galaxy objects stored in this node
 
   int do_imap; //Do we include intensity mapping
@@ -380,11 +355,7 @@ void free_onion_info(OnionInfo *oi);
 unsigned long long get_max_memory(ParamCoLoRe *par);
 void alloc_beams(ParamCoLoRe *par);
 void free_beams(ParamCoLoRe *par);
-flouble get_res(int nside);
-long get_npix(int nside);
-void get_vec(int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,double *u);
-void get_random_angles(gsl_rng *rng,int ipix_nest,int iphi_0,int icth_0,int nside,int nside_ratio,
-		       double *th,double *phi);
+void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
 void free_hp_shell(HealpixShells *shell);
 HealpixShells *new_hp_shell(int nside,int nr);
 
@@ -458,8 +429,9 @@ void get_isw(ParamCoLoRe *par);
 //////
 // Defined in healpix_extra.c
 long he_nside2npix(long nside);
+double he_pixel_area(int nside);
 long he_ang2pix(long nside,double cth,double phi);
-void he_write_healpix_map(flouble **tmap,int nfields,long nside,char *fname);
+void he_write_healpix_map(flouble **tmap,int nfields,long nside,char *fname,int isnest);
 flouble *he_read_healpix_map(char *fname,long *nside,int nfield);
 int he_ring_num(long nside,double z);
 long *he_query_strip(long nside,double theta1,double theta2,long *npix_strip);

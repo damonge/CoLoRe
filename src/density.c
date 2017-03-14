@@ -39,10 +39,10 @@ static void pos_2_ngp(ParamCoLoRe *par,unsigned long long np,
 {
   unsigned long long ii;
   flouble i_agrid=par->n_grid/par->l_box;
-  lint ngx=2*(par->n_grid/2+1);
+  long ngx=2*(par->n_grid/2+1);
 
   for(ii=0;ii<np;ii++) {
-    lint index;
+    long index;
     int ax,i0[3];
 
     i0[0]=(int)(x[ii]*i_agrid+0.5);
@@ -66,7 +66,7 @@ static void pos_2_cic(ParamCoLoRe *par,unsigned long long np,
 {
   unsigned long long ii;
   flouble i_agrid=par->n_grid/par->l_box;
-  lint ngx=2*(par->n_grid/2+1);
+  long ngx=2*(par->n_grid/2+1);
 
   for(ii=0;ii<np;ii++) {
     int ax,i0[3],i1[3];
@@ -109,7 +109,7 @@ static void pos_2_tsc(ParamCoLoRe *par,unsigned long long np,
 {
   unsigned long long ii;
   flouble i_agrid=par->n_grid/par->l_box;
-  lint ngx=2*(par->n_grid/2+1);
+  long ngx=2*(par->n_grid/2+1);
 
   for(ii=0;ii<np;ii++) {
     int ax,i0[3],ip[3],im[3];
@@ -202,7 +202,7 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
   flouble *z_bright_left=my_malloc(NNodes*sizeof(flouble));
   flouble *z_bright_right=my_malloc(NNodes*sizeof(flouble));
   unsigned long long nbuffer=(unsigned long long)(par->lpt_buffer_fraction*par->nz_here*
-						  ((lint)(par->n_grid*par->n_grid)));
+						  ((long)(par->n_grid*par->n_grid)));
   flouble *x_b=my_malloc(nbuffer*sizeof(flouble));
   flouble *y_b=my_malloc(nbuffer*sizeof(flouble));
   flouble *z_b=my_malloc(nbuffer*sizeof(flouble));
@@ -364,7 +364,7 @@ static void lpt_1(ParamCoLoRe *par)
 
   dftw_complex *(cdisp[3]);
   flouble *(disp[3]);
-  ptrdiff_t dsize=par->nz_here*((lint)(par->n_grid*(par->n_grid/2+1)));
+  ptrdiff_t dsize=par->nz_here*((long)(par->n_grid*(par->n_grid/2+1)));
   ptrdiff_t dsize_buff=(ptrdiff_t)(dsize*(1+par->lpt_buffer_fraction));
 
   print_info(" 1LPT\n");
@@ -385,7 +385,7 @@ static void lpt_1(ParamCoLoRe *par)
     int ii;
     double dk=2*M_PI/par->l_box;
     double kv[3];
-    double fftnorm=(double)(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    double fftnorm=(double)(par->n_grid*((long)(par->n_grid*par->n_grid)));
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -406,7 +406,7 @@ static void lpt_1(ParamCoLoRe *par)
 	for(kk=0;kk<=par->n_grid/2;kk++) {
 	  int ax;
 	  double k_mod2;
-	  lint index=kk+(par->n_grid/2+1)*((lint)(jj+par->n_grid*ii)); //Grid index for +k
+	  long index=kk+(par->n_grid/2+1)*((long)(jj+par->n_grid*ii)); //Grid index for +k
 	  if(2*kk<=par->n_grid)
 	    kv[0]=kk*dk;
 	  else
@@ -442,7 +442,7 @@ static void lpt_1(ParamCoLoRe *par)
 #endif //_DEBUG
 #endif //_HAVE_OMP
   {
-    lint iz;
+    long iz;
     int ngx=2*(par->n_grid/2+1);
     flouble dx=par->l_box/par->n_grid;
     flouble xv[3];
@@ -457,16 +457,16 @@ static void lpt_1(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint indexz=iz*((lint)(ngx*par->n_grid));
+      long indexz=iz*((long)(ngx*par->n_grid));
       xv[2]=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint indexy=iy*ngx;
+	long indexy=iy*ngx;
 	xv[1]=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int ax;
 	  double r,dg;
-	  lint index=ix+indexy+indexz;
+	  long index=ix+indexy+indexz;
 	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
 	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
 	  dg=get_bg(par,r,BG_D1,0);
@@ -507,10 +507,10 @@ static void lpt_1(ParamCoLoRe *par)
     MPI_Reduce(&d_sigma2_1,&d_sigma2_1,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
   if(NodeThis==0) {
-    d_mean_1[0]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_mean_1[1]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_mean_1[2]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_sigma2_1/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_1[0]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_mean_1[1]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_mean_1[2]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_sigma2_1/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
   
     print_info(" 1st-order displacement : [%lE,%lE,%lE] %lE\n",
 	       d_mean_1[0],d_mean_1[1],d_mean_1[2],sqrt(d_sigma2_1));
@@ -519,21 +519,21 @@ static void lpt_1(ParamCoLoRe *par)
 
   print_info(" - Undoing padding\n");
   {
-    lint iz;
+    long iz;
     int ngx=2*(par->n_grid/2+1);
 
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint indexz=iz*((lint)(ngx*par->n_grid));
-      lint indexz_unpadded=iz*((lint)(par->n_grid*par->n_grid));
+      long indexz=iz*((long)(ngx*par->n_grid));
+      long indexz_unpadded=iz*((long)(par->n_grid*par->n_grid));
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint indexy=iy*ngx;
-	lint indexy_unpadded=iy*par->n_grid;
+	long indexy=iy*ngx;
+	long indexy_unpadded=iy*par->n_grid;
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int ax;
-	  lint index=ix+indexy+indexz;
-	  lint index_unpadded=ix+indexy_unpadded+indexz_unpadded;
+	  long index=ix+indexy+indexz;
+	  long index_unpadded=ix+indexy_unpadded+indexz_unpadded;
 	  for(ax=0;ax<3;ax++)
 	    disp[ax][index_unpadded]=disp[ax][index];
 	}
@@ -543,7 +543,7 @@ static void lpt_1(ParamCoLoRe *par)
 
   unsigned long long np_here;
   if(par->output_lpt) {
-    np_here=par->nz_here*((lint)(par->n_grid*par->n_grid));
+    np_here=par->nz_here*((long)(par->n_grid*par->n_grid));
     print_info(" - Writing LPT positions\n");
     write_lpt(par,np_here,disp[0],disp[1],disp[2]);
   }
@@ -551,10 +551,10 @@ static void lpt_1(ParamCoLoRe *par)
 #ifdef _HAVE_MPI
   print_info(" - Sharing particle positions\n");
   share_particles(par,(unsigned long long)(2*dsize_buff),
-		  (unsigned long long)(par->nz_here*((lint)(par->n_grid*par->n_grid))),
+		  (unsigned long long)(par->nz_here*((long)(par->n_grid*par->n_grid))),
 		  disp[0],disp[1],disp[2],&np_here);
 #else //_HAVE_MPI
-  np_nere=par->nz_here*((lint)(par->n_grid*par->n_grid));
+  np_nere=par->nz_here*((long)(par->n_grid*par->n_grid));
 #endif //_HAVE_MPI
 
   print_info(" - Interpolating positions into density field\n");
@@ -580,7 +580,7 @@ static void lpt_1(ParamCoLoRe *par)
 #endif //_DEBUG
 #endif //_HAVE_OMP
   {
-    lint iz;
+    long iz;
     int ngx=2*(par->n_grid/2+1);
     flouble inv_dens=1.;
 #ifdef _DEBUG
@@ -592,12 +592,12 @@ static void lpt_1(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint indexz=iz*((lint)(ngx*par->n_grid));
+      long indexz=iz*((long)(ngx*par->n_grid));
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint indexy=iy*ngx;
+	long indexy=iy*ngx;
 	for(ix=0;ix<par->n_grid;ix++) {
-	  lint index=ix+indexy+indexz;
+	  long index=ix+indexy+indexz;
 #ifdef _DEBUG
 	  numtot_thr+=par->grid_dens[index];
 #endif //_DEBUG
@@ -620,7 +620,7 @@ static void lpt_1(ParamCoLoRe *par)
   else
     MPI_Reduce(&numtot,&numtot,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
-  print_info(" Total density : %lE\n",numtot-(double)(par->n_grid*((lint)(par->n_grid*par->n_grid))));
+  print_info(" Total density : %lE\n",numtot-(double)(par->n_grid*((long)(par->n_grid*par->n_grid))));
 #endif //_DEBUG
 }
 
@@ -630,7 +630,7 @@ static void lpt_2(ParamCoLoRe *par)
 
   dftw_complex *(cdisp[3]),*(cdigrad[6]);
   flouble *(disp[3]),*(digrad[6]);
-  ptrdiff_t dsize=par->nz_here*((lint)(par->n_grid*(par->n_grid/2+1)));
+  ptrdiff_t dsize=par->nz_here*((long)(par->n_grid*(par->n_grid/2+1)));
   ptrdiff_t dsize_buff=(ptrdiff_t)(dsize*(1+par->lpt_buffer_fraction));
 
   print_info(" 2LPT\n");
@@ -657,7 +657,7 @@ static void lpt_2(ParamCoLoRe *par)
     int ii;
     double dk=2*M_PI/par->l_box;
     double kv[3];
-    double fftnorm=(double)(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    double fftnorm=(double)(par->n_grid*((long)(par->n_grid*par->n_grid)));
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -678,7 +678,7 @@ static void lpt_2(ParamCoLoRe *par)
 	for(kk=0;kk<=par->n_grid/2;kk++) {
 	  int ax;
 	  double k_mod2;
-	  lint index=kk+(par->n_grid/2+1)*((lint)(jj+par->n_grid*ii)); //Grid index for +k
+	  long index=kk+(par->n_grid/2+1)*((long)(jj+par->n_grid*ii)); //Grid index for +k
 	  if(2*kk<=par->n_grid)
 	    kv[0]=kk*dk;
 	  else
@@ -722,12 +722,12 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint indexz=iz*((lint)(ngx*par->n_grid));
+      long indexz=iz*((long)(ngx*par->n_grid));
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint indexy=iy*ngx;
+	long indexy=iy*ngx;
 	for(ix=0;ix<par->n_grid;ix++) {
-	  lint index=ix+indexy+indexz; //SIGN
+	  long index=ix+indexy+indexz; //SIGN
 	  digrad[5][index]=
 	    digrad[0][index]*digrad[3][index]+//xx*yy
 	    digrad[0][index]*digrad[5][index]+//xx*zz
@@ -752,7 +752,7 @@ static void lpt_2(ParamCoLoRe *par)
     int ii;
     double dk=2*M_PI/par->l_box;
     double kv[3];
-    double fftnorm=(double)(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    double fftnorm=(double)(par->n_grid*((long)(par->n_grid*par->n_grid)));
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -773,7 +773,7 @@ static void lpt_2(ParamCoLoRe *par)
 	for(kk=0;kk<=par->n_grid/2;kk++) {
 	  int ax;
 	  double k_mod2;
-	  lint index=kk+(par->n_grid/2+1)*((lint)(jj+par->n_grid*ii)); //Grid index for +k
+	  long index=kk+(par->n_grid/2+1)*((long)(jj+par->n_grid*ii)); //Grid index for +k
 	  if(2*kk<=par->n_grid)
 	    kv[0]=kk*dk;
 	  else
@@ -813,7 +813,7 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_DEBUG
 #endif //_HAVE_OMP
   {
-    lint iz;
+    long iz;
     int ngx=2*(par->n_grid/2+1);
     flouble dx=par->l_box/par->n_grid;
     flouble xv[3];
@@ -830,17 +830,17 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint indexz=iz*((lint)(ngx*par->n_grid));
+      long indexz=iz*((long)(ngx*par->n_grid));
       xv[2]=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint indexy=iy*ngx;
+	long indexy=iy*ngx;
 	xv[1]=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int ax;
 	  double r,dg,d2g;
-	  lint index=ix+indexy+indexz;
-	  lint index_nopad=ix+par->n_grid*((lint)(iy+par->n_grid*iz));
+	  long index=ix+indexy+indexz;
+	  long index_nopad=ix+par->n_grid*((long)(iy+par->n_grid*iz));
 	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
 	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
 	  dg=get_bg(par,r,BG_D1,0);
@@ -896,14 +896,14 @@ static void lpt_2(ParamCoLoRe *par)
     MPI_Reduce(&d_sigma2_2,&d_sigma2_2,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
   if(NodeThis==0) {
-    d_mean_1[0]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_mean_1[1]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_mean_1[2]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_mean_2[0]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_mean_2[1]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_mean_2[2]/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_sigma2_1/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
-    d_sigma2_2/=(par->n_grid*((lint)(par->n_grid*par->n_grid)));
+    d_mean_1[0]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_mean_1[1]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_mean_1[2]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_mean_2[0]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_mean_2[1]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_mean_2[2]/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_sigma2_1/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
+    d_sigma2_2/=(par->n_grid*((long)(par->n_grid*par->n_grid)));
   
     print_info(" 1st-order displacement : [%lE,%lE,%lE] %lE\n",
 	       d_mean_1[0],d_mean_1[1],d_mean_1[2],sqrt(d_sigma2_1));
@@ -926,7 +926,7 @@ static void lpt_2(ParamCoLoRe *par)
 
   unsigned long long np_here;
   if(par->output_lpt) {
-    np_here=par->nz_here*((lint)(par->n_grid*par->n_grid));
+    np_here=par->nz_here*((long)(par->n_grid*par->n_grid));
     print_info(" - Writing LPT positions\n");
     write_lpt(par,np_here,digrad[3],digrad[4],digrad[5]);
   }
@@ -934,10 +934,10 @@ static void lpt_2(ParamCoLoRe *par)
 #ifdef _HAVE_MPI
   print_info(" - Sharing particle positions\n");
   share_particles(par,(unsigned long long)(2*dsize_buff),
-		  (unsigned long long)(par->nz_here*((lint)(par->n_grid*par->n_grid))),
+		  (unsigned long long)(par->nz_here*((long)(par->n_grid*par->n_grid))),
 		  digrad[3],digrad[4],digrad[5],&np_here);
 #else //_HAVE_MPI
-  np_nere=par->nz_here*((lint)(par->n_grid*par->n_grid));
+  np_nere=par->nz_here*((long)(par->n_grid*par->n_grid));
 #endif //_HAVE_MPI
 
   print_info(" - Interpolating positions into density field\n");
@@ -963,7 +963,7 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_DEBUG
 #endif //_HAVE_OMP
   {
-    lint iz;
+    long iz;
     int ngx=2*(par->n_grid/2+1);
     flouble inv_dens=1.;
 #ifdef _DEBUG
@@ -975,12 +975,12 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint indexz=iz*((lint)(ngx*par->n_grid));
+      long indexz=iz*((long)(ngx*par->n_grid));
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint indexy=iy*ngx;
+	long indexy=iy*ngx;
 	for(ix=0;ix<par->n_grid;ix++) {
-	  lint index=ix+indexy+indexz;
+	  long index=ix+indexy+indexz;
 #ifdef _DEBUG
 	  numtot_thr+=par->grid_dens[index];
 #endif //_DEBUG
@@ -1003,7 +1003,7 @@ static void lpt_2(ParamCoLoRe *par)
   else
     MPI_Reduce(&numtot,&numtot,1,MPI_DOUBLE,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
-  print_info(" Total density : %lE\n",numtot-(double)(par->n_grid*((lint)(par->n_grid*par->n_grid))));
+  print_info(" Total density : %lE\n",numtot-(double)(par->n_grid*((long)(par->n_grid*par->n_grid))));
 #endif //_DEBUG
 }
 
@@ -1015,7 +1015,7 @@ static void lognormalize(ParamCoLoRe *par)
 #pragma omp parallel default(none) shared(par)
 #endif //_HAVE_OMP
   {
-    lint iz;
+    long iz;
     int ngx=2*(par->n_grid/2+1);
     flouble dx=par->l_box/par->n_grid;
 
@@ -1024,14 +1024,14 @@ static void lognormalize(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint indexz=iz*((lint)(ngx*par->n_grid));
+      long indexz=iz*((long)(ngx*par->n_grid));
       flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint indexy=iy*ngx;
+	long indexy=iy*ngx;
 	flouble y0=(iy+0.5)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
-	  lint index=ix+indexy+indexz;
+	  long index=ix+indexy+indexz;
 	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double dg=get_bg(par,r,BG_D1,0);
@@ -1089,14 +1089,14 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint iz0=iz*((lint)(2*(par->n_grid/2+1)*par->n_grid));
+      long iz0=iz*((long)(2*(par->n_grid/2+1)*par->n_grid));
       flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint iy0=iy*2*(par->n_grid/2+1);
+	long iy0=iy*2*(par->n_grid/2+1);
 	flouble y0=(iy+0.5)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
-	  lint index=ix+iy0+iz0;
+	  long index=ix+iy0+iz0;
 	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double redshift=get_bg(par,r,BG_Z,0);
@@ -1309,7 +1309,8 @@ void compute_density_normalization(ParamCoLoRe *par)
       else if(z>=par->zf_norm)
 	nm=par->norm_srcs_f[ipop];
       else
-	par->srcs_norm_arr[ipop][ii]=gsl_spline_eval(spline_norm_srcs[ipop],z,intacc_srcs);
+	nm=gsl_spline_eval(spline_norm_srcs[ipop],z,intacc_srcs);
+      par->srcs_norm_arr[ipop][ii]=nm;
     }
     for(ipop=0;ipop<par->n_imap;ipop++) {
       double nm;
@@ -1318,7 +1319,8 @@ void compute_density_normalization(ParamCoLoRe *par)
       else if(z>=par->zf_norm)
 	nm=par->norm_imap_f[ipop];
       else
-	par->imap_norm_arr[ipop][ii]=gsl_spline_eval(spline_norm_imap[ipop],z,intacc_imap);
+	nm=gsl_spline_eval(spline_norm_imap[ipop],z,intacc_imap);
+      par->imap_norm_arr[ipop][ii]=nm;
     }
   }
 
