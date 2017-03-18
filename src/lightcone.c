@@ -126,12 +126,14 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
 	  long index=ix+indexy+indexz;
 	  double x0=(ix+0.5)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
-	  double ndens=get_bg(par,r,BG_NZ_SRCS,ipop);
-	  if(ndens>0) {
-	    double bias=get_bg(par,r,BG_BZ_SRCS,ipop);
-	    double dnorm=get_bg(par,r,BG_NORM_SRCS,ipop);
-	    double lambda=ndens*cell_vol*bias_model(par->grid_dens[index],bias)*dnorm;
-	    npp=rng_poisson(lambda,rng_thr);
+	  if(r<par->l_box/2+20.) {
+	    double ndens=get_bg(par,r,BG_NZ_SRCS,ipop);
+	    if(ndens>0) {
+	      double bias=get_bg(par,r,BG_BZ_SRCS,ipop);
+	      double dnorm=get_bg(par,r,BG_NORM_SRCS,ipop);
+	      double lambda=ndens*cell_vol*bias_model(par->grid_dens[index],bias)*dnorm;
+	      npp=rng_poisson(lambda,rng_thr);
+	    }
 	  }
 
 	  nsources[index]=npp;
@@ -635,7 +637,7 @@ static double get_min_vol(HealpixShells *sh)
   for(ir=0;ir<sh->nr;ir++) {
     double r0=sh->r0[ir];
     double rf=sh->rf[ir];
-    double vol=pixel_area*(rf*rf*rf-r0*r0*r0);
+    double vol=pixel_area*(rf*rf*rf-r0*r0*r0)/3;
     if(vol<volmin)
       volmin=vol;
   }
@@ -666,7 +668,7 @@ static void get_imap_cartesian_single(ParamCoLoRe *par,int ipop)
     double dx=par->l_box/par->n_grid;
     int ngx=2*(par->n_grid/2+1);
     double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
-    double hpa_third=4*M_PI/(3.*he_nside2npix(par->imap[ipop]->nside));
+    double hpa=he_pixel_area(par->imap[ipop]->nside);
 
     double volmin=get_min_vol(par->imap[ipop]);
     int n_resample=(int)(MAX((8*dx*dx*dx/volmin),1.));
@@ -683,7 +685,7 @@ static void get_imap_cartesian_single(ParamCoLoRe *par,int ipop)
     end_rng(rng_thr);
 
 #ifdef _HAVE_OMP
-#pragma omp for schedule(static)
+#pragma omp for schedule(dynamic)
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
@@ -699,49 +701,49 @@ static void get_imap_cartesian_single(ParamCoLoRe *par,int ipop)
 	  double x0=(ix+0.5)*dx-par->pos_obs[0];
 	  double r0=sqrt(x0*x0+y0*y0+z0*z0);
 	  double tmean=get_bg(par,r0,BG_TZ_IMAP,ipop);
-	  if(tmean>0) {
-	    int isub,n_resample_here;
-	    double bias=get_bg(par,r0,BG_BZ_IMAP,ipop);
-	    double dnorm=get_bg(par,r0,BG_NORM_IMAP,ipop);
-	    double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,r0);
-	    double dr_rsd=rvel*get_bg(par,r0,BG_V1,0)*get_bg(par,r0,BG_IH,0);
-	    double temp=tmean*bias_model(par->grid_dens[index],bias)*dnorm;
-	    if((irad>=0) && (irad<par->imap[ipop]->nr)) {
-	      double pixvol;
-	      double rfh,r0h;
-	      irad=get_r_index_imap(par->imap[ipop],r0,irad);
-	      rfh=par->imap[ipop]->rf[irad];
-	      r0h=par->imap[ipop]->r0[irad];
-	      pixvol=(rfh*rfh*rfh-r0h*r0h*r0h)*hpa_third;
-	      n_resample_here=(int)(MAX((8*dx*dx*dx/pixvol),1.));
-	    }
-	    else
-	      n_resample_here=n_resample;
-	    if(n_resample_here>n_resample) {
-	      printf("SHIT\n");
-	      exit(1);
-	    }
-	    n_resample_here=n_resample;
-	    for(isub=0;isub<n_resample_here;isub++) {
-	      double cth,phi,r;
-	      double x=x0+(disp[3*isub+0]-0.5)*dx;
-	      double y=y0+(disp[3*isub+1]-0.5)*dx;
-	      double z=z0+(disp[3*isub+2]-0.5)*dx;
-	      cart2sph(x,y,z,&r,&cth,&phi);
-	      irad=get_r_index_imap(par->imap[ipop],r+dr_rsd,irad);
+	  if(r0<par->l_box/2+20.) {
+	    if(tmean>0) {
+	      int isub,n_resample_here;
+	      double bias=get_bg(par,r0,BG_BZ_IMAP,ipop);
+	      double dnorm=get_bg(par,r0,BG_NORM_IMAP,ipop);
+	      double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,r0);
+	      double dr_rsd=rvel*get_bg(par,r0,BG_V1,0)*get_bg(par,r0,BG_IH,0);
+	      double temp=tmean*bias_model(par->grid_dens[index],bias)*dnorm;
 	      if((irad>=0) && (irad<par->imap[ipop]->nr)) {
-		long pix_id;
-		long irad_t=irad*par->imap[ipop]->num_pix;
-		long pix_id_ring=he_ang2pix(par->imap[ipop]->nside,cth,phi);
-		ring2nest(par->imap[ipop]->nside,pix_id_ring,&pix_id);
+		double pixvol,rfh,r0h;
+		irad=get_r_index_imap(par->imap[ipop],r0,irad);
+		rfh=par->imap[ipop]->rf[irad];
+		r0h=par->imap[ipop]->r0[irad];
+		pixvol=(rfh*rfh*rfh-r0h*r0h*r0h)*hpa/3;
+		n_resample_here=(int)(MAX((8*dx*dx*dx/pixvol),1.));
+	      }
+	      else
+		n_resample_here=n_resample;
+	      if(n_resample_here>n_resample) {
+		printf("NOOOO \n");
+		exit(1);
+	      }
+	      for(isub=0;isub<n_resample_here;isub++) {
+		double cth,phi,r;
+		double x=x0+(disp[3*isub+0]-0.5)*dx;
+		double y=y0+(disp[3*isub+1]-0.5)*dx;
+		double z=z0+(disp[3*isub+2]-0.5)*dx;
+		cart2sph(x,y,z,&r,&cth,&phi);
+		irad=get_r_index_imap(par->imap[ipop],r+dr_rsd,irad);
+		if((irad>=0) && (irad<par->imap[ipop]->nr)) {
+		  long pix_id;
+		  long irad_t=irad*par->imap[ipop]->num_pix;
+		  long pix_id_ring=he_ang2pix(par->imap[ipop]->nside,cth,phi);
+		  ring2nest(par->imap[ipop]->nside,pix_id_ring,&pix_id);
 #ifdef _HAVE_OMP
 #pragma omp atomic
 #endif //_HAVE_OMP
-		par->imap[ipop]->data[irad_t+pix_id]+=temp;
+		  par->imap[ipop]->data[irad_t+pix_id]+=temp;
 #ifdef _HAVE_OMP
 #pragma omp atomic
 #endif //_HAVE_OMP
-		par->imap[ipop]->nadd[irad_t+pix_id]++;
+		  par->imap[ipop]->nadd[irad_t+pix_id]++;
+		}
 	      }
 	    }
 	  }
