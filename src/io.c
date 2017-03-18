@@ -106,25 +106,21 @@ static ParamCoLoRe *param_colore_new(void)
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzSrcs[ii],"default");
     sprintf(par->fnameNzSrcs[ii],"default");
-    par->spline_srcs_bz[ii]=NULL;
-    par->spline_srcs_nz[ii]=NULL;
-    par->intacc_srcs[ii]=NULL;
+    par->srcs_bz_arr[ii]=NULL;
+    par->srcs_nz_arr[ii]=NULL;
+    par->srcs_norm_arr[ii]=NULL;
     par->shear_srcs[ii]=0;
     sprintf(par->fnameBzImap[ii],"default");
     sprintf(par->fnameTzImap[ii],"default");
     sprintf(par->fnameNuImap[ii],"default");
-    par->spline_imap_bz[ii]=NULL;
-    par->spline_imap_tz[ii]=NULL;
-    par->intacc_imap[ii]=NULL;
+    par->imap_bz_arr[ii]=NULL;
+    par->imap_tz_arr[ii]=NULL;
+    par->imap_norm_arr[ii]=NULL;
     par->nside_imap[ii]=-1;
     par->z_kappa_out[ii]=-1;
     par->z_isw_out[ii]=-1;
     par->nu0_imap[ii]=-1;
-    par->spline_norm_srcs[ii]=NULL;
-    par->spline_norm_imap[ii]=NULL;
   }
-  par->intacc_norm_srcs=NULL;
-  par->intacc_norm_imap=NULL;
   par->srcs=NULL;
   par->imap=NULL;
   par->kmap=NULL;
@@ -325,7 +321,7 @@ ParamCoLoRe *read_run_params(char *fname)
 
   if(par->do_sources) {
     par->srcs=my_malloc(par->n_srcs*sizeof(Src *));
-    par->nsources_this=my_malloc(par->n_srcs*sizeof(lint));
+    par->nsources_this=my_malloc(par->n_srcs*sizeof(long));
   }
 
   if(par->do_imap) {
@@ -379,10 +375,11 @@ ParamCoLoRe *read_run_params(char *fname)
   init_fftw(par);
 
   par->nside_base=2;
-  while(get_npix(par->nside_base)<NNodes)
+  while(he_nside2npix(par->nside_base)<NNodes)
     par->nside_base*=2;
 
-  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
+  //  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
+  par->need_onions=par->do_lensing+par->do_kappa+par->do_isw;
   if(par->need_onions) {
     par->oi_beams=alloc_onion_info_beams(par);
     par->nside_base=par->oi_beams[0]->nside_arr[0];
@@ -441,7 +438,7 @@ void write_density_grid(ParamCoLoRe *par,char *prefix_dens)
   for(iz=0;iz<par->nz_here;iz++) {
     int iy;
     for(iy=0;iy<par->n_grid;iy++) {
-      lint index0=ngx*((lint)(iy+iz*par->n_grid));
+      long index0=ngx*((long)(iy+iz*par->n_grid));
       my_fwrite(&(par->grid_dens[index0]),sizeof(flouble),par->n_grid,fo);
     }
   }
@@ -479,7 +476,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   char fname[256];
   unsigned long long ipart,np_total;
   unsigned long long np_send=npart;
-  unsigned long long np_total_expected=par->n_grid*((lint)(par->n_grid*par->n_grid));
+  unsigned long long np_total_expected=par->n_grid*((long)(par->n_grid*par->n_grid));
 
   sprintf(fname,"%s_lpt_out.%d",par->prefixOut,NodeThis);
   fo=fopen(fname,"w");
@@ -540,7 +537,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   // id
   blklen=npart*sizeof(unsigned long long);
   my_fwrite(&blklen,sizeof(blklen),1,fo);
-  long long id0=(long long)(par->iz0_here*((lint)(par->n_grid*par->n_grid)));
+  long long id0=(long long)(par->iz0_here*((long)(par->n_grid*par->n_grid)));
   for(ipart=0;ipart<npart;ipart++) {
     unsigned long long id_out=id0+ipart;
     my_fwrite(&id_out,sizeof(unsigned long long),1,fo); 
@@ -562,20 +559,20 @@ void write_imap(ParamCoLoRe *par)
       int ir;
       long npx=he_nside2npix(par->imap[i_pop]->nside);
       flouble *map_write=my_malloc(npx*sizeof(flouble));
-      //      int *map_nadd=my_malloc(npx*sizeof(int));
+      int *map_nadd=my_malloc(npx*sizeof(int));
       for(ir=0;ir<par->imap[i_pop]->nr;ir++) {
 	long ip;
 	long ir_t=ir*par->imap[i_pop]->num_pix;
 
 	//Write local pixels to dummy map
 	memset(map_write,0,npx*sizeof(flouble));
-	//	memset(map_nadd,0,npx*sizeof(int));
+	memset(map_nadd,0,npx*sizeof(int));
 	sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,i_pop,ir);
 	for(ip=0;ip<npx;ip++) {
 	  int id_pix=par->imap[i_pop]->listpix[ip];
-	  if(id_pix>0) {
+	  if(id_pix>=0) {
 	    map_write[ip]+=par->imap[i_pop]->data[ir_t+id_pix];
-	    //	    map_nadd[ip]+=par->imap[i_pop]->nadd[ir_t+id_pix];
+	    map_nadd[ip]+=par->imap[i_pop]->nadd[ir_t+id_pix];
 	  }
 	}
 
@@ -585,23 +582,23 @@ void write_imap(ParamCoLoRe *par)
 	  MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
 	else
 	  MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
-	//	if(NodeThis==0)
-	//	  MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-	//	else
-	//	  MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+	if(NodeThis==0)
+	  MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+	else
+	  MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
 
-	//	for(ip=0;ip<npx;ip++) {
-	//	  if(map_nadd[ip]>0)
-	//	    map_write[ip]/=map_nadd[ip];
-	//	}
-	//	
+	for(ip=0;ip<npx;ip++) {
+	  if(map_nadd[ip]>0)
+	    map_write[ip]/=map_nadd[ip];
+	}
+
 	//Write dummy map
 	if(NodeThis==0)
-	  he_write_healpix_map(&map_write,1,par->imap[i_pop]->nside,fname);
+	  he_write_healpix_map(&map_write,1,par->imap[i_pop]->nside,fname,1);
       }
       free(map_write);
-      //      free(map_nadd);
+      free(map_nadd);
     }
     if(NodeThis==0) timer(2);
     print_info("\n");
@@ -628,7 +625,7 @@ void write_kappa(ParamCoLoRe *par)
       sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
       for(ip=0;ip<npx;ip++) {
 	int id_pix=par->kmap->listpix[ip];
-	if(id_pix>0) {
+	if(id_pix>=0) {
 	  map_write[ip]+=par->kmap->data[ir_t+id_pix];
 	  map_nadd[ip]+=par->kmap->nadd[ir_t+id_pix];
 	}
@@ -674,7 +671,7 @@ void write_kappa(ParamCoLoRe *par)
 
       //Write dummy map
       if(NodeThis==0)
-	he_write_healpix_map(&map_write,1,par->nside_kappa,fname);
+	he_write_healpix_map(&map_write,1,par->nside_kappa,fname,1);
     }
     free(map_write);
     free(map_nadd);
@@ -703,7 +700,7 @@ void write_isw(ParamCoLoRe *par)
       sprintf(fname,"!%s_isw_z%03d.fits",par->prefixOut,ir);
       for(ip=0;ip<npx;ip++) {
 	int id_pix=par->pd_map->listpix[ip];
-	if(id_pix>0) {
+	if(id_pix>=0) {
 	  map_write[ip]+=par->pd_map->data[ir_t+id_pix];
 	  map_nadd[ip]+=par->pd_map->nadd[ir_t+id_pix];
 	}
@@ -749,7 +746,7 @@ void write_isw(ParamCoLoRe *par)
 
       //Write dummy map
       if(NodeThis==0)
-	he_write_healpix_map(&map_write,1,par->nside_isw,fname);
+	he_write_healpix_map(&map_write,1,par->nside_isw,fname,1);
     }
     free(map_write);
     free(map_nadd);
@@ -885,7 +882,7 @@ void write_catalog(ParamCoLoRe *par)
       print_info("*** Writing catalog (ASCII)\n");
       sprintf(fname,"%s_srcs_%d.txt",par->prefixOut,NodeThis);
 
-      lint jj;
+      long jj;
       FILE *fil=fopen(fname,"w");
       if(fil==NULL) error_open_file(fname);
       fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");
@@ -928,14 +925,12 @@ void param_colore_free(ParamCoLoRe *par)
 
   if(par->do_sources) {
     for(ii=0;ii<par->n_srcs;ii++) {
-      gsl_spline_free(par->spline_srcs_bz[ii]);
-      gsl_spline_free(par->spline_srcs_nz[ii]);
-      gsl_spline_free(par->spline_norm_srcs[ii]);
-      gsl_interp_accel_free(par->intacc_srcs[ii]);
+      free(par->srcs_bz_arr[ii]);
+      free(par->srcs_nz_arr[ii]);
+      free(par->srcs_norm_arr[ii]);
       if(par->srcs[ii]!=NULL)
       	free(par->srcs[ii]);
     }
-    gsl_interp_accel_free(par->intacc_norm_srcs);
     if(par->srcs!=NULL)
       free(par->srcs);
     free(par->nsources_this);
@@ -943,13 +938,11 @@ void param_colore_free(ParamCoLoRe *par)
 
   if(par->do_imap) {
     for(ii=0;ii<par->n_imap;ii++) {
-      gsl_spline_free(par->spline_imap_bz[ii]);
-      gsl_spline_free(par->spline_imap_tz[ii]);
-      gsl_spline_free(par->spline_norm_imap[ii]);
-      gsl_interp_accel_free(par->intacc_imap[ii]);
+      free(par->imap_bz_arr[ii]);
+      free(par->imap_tz_arr[ii]);
+      free(par->imap_norm_arr[ii]);
       free_hp_shell(par->imap[ii]);
     }
-    gsl_interp_accel_free(par->intacc_norm_imap);
     if(par->imap!=NULL)
       free(par->imap);
   }

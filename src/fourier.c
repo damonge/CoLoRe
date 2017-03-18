@@ -36,19 +36,19 @@ static void compute_sigma_dens(ParamCoLoRe *par)
     int iz;
     double sigma2_thr=0;
     double mean_thr=0;
-    lint ng_tot=par->n_grid*((lint)(par->n_grid*par->n_grid));
+    long ng_tot=par->n_grid*((long)(par->n_grid*par->n_grid));
 
 #ifdef _HAVE_OMP
 #pragma omp for
 #endif //_HAVE_OMP
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
-      lint iz0=iz*((lint)(2*(par->n_grid/2+1)*par->n_grid));
+      long iz0=iz*((long)(2*(par->n_grid/2+1)*par->n_grid));
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
-	lint iy0=iy*2*(par->n_grid/2+1);
+	long iy0=iy*2*(par->n_grid/2+1);
 	for(ix=0;ix<par->n_grid;ix++) {
-	  lint index=ix+iy0+iz0;
+	  long index=ix+iy0+iz0;
 	  sigma2_thr+=par->grid_dens[index]*par->grid_dens[index];
 	  mean_thr+=par->grid_dens[index];
 	}
@@ -207,7 +207,7 @@ void init_fftw(ParamCoLoRe *par)
   par->nz_all[0]=par->nz_here;
   par->iz0_all[0]=par->iz0_here;
 #endif //_HAVE_MPI
-  dsize=par->nz_max*((lint)(par->n_grid*(par->n_grid/2+1)));
+  dsize=par->nz_max*((long)(par->n_grid*(par->n_grid/2+1)));
 
 #ifdef _SPREC
   par->grid_dens_f=fftwf_alloc_complex(dsize);
@@ -301,7 +301,6 @@ static void create_grids_fourier(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     unsigned int seed_thr=par->seed_rng+IThread0+ithr;
     gsl_rng *rng_thr=init_rng(seed_thr);
-    double factor_p=-1.5*par->hubble_0*par->hubble_0*par->OmegaM;
     
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -324,7 +323,7 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	for(kk=0;kk<=par->n_grid/2;kk++) {
 	  double kx;
 	  double k_mod2;
-	  lint index=kk+(par->n_grid/2+1)*((lint)(jj+par->n_grid*ii)); //Grid index for +k
+	  long index=kk+(par->n_grid/2+1)*((long)(jj+par->n_grid*ii)); //Grid index for +k
 	  double delta_mod,delta_phase;
 	  if(2*kk<=par->n_grid)
 	    kx=kk*dk;
@@ -342,7 +341,7 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	    double sigma2=pk_linear0(par,lgk)*idk3;
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
-	    par->grid_npot_f[index]=factor_p*par->grid_dens_f[index]/k_mod2;
+	    par->grid_npot_f[index]=-par->prefac_lensing*par->grid_dens_f[index]/k_mod2;
 	    if(par->do_smoothing) {
 	      double sm=exp(-0.5*par->r2_smooth*k_mod2);
 	      par->grid_dens_f[index]*=sm;
@@ -363,7 +362,7 @@ void create_cartesian_fields(ParamCoLoRe *par)
   // Creates a realization of the gaussian density
   // contrast field from the linear P_k
   
-  lint n_grid_tot=2*(par->n_grid/2+1)*((lint)(par->n_grid*par->nz_here));
+  long n_grid_tot=2*(par->n_grid/2+1)*((long)(par->n_grid*par->nz_here));
   print_info("*** Creating Gaussian density field \n");
 
   print_info("Creating Fourier-space density and Newtonian potential \n");
@@ -384,7 +383,7 @@ void create_cartesian_fields(ParamCoLoRe *par)
   shared(n_grid_tot,par)
 #endif //_HAVE_OMP
   {
-    lint ii;
+    long ii;
     double norm=pow(sqrt(2*M_PI)/par->l_box,3);
     
 #ifdef _HAVE_OMP
@@ -397,7 +396,7 @@ void create_cartesian_fields(ParamCoLoRe *par)
   }//end omp parallel
   if(NodeThis==0) timer(2);
 
-  lint slice_size=2*(par->n_grid/2+1)*par->n_grid;
+  long slice_size=2*(par->n_grid/2+1)*par->n_grid;
 #ifdef _HAVE_MPI
   MPI_Status stat;
 

@@ -1,7 +1,7 @@
 #include "common.h"
 
 //HE_IO
-void he_write_healpix_map(flouble **tmap,int nfields,long nside,char *fname)
+void he_write_healpix_map(flouble **tmap,int nfields,long nside,char *fname,int isnest)
 {
   fitsfile *fptr;
   int ii,status=0;
@@ -37,6 +37,8 @@ void he_write_healpix_map(flouble **tmap,int nfields,long nside,char *fname)
 		     &status);
   for(ii=0;ii<nfields;ii++) {
     long ip;
+    if(isnest)
+      he_nest2ring_inplace(tmap[ii],nside);
     for(ip=0;ip<nside2npix(nside);ip++)
       map_dum[ip]=(float)(tmap[ii][ip]);
     fits_write_col(fptr,TFLOAT,ii+1,1,1,nside2npix(nside),map_dum,&status);
@@ -125,6 +127,11 @@ static int imodulo (int v1, int v2)
 long he_nside2npix(long nside)
 {
   return 12*nside*nside;
+}
+
+double he_pixel_area(int nside)
+{
+  return M_PI/(3*nside*nside);
 }
 
 static const double twopi=6.283185307179586476925286766559005768394;

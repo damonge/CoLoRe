@@ -28,13 +28,13 @@
 #define IND_YZ 4
 #define IND_ZZ 5
 
-static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
+static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 			flouble *d,flouble v[3],flouble t[6],flouble *pdot)
 {
-  int ngx=2*(par->n_grid/2+1);
-  lint iz_hi=iz+1,iz_lo=iz-1,iz_0=iz;
-  lint iy_hi=iy+1,iy_lo=iy-1,iy_0=iy;
-  lint ix_hi=ix+1,ix_lo=ix-1,ix_0=ix;
+  long ngx=2*(par->n_grid/2+1);
+  long iz_hi=iz+1,iz_lo=iz-1,iz_0=iz;
+  long iy_hi=iy+1,iy_lo=iy-1,iy_0=iy;
+  long ix_hi=ix+1,ix_lo=ix-1,ix_0=ix;
   if(iy==0) iy_lo=par->n_grid-1;
   if(iy==par->n_grid-1) iy_hi=0;
   if(ix==0) ix_lo=par->n_grid-1;
@@ -97,14 +97,35 @@ static void get_element(ParamCoLoRe *par,int ix,int iy,int iz,
   }
 }  
 
+static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
+{
+#define SENDRECV_BATCH 1073741824
+  int remainder;
+  long i_sofar=0;
+  while(i_sofar+SENDRECV_BATCH<count) {
+    MPI_Sendrecv(&(data[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeRight,tag,
+		 &(buff[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeLeft ,tag,
+		 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    i_sofar+=SENDRECV_BATCH;
+  }
+  remainder=(int)(count-i_sofar);
+  if(remainder>0) {
+    MPI_Sendrecv(&(data[i_sofar]),remainder,FLOUBLE_MPI,NodeRight,tag,
+		 &(buff[i_sofar]),remainder,FLOUBLE_MPI,NodeLeft ,tag,
+		 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+  }
+  memcpy(data,buff,count*sizeof(flouble));
+}
+
 void pixelize(ParamCoLoRe *par)
 {
   print_info("*** Pixelizing cartesian grids\n");
   if(NodeThis==0) timer(0);
 
   int i;
-  lint size_slice_npot=(par->nz_max+2)*((lint)(2*par->n_grid*(par->n_grid/2+1)));
-  lint size_slice_dens=par->nz_max*((lint)(2*par->n_grid*(par->n_grid/2+1)));
+  long size_slice_npot=(par->nz_max+2)*((long)(2*par->n_grid*(par->n_grid/2+1)));
+  long size_slice_dens=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
+  flouble *buffer_sr=my_malloc(size_slice_npot*sizeof(flouble));
 
   for(i=0;i<NNodes;i++) {
     int ib;
@@ -113,10 +134,9 @@ void pixelize(ParamCoLoRe *par)
 #ifdef _DEBUG
     print_info("Communication %d, Node %d is now Node %d\n",i,NodeThis,node_i_am_now);
 #endif //_DEBUG
-    MPI_Sendrecv_replace(par->grid_npot,size_slice_npot,FLOUBLE_MPI,
-			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-    MPI_Sendrecv_replace(par->grid_dens,size_slice_dens,FLOUBLE_MPI,
-			 NodeRight,i,NodeLeft,i,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    mpi_sendrecv_wrap(par->grid_npot,buffer_sr,size_slice_npot,i);
+    mpi_sendrecv_wrap(par->grid_dens,buffer_sr,size_slice_dens,i);
+
 #endif //_HAVE_MPI
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
@@ -140,18 +160,17 @@ void pixelize(ParamCoLoRe *par)
 	  double dr=oi->rf_arr[ir]-oi->r0_arr[ir];
 	  flouble dr_sub=dr/NSUB_PAR;
 	  double rm=r0+dr*0.5;
-	  double dg=dgrowth_of_r(par,rm);
-	  double vg=vgrowth_of_r(par,rm);
-	  double pg=dg*(1+z_of_r(par,rm));
-	  double pdg=pdgrowth_of_r(par,rm);
+	  double dg=get_bg(par,rm,BG_D1,0);
+	  double vg=get_bg(par,rm,BG_V1,0);
+	  double pg=dg*(1+get_bg(par,rm,BG_Z,0));
+	  double pdg=get_bg(par,rm,BG_PD,0);
 	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	    int ipix_sub;
 	    double cth_h=1,sth_h=0,cph_h=1,sph_h=0,u[3];
 	    int added_anything=0;
 	    flouble d=0,v[3]={0,0,0},t[6]={0,0,0,0,0,0},pd=0;
 
-	    get_vec(ipix,oi->iphi0_arr[ir],oi->icth0_arr[ir],
-		    oi->nside_arr[ir],oi->nside_ratio_arr[ir],u);
+	    pix2vec_nest(oi->nside_arr[ir],oi->ipix0_arr[ir]+ipix,u);
 	    if(par->do_lensing) {
 	      cth_h=u[2]; sth_h=sqrt((1+cth_h)*(1-cth_h));
 	      if(sth_h!=0) {
@@ -162,32 +181,26 @@ void pixelize(ParamCoLoRe *par)
 
 	    for(ipix_sub=0;ipix_sub<NSUB_PERP*NSUB_PERP;ipix_sub++) {
 	      int ir2;
-	      double x[3];
+	      double u1[3];
 	      if(NSUB_PERP==1) {
-		x[0]=u[0]; x[1]=u[1]; x[2]=u[2];
+		u1[0]=u[0]; u1[1]=u[1]; u1[2]=u[2];
 	      }
 	      else {
-		int iphi0;
-#if PIXTYPE == PT_HPX
-		iphi0=oi->iphi0_arr[ir]*NSUB_PERP*NSUB_PERP;
-#else
-		iphi0=oi->iphi0_arr[ir]*NSUB_PERP;
-#endif //PIXTYPE
-		get_vec(ipix*NSUB_PERP*NSUB_PERP+ipix_sub,iphi0,oi->icth0_arr[ir]*NSUB_PERP,
-			oi->nside_arr[ir]*NSUB_PERP,oi->nside_ratio_arr[ir]*NSUB_PERP,x);
+		pix2vec_nest(oi->nside_arr[ir]*NSUB_PERP,
+			     (oi->ipix0_arr[ir]+ipix)*NSUB_PERP*NSUB_PERP+ipix_sub,u1);
 	      }
 	      for(ir2=0;ir2<NSUB_PAR;ir2++) {
 		int ax;
-		lint ix0[3];
-		double h0x[3];
+		long ix0[3];
+		double x[3],h0x[3];
 		flouble r=r0+(ir2+0.5)*dr_sub;
-		x[0]*=r; x[1]*=r; x[2]*=r; 
+		for(ax=0;ax<3;ax++)
+		  x[ax]=u1[ax]*r+par->pos_obs[ax];
 
 #if INTERP_TYPE==INTERP_NGP
 		//Trilinear interpolation
 		for(ax=0;ax<3;ax++) {
-		  x[ax]+=par->pos_obs[ax];
-		  ix0[ax]=(int)(x[ax]*idx+0.5);
+		  ix0[ax]=(long)(x[ax]*idx+0.5);
 		  if(ix0[ax]>=par->n_grid)
 		    ix0[ax]-=par->n_grid;
 		  else if(ix0[ax]<0)
@@ -212,13 +225,12 @@ void pixelize(ParamCoLoRe *par)
 		  }
 		}
 #elif INTERP_TYPE==INTERP_CIC
-		lint ix1[3];
+		long ix1[3];
 		flouble h1x[3];
 
 		//Trilinear interpolation
 		for(ax=0;ax<3;ax++) {
-		  x[ax]+=par->pos_obs[ax];
-		  ix0[ax]=(int)(x[ax]*idx);
+		  ix0[ax]=(long)(x[ax]*idx);
 		  h0x[ax]=x[ax]*idx-ix0[ax];
 		  h1x[ax]=1-h0x[ax];
 		  ix1[ax]=ix0[ax]+1;
@@ -309,6 +321,7 @@ void pixelize(ParamCoLoRe *par)
       } //end omp parallel
     }
   }
+  free(buffer_sr);
 
   if(NodeThis==0) timer(2);
   print_info("\n");
