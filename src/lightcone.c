@@ -34,13 +34,9 @@ static inline void cart2sph(double x,double y,double z,double *r,double *cth,dou
     double yn=y/(*r);
 
     *cth=z/(*r);
-    if((xn==0)&&(yn==0))
-      *phi=0;
-    else {
-      *phi=atan2(yn,xn);
-      if((*phi)<0)
-      	(*phi)+=2*M_PI;
-    }
+    *phi=atan2(yn,xn);
+    if((*phi)<0)
+      (*phi)+=2*M_PI;
   }
 }
 
