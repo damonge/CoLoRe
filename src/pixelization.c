@@ -99,6 +99,8 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 
 static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 {
+  // still need to compile even if never called
+#ifdef _HAVE_MPI 
 #define SENDRECV_BATCH 1073741824
   int remainder;
   long i_sofar=0;
@@ -115,6 +117,7 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 		 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
   }
   memcpy(data,buff,count*sizeof(flouble));
+#endif
 }
 
 void pixelize(ParamCoLoRe *par)

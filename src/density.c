@@ -230,7 +230,9 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
 	       z_true_left[inode],z_true_right[inode],
 	       z_bleft_left[inode],z_bleft_right[inode],
 	       z_bright_left[inode],z_bright_right[inode]);
+#ifdef _HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#endif
 #endif //_DEBUG
   }
 
@@ -267,7 +269,9 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
 
 #ifdef _DEBUG
   printf("Node %d: %llu %llu %llu %llu\n",NodeThis,np_allocated,n_inrange,nbuffer,n_inbuffer);
+#ifdef _HAVE_MPI
   MPI_Barrier(MPI_COMM_WORLD);
+#endif
 #endif //_DEBUG
 
   for(inode=1;inode<NNodes;inode++) {
@@ -314,31 +318,38 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
       nsend=n_inbuffer-i;
     }
 
-    MPI_Status status;
     flouble *x_send=x_b+nstay;
     flouble *y_send=y_b+nstay;
     flouble *z_send=z_b+nstay;
     int tag=500+5*inode;
 
+#ifdef _HAVE_MPI
+    MPI_Status status;
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Sendrecv(&nsend,1,MPI_INT,node_to,tag,&nrecv,1,MPI_INT,node_from,tag,MPI_COMM_WORLD,&status);
+#endif
     tag++;
+    
 
 #ifdef _DEBUG
     printf("%d. Node %d: send %d particles to node %d, receive %d particles from node %d\n",
 	   inode,NodeThis,nsend,node_to,nrecv,node_from);
+#ifdef _HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#endif //_HAVE_MPI
 #endif //_DEBUG
 
     if(n_inrange+nrecv>np_allocated)
       report_error(1,"Not enough memory, enlarge buffer\n");
 
+#ifdef _HAVE_MPI
     MPI_Sendrecv(x_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
 		 x+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
     MPI_Sendrecv(y_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
 		 y+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
     MPI_Sendrecv(z_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
 		 z+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
+#endif
 
     n_inrange+=nrecv;
   }
@@ -554,7 +565,7 @@ static void lpt_1(ParamCoLoRe *par)
 		  (unsigned long long)(par->nz_here*((long)(par->n_grid*par->n_grid))),
 		  disp[0],disp[1],disp[2],&np_here);
 #else //_HAVE_MPI
-  np_nere=par->nz_here*((long)(par->n_grid*par->n_grid));
+  np_here=par->nz_here*((long)(par->n_grid*par->n_grid));
 #endif //_HAVE_MPI
 
   print_info(" - Interpolating positions into density field\n");
@@ -937,7 +948,7 @@ static void lpt_2(ParamCoLoRe *par)
 		  (unsigned long long)(par->nz_here*((long)(par->n_grid*par->n_grid))),
 		  digrad[3],digrad[4],digrad[5],&np_here);
 #else //_HAVE_MPI
-  np_nere=par->nz_here*((long)(par->n_grid*par->n_grid));
+  np_here=par->nz_here*((long)(par->n_grid*par->n_grid));
 #endif //_HAVE_MPI
 
   print_info(" - Interpolating positions into density field\n");
