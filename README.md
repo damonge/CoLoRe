@@ -55,7 +55,7 @@ section 3.
 The behaviour of CoLoRe is mainly controlled by the input param file. The
 param file is basically a set of name-value pairs. Any blank lines, and
 anything beyond a #-symbol will be ignored. We provide a sample param
-file (param_sample.ini) that includes all the input parameters needed by
+file (param.cfg) that includes all the input parameters needed by
 CoLoRe. The comments included in this file explain the meaning and
 functionality of these parameters.
 
