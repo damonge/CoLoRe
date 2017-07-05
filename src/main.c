@@ -86,8 +86,11 @@ int main(int argc,char **argv)
     get_isw(par);
 
   //Write output
-  if(par->do_sources)
-    write_catalog(par);
+  if(par->do_sources) {
+    int i_pop;
+    for(i_pop=0;i_pop<par->n_srcs;i_pop++)
+      write_catalog(par,i_pop);
+  }
   if(par->do_imap)
     write_imap(par);
   if(par->do_kappa)

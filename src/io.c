@@ -93,6 +93,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->nsrc_beams=NULL;
 
   par->do_sources=0;
+  par->do_skewers=0;
   par->do_imap=0;
   par->do_kappa=0;
   par->do_isw=0;
@@ -110,6 +111,7 @@ static ParamCoLoRe *param_colore_new(void)
     par->srcs_nz_arr[ii]=NULL;
     par->srcs_norm_arr[ii]=NULL;
     par->shear_srcs[ii]=0;
+    par->skw_srcs[ii]=0;
     sprintf(par->fnameBzImap[ii],"default");
     sprintf(par->fnameTzImap[ii],"default");
     sprintf(par->fnameNuImap[ii],"default");
@@ -121,7 +123,7 @@ static ParamCoLoRe *param_colore_new(void)
     par->z_isw_out[ii]=-1;
     par->nu0_imap[ii]=-1;
   }
-  par->srcs=NULL;
+  par->cats=NULL;
   par->imap=NULL;
   par->kmap=NULL;
   par->pd_map=NULL;
@@ -275,6 +277,9 @@ ParamCoLoRe *read_run_params(char *fname)
     conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
     if(par->shear_srcs[ii])
       par->do_lensing=1;
+    conf_read_bool(conf,c_dum,"store_skewers",&(par->skw_srcs[ii]));
+    if(par->skw_srcs[ii])
+      par->do_skewers=1;
   }
   if(par->n_srcs>0)
     par->do_sources=1;
@@ -320,7 +325,7 @@ ParamCoLoRe *read_run_params(char *fname)
   }
 
   if(par->do_sources) {
-    par->srcs=my_malloc(par->n_srcs*sizeof(Src *));
+    par->cats=my_malloc(par->n_srcs*sizeof(Catalog *));
     par->nsources_this=my_malloc(par->n_srcs*sizeof(long));
   }
 
@@ -379,7 +384,7 @@ ParamCoLoRe *read_run_params(char *fname)
     par->nside_base*=2;
 
   //  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
-  par->need_onions=par->do_lensing+par->do_kappa+par->do_isw;
+  par->need_onions=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
   if(par->need_onions) {
     par->oi_beams=alloc_onion_info_beams(par);
     par->nside_base=par->oi_beams[0]->nside_arr[0];
@@ -400,6 +405,8 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  No extra smoothing\n");
   if(par->do_sources)
     print_info("  %d galaxy populations\n",par->n_srcs);
+  if(par->do_skewers)
+    print_info("  Some populations will include LoS skewers\n");
   if(par->do_imap)
     print_info("  %d intensity mapping species\n",par->n_imap);
   if(par->do_kappa)
@@ -755,9 +762,8 @@ void write_isw(ParamCoLoRe *par)
   }
 }
 
-void write_catalog(ParamCoLoRe *par)
+void write_catalog(ParamCoLoRe *par,int i_pop)
 {
-  int i_pop;
   char fname[256];
 
   if(par->do_sources) {
@@ -777,24 +783,22 @@ void write_catalog(ParamCoLoRe *par)
       gal_types[5]=H5T_NATIVE_FLOAT;
 
       print_info("*** Writing catalog (HDF5)\n");
-      sprintf(fname,"%s_srcs_%d.h5",par->prefixOut,NodeThis);
+      sprintf(fname,"%s_srcs_s%d_%d.h5",par->prefixOut,i_pop,NodeThis);
 
       //Create file
       file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
       //Write table for each galaxy type
-      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
-	char table_title[256],table_name[256];
-	sprintf(table_title,"sources%d_data",i_pop);
-	sprintf(table_name,"/sources%d",i_pop);
-	H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Src),
-		       names,dst_offset,gal_types,chunk_size,NULL,0,par->srcs[i_pop]);
-	H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
-	H5LTset_attribute_string(file_id,table_name,"FIELD_1_UNITS",tunit[1]);
-	H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
-	H5LTset_attribute_string(file_id,table_name,"FIELD_3_UNITS",tunit[3]);
-	H5LTset_attribute_string(file_id,table_name,"FIELD_4_UNITS",tunit[4]);
-	H5LTset_attribute_string(file_id,table_name,"FIELD_5_UNITS",tunit[5]);
-      }
+      char table_title[256],table_name[256];
+      sprintf(table_title,"sources%d_data",i_pop);
+      sprintf(table_name,"/sources%d",i_pop);
+      H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Src),
+		     names,dst_offset,gal_types,chunk_size,NULL,0,par->cat[i_pop]->srcs);
+      H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
+      H5LTset_attribute_string(file_id,table_name,"FIELD_1_UNITS",tunit[1]);
+      H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
+      H5LTset_attribute_string(file_id,table_name,"FIELD_3_UNITS",tunit[3]);
+      H5LTset_attribute_string(file_id,table_name,"FIELD_4_UNITS",tunit[4]);
+      H5LTset_attribute_string(file_id,table_name,"FIELD_5_UNITS",tunit[5]);
 
       //End file
       H5Fclose(file_id);
@@ -817,10 +821,11 @@ void write_catalog(ParamCoLoRe *par)
 	nfields=7;
 
       print_info("*** Writing catalog (FITS)\n");
-      sprintf(fname,"!%s_srcs_%d.fits",par->prefixOut,NodeThis);
-
+      sprintf(fname,"!%s_srcs_s%d_%d.fits",par->prefixOut,i_pop,NodeThis);
+      
       fits_create_file(&fptr,fname,&status);
       fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
+      fits_update_key(fptr,TSTRING,"CONTENTS","Source catalog",NULL,&status);
 
       fits_get_rowsize(fptr,&nrw,&status);
       type_arr=my_malloc(nrw*sizeof(int));
@@ -831,41 +836,80 @@ void write_catalog(ParamCoLoRe *par)
       e1_arr=my_malloc(nrw*sizeof(float));
       e2_arr=my_malloc(nrw*sizeof(float));
 
-      long offset=0;
-      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
-	long row_here=0;
-	while(row_here<par->nsources_this[i_pop]) {
-	  long nrw_here;
-	  if(row_here+nrw>par->nsources_this[i_pop])
-	    nrw_here=par->nsources_this[i_pop]-row_here;
-	  else
-	    nrw_here=nrw;
-
-	  for(ii=0;ii<nrw_here;ii++) {
-	    type_arr[ii]=i_pop;
-	    ra_arr[ii]=par->srcs[i_pop][row_here+ii].ra;
-	    dec_arr[ii]=par->srcs[i_pop][row_here+ii].dec;
-	    z0_arr[ii]=par->srcs[i_pop][row_here+ii].z0;
-	    rsd_arr[ii]=par->srcs[i_pop][row_here+ii].dz_rsd;
-	    if(par->do_lensing) {
-	      e1_arr[ii]=par->srcs[i_pop][row_here+ii].e1;
-	      e2_arr[ii]=par->srcs[i_pop][row_here+ii].e2;
-	    }
-	  }
-	  fits_write_col(fptr,TINT  ,1,offset+row_here+1,1,nrw_here,type_arr,&status);
-	  fits_write_col(fptr,TFLOAT,2,offset+row_here+1,1,nrw_here,ra_arr,&status);
-	  fits_write_col(fptr,TFLOAT,3,offset+row_here+1,1,nrw_here,dec_arr,&status);
-	  fits_write_col(fptr,TFLOAT,4,offset+row_here+1,1,nrw_here,z0_arr,&status);
-	  fits_write_col(fptr,TFLOAT,5,offset+row_here+1,1,nrw_here,rsd_arr,&status);
+      long row_here=0;
+      while(row_here<par->nsources_this[i_pop]) {
+	long nrw_here;
+	if(row_here+nrw>par->nsources_this[i_pop])
+	  nrw_here=par->nsources_this[i_pop]-row_here;
+	else
+	  nrw_here=nrw;
+	
+	for(ii=0;ii<nrw_here;ii++) {
+	  type_arr[ii]=i_pop;
+	  ra_arr[ii]=par->cats[i_pop]->srcs[row_here+ii].ra;
+	  dec_arr[ii]=par->cats[i_pop]->srcs[row_here+ii].dec;
+	  z0_arr[ii]=par->cats[i_pop]->srcs[row_here+ii].z0;
+	  rsd_arr[ii]=par->cats[i_pop]->srcs[row_here+ii].dz_rsd;
 	  if(par->do_lensing) {
-	    fits_write_col(fptr,TFLOAT,6,offset+row_here+1,1,nrw_here,e1_arr,&status);
-	    fits_write_col(fptr,TFLOAT,7,offset+row_here+1,1,nrw_here,e2_arr,&status);
+	    e1_arr[ii]=par->cats[i_pop]->srcs[row_here+ii].e1;
+	    e2_arr[ii]=par->cats[i_pop]->srcs[row_here+ii].e2;
 	  }
-
-	  row_here+=nrw_here;
 	}
-	offset+=par->nsources_this[i_pop];
+	fits_write_col(fptr,TINT  ,1,row_here+1,1,nrw_here,type_arr,&status);
+	fits_write_col(fptr,TFLOAT,2,row_here+1,1,nrw_here,ra_arr,&status);
+	fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,dec_arr,&status);
+	fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,z0_arr,&status);
+	fits_write_col(fptr,TFLOAT,5,row_here+1,1,nrw_here,rsd_arr,&status);
+	if(par->do_lensing) {
+	  fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
+	  fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
+	}
+
+	row_here+=nrw_here;
       }
+
+      if(par->cats[i_pop]->has_skw) {
+	int ir;
+	long nelements,naxis=2;
+	long naxes[2];
+
+	//Write density skewers
+	naxes[0]=par->cats[i_pop]->nr;
+	naxes[1]=par->cats[i_pop]->nsrc;
+	nelements=naxes[0]*naxes[1];
+	fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
+	fits_update_key(fptr, TSTRING, "CONTENTS", "density skewers",NULL, &status);
+	fits_write_img(fptr,TFLOAT,1,nelements,par->cats[i_pop]->d_skw,&status);
+
+	//Write velocity skewers
+	fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
+	fits_update_key(fptr, TSTRING, "CONTENTS", "velocity skewers",NULL, &status);
+	fits_write_img(fptr,TFLOAT,1,nelements,par->cats[i_pop]->v_skw,&status);
+
+	//Write slicing information
+	float *ra=my_malloc(par->oi_beams[0]->nr*sizeof(float));
+	float *za=my_malloc(par->oi_beams[0]->nr*sizeof(float));
+	float *gda=my_malloc(par->oi_beams[0]->nr*sizeof(float));
+	float *gva=my_malloc(par->oi_beams[0]->nr*sizeof(float));
+	char *tt[]={"R","Z","D","V"};
+	char *tf[]={"1E","1E","1E","1E"};
+	char *tu[]={"MPC_H","NA","NA","NA"};
+	for(ir=0;ir<par->oi_beams[0]->nr;ir++) {
+	  double r=(par->oi_beams[0]->rf_arr[ir]+par->oi_beams[0]->r0_arr[ir])*0.5;
+	  ra[ir]=r;
+	  za[ir]=get_bg(par,r,BG_Z,0);
+	  gda[ir]=get_bg(par,r,BG_D1,0);
+	  gva[ir]=get_bg(par,r,BG_V1,0);
+	}
+	fits_create_tbl(fptr,BINARY_TBL,0,4,tt,tf,tu,NULL,&status);
+	fits_update_key(fptr,TSTRING,"CONTENTS","Background cosmology",NULL,&status);
+	fits_write_col(fptr,TFLOAT,1,1,1,par->oi_beams[0]->nr,ra,&status);
+	fits_write_col(fptr,TFLOAT,2,1,1,par->oi_beams[0]->nr,za,&status);
+	fits_write_col(fptr,TFLOAT,3,1,1,par->oi_beams[0]->nr,gda,&status);
+	fits_write_col(fptr,TFLOAT,4,1,1,par->oi_beams[0]->nr,gva,&status);
+	free(ra); free(za); free(gda); free(gva);
+      }
+
       fits_close_file(fptr,&status);
       free(ra_arr);
       free(dec_arr);
@@ -878,9 +922,9 @@ void write_catalog(ParamCoLoRe *par)
       printf("FITS not supported\n");
 #endif //_HAVE_FITS
     }
-    else   {
+    else {
       print_info("*** Writing catalog (ASCII)\n");
-      sprintf(fname,"%s_srcs_%d.txt",par->prefixOut,NodeThis);
+      sprintf(fname,"%s_srcs_s%d_%d.txt",par->prefixOut,i_pop,NodeThis);
 
       long jj;
       FILE *fil=fopen(fname,"w");
@@ -890,16 +934,14 @@ void write_catalog(ParamCoLoRe *par)
 	fprintf(fil,"#[6]e1, [7]e2\n");
       else
 	fprintf(fil,"\n");
-      for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
-	for(jj=0;jj<par->nsources_this[i_pop];jj++) {
-	  fprintf(fil,"%d %E %E %E %E ",
-		  i_pop,par->srcs[i_pop][jj].ra,par->srcs[i_pop][jj].dec,
-		  par->srcs[i_pop][jj].z0,par->srcs[i_pop][jj].dz_rsd);
-	  if(par->do_lensing)
-	    fprintf(fil,"%E %E \n",par->srcs[i_pop][jj].e1,par->srcs[i_pop][jj].e2);
-	  else
-	    fprintf(fil,"\n");
-	}
+      for(jj=0;jj<par->nsources_this[i_pop];jj++) {
+	fprintf(fil,"%d %E %E %E %E ",
+		i_pop,par->cats[i_pop]->srcs[jj].ra,par->cats[i_pop]->srcs[jj].dec,
+		par->cats[i_pop]->srcs[jj].z0,par->cats[i_pop]->srcs[jj].dz_rsd);
+	if(par->do_lensing)
+	  fprintf(fil,"%E %E \n",par->cats[i_pop]->srcs[jj].e1,par->cats[i_pop]->srcs[jj].e2);
+	else
+	  fprintf(fil,"\n");
       }
       fclose(fil);
     }
@@ -928,11 +970,18 @@ void param_colore_free(ParamCoLoRe *par)
       free(par->srcs_bz_arr[ii]);
       free(par->srcs_nz_arr[ii]);
       free(par->srcs_norm_arr[ii]);
-      if(par->srcs[ii]!=NULL)
-      	free(par->srcs[ii]);
+      if(par->cats[ii]!=NULL) {
+	if(par->cats[ii]->srcs!=NULL)
+	  free(par->cats[ii]->srcs);
+	if(par->cats[ii]->has_skw) {
+	  free(par->cats[ii]->d_skw);
+	  free(par->cats[ii]->v_skw);
+	}
+	free(par->cats[ii]);
+      }
     }
-    if(par->srcs!=NULL)
-      free(par->srcs);
+    if(par->cats!=NULL)
+      free(par->cats);
     free(par->nsources_this);
   }
 

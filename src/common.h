@@ -174,6 +174,15 @@ typedef struct {
 } Src;
 
 typedef struct {
+  int nsrc;
+  int nr;
+  Src *srcs;
+  int has_skw;
+  float *d_skw;
+  float *v_skw;
+} Catalog;
+
+typedef struct {
   int nr;
   flouble *r0_arr;
   flouble *rf_arr;
@@ -280,7 +289,8 @@ typedef struct {
   flouble ***pdot_beams; //phi_t beams
   int ***nsrc_beams; //Beams with total number of sources
 
-  int do_sources; //Do we include sources
+  int do_sources; //Do we include sources?
+  int do_skewers; //Do we include skewer information?
   int n_srcs; //Number of source types
   char fnameBzSrcs[NPOP_MAX][256]; //Files containing b(z) for each source type
   char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega (in deg^-2)
@@ -290,8 +300,9 @@ typedef struct {
   double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
   double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
   int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
+  int skw_srcs[NPOP_MAX]; //Do we want to store skewers for each source of this type?
   long *nsources_this; //Number of sources found in this node
-  Src **srcs; //Galaxy objects stored in this node
+  Catalog **cats; //Galaxy objects stored in this node
 
   int do_imap; //Do we include intensity mapping
   int n_imap; //Number of IM species
@@ -382,7 +393,7 @@ double get_bg(ParamCoLoRe *par,double r,int tag,int ipop);
 //////
 // Functions defined in io.c
 ParamCoLoRe *read_run_params(char *fname);
-void write_catalog(ParamCoLoRe *par);
+void write_catalog(ParamCoLoRe *par,int i_pop);
 void write_imap(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
 void write_isw(ParamCoLoRe *par);

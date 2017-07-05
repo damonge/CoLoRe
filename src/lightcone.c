@@ -21,6 +21,22 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
+Catalog *init_catalog(int nsrcs,int has_skw,int nr)
+{
+  Catalog *cat=my_malloc(sizeof(Catalog));
+  cat->nsrc=nsrcs;
+  cat->nr=-1;
+  cat->srcs=my_malloc(nsrcs*sizeof(Src));
+  cat->has_skw=has_skw;
+  if(has_skw) {
+    cat->nr=nr;
+    cat->d_skw=my_calloc(nsrcs*nr,sizeof(float));
+    cat->v_skw=my_calloc(nsrcs*nr,sizeof(float));
+  }
+
+  return cat;
+}
+
 static inline void cart2sph(double x,double y,double z,double *r,double *cth,double *phi)
 {
   *r=sqrt(x*x+y*y+z*z);
@@ -168,7 +184,7 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
   
-  par->srcs[ipop]=my_malloc(par->nsources_this[ipop]*sizeof(Src));
+  par->cats[ipop]=init_catalog(par->nsources_this[ipop],0,-1);
 
   if(NodeThis==0) timer(0);
   print_info("   Assigning coordinates\n");
@@ -216,12 +232,12 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
 	      double y=y0+dx*(rng_01(rng_thr)-0.5);
 	      double z=z0+dx*(rng_01(rng_thr)-0.5);
 	      cart2sph(x,y,z,&r,&cth,&phi);
-	      par->srcs[ipop][pid].ra=RTOD*phi;
-	      par->srcs[ipop][pid].dec=90-RTOD*acos(cth);
-	      par->srcs[ipop][pid].z0=get_bg(par,r,BG_Z,0);
-	      par->srcs[ipop][pid].dz_rsd=dz_rsd;
-	      par->srcs[ipop][pid].e1=-1;
-	      par->srcs[ipop][pid].e2=-1;
+	      par->cats[ipop]->srcs[pid].ra=RTOD*phi;
+	      par->cats[ipop]->srcs[pid].dec=90-RTOD*acos(cth);
+	      par->cats[ipop]->srcs[pid].z0=get_bg(par,r,BG_Z,0);
+	      par->cats[ipop]->srcs[pid].dz_rsd=dz_rsd;
+	      par->cats[ipop]->srcs[pid].e1=-1;
+	      par->cats[ipop]->srcs[pid].e2=-1;
 	      np_tot_thr[ithr]++;
 	    }
 	  }
@@ -325,8 +341,8 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
   }
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
-  
-  par->srcs[ipop]=my_malloc(par->nsources_this[ipop]*sizeof(Src));
+
+  par->cats[ipop]=init_catalog(par->nsources_this[ipop],par->skw_srcs[ipop],par->oi_beams[0]->nr);
 
   if(NodeThis==0) timer(0);
   print_info("   Assigning coordinates\n");
@@ -343,6 +359,7 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 #endif //_HAVE_OMP
     unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_srcs*IThread0);
     gsl_rng *rng_thr=init_rng(seed_thr);
+    int do_skw=par->skw_srcs[ipop];
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static) //TODO: this will give very bad load balance
@@ -384,13 +401,26 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	      double th,phi;
 	      double r=r0+dr*rng_01(rng_thr); //TODO: this is not completely correct
 	      long pid=np_tot_thr[ithr];
+
 	      get_random_angles(rng_thr,ipix,oi->ipix0_arr[ir],oi->nside_arr[ir],&th,&phi);
-	      par->srcs[ipop][pid].ra=RTOD*phi;
-	      par->srcs[ipop][pid].dec=90-RTOD*th;
-	      par->srcs[ipop][pid].z0=get_bg(par,r,BG_Z,0);
-	      par->srcs[ipop][pid].dz_rsd=dz_rsd;
-	      par->srcs[ipop][pid].e1=e1;
-	      par->srcs[ipop][pid].e2=e2;
+	      par->cats[ipop]->srcs[pid].ra=RTOD*phi;
+	      par->cats[ipop]->srcs[pid].dec=90-RTOD*th;
+	      par->cats[ipop]->srcs[pid].z0=get_bg(par,r,BG_Z,0);
+	      par->cats[ipop]->srcs[pid].dz_rsd=dz_rsd;
+	      par->cats[ipop]->srcs[pid].e1=e1;
+	      par->cats[ipop]->srcs[pid].e2=e2;
+	      if(do_skw) {
+		int irr;
+		long offp=pid*par->cats[ipop]->nr;
+		int nside_base=oi->nside_arr[ir];
+		for(irr=ir;irr>=0;irr--) {
+		  int nside_this=oi->nside_arr[irr];
+		  int ratio=nside_base/nside_this;
+		  int ipix_here=ipix/(ratio*ratio);
+		  par->cats[ipop]->d_skw[offp+irr]=(float)(par->dens_beams[ib][irr][ipix_here]);
+		  par->cats[ipop]->v_skw[offp+irr]=(float)(par->vrad_beams[ib][irr][ipix_here]);
+		}
+	      }
 	      np_tot_thr[ithr]++;
 	    }
 	  }

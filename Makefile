@@ -18,8 +18,6 @@ USE_SINGLE_PRECISION = yes
 ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
 USE_HDF5 = no
-#Compile with FITS capability? Set to "yes" or "no"
-USE_FITS = yes
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
@@ -31,8 +29,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/users/damonge/include
-GSL_LIB = -L/users/damonge/lib
+GSL_INC = -I/home/damonge/include
+GSL_LIB = -L/home/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
@@ -54,6 +52,7 @@ SHT_LIB =
 #
 ########## End of user-definable ##########
 
+USE_FITS = yes
 DEFINEFLAGS += -DHAVE_INLINE -DGSL_RANGE_CHECK_OFF 
 
 ifeq ($(strip $(USE_OMP)),yes)
