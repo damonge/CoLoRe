@@ -792,7 +792,7 @@ void write_catalog(ParamCoLoRe *par,int i_pop)
       sprintf(table_title,"sources%d_data",i_pop);
       sprintf(table_name,"/sources%d",i_pop);
       H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Src),
-		     names,dst_offset,gal_types,chunk_size,NULL,0,par->cat[i_pop]->srcs);
+		     names,dst_offset,gal_types,chunk_size,NULL,0,par->cats[i_pop]->srcs);
       H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
       H5LTset_attribute_string(file_id,table_name,"FIELD_1_UNITS",tunit[1]);
       H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
