@@ -1,7 +1,7 @@
-#CoLoRe - Cosmological Lognormal Realizations
+# CoLoRe - Cosmological Lognormal Realizations
 
 
-##1 Methods.
+## 1 Methods.
 
 CoLoRe is a parallel C code for generating fast mock realizations
 of a given galaxy sample using a lognormal model for the matter density.
@@ -19,7 +19,7 @@ When in doubt, bear in mind that by default CoLoRe uses the following units:
  - Angles: degrees
 
 
-##2 Compilation and usage.
+## 2 Compilation and usage.
 
 To compile CoLoRe, open the Makefile and edit it according to your
 system. The default options (except for the paths to the external
@@ -50,7 +50,7 @@ where <param_file> is the path to the parameter file described in
 section 3.
 
 
-##3 Parameter file.
+## 3 Parameter file.
 
 The behaviour of CoLoRe is mainly controlled by the input param file. The
 param file is basically a set of name-value pairs. Any blank lines, and
@@ -60,7 +60,7 @@ CoLoRe. The comments included in this file explain the meaning and
 functionality of these parameters.
 
 
-##4 Output.
+## 4 Output.
 
 The main output of CoLoRe is a catalogue of sources written either
 as ASCII or FITS files. Each source is characterized by 5 quantities:
@@ -74,14 +74,14 @@ A python script (read_colore.py) is also provided to illustrate how
 to read in CoLoRe's output.
 
 
-##5 License:
+## 5 License:
 
 CoLoRe is distributed under the GPL license (see COPYING in the root
 directory). We kindly ask you to report the program's website
 "https://github.com/damonge/CoLoRe" when using it.
 
 
-##6 Contact:
+## 6 Contact:
 
 Regarding bugs, suggestions, questions or petitions, feel free to contact
 the author:
