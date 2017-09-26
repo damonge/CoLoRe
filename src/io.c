@@ -567,7 +567,7 @@ void write_imap(ParamCoLoRe *par)
 	//Write local pixels to dummy map
 	memset(map_write,0,npx*sizeof(flouble));
 	memset(map_nadd,0,npx*sizeof(int));
-	sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,i_pop,ir);
+	sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,i_pop+1,ir);
 	for(ip=0;ip<npx;ip++) {
 	  int id_pix=par->imap[i_pop]->listpix[ip];
 	  if(id_pix>=0) {
@@ -784,8 +784,8 @@ void write_catalog(ParamCoLoRe *par)
       //Write table for each galaxy type
       for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
 	char table_title[256],table_name[256];
-	sprintf(table_title,"sources%d_data",i_pop);
-	sprintf(table_name,"/sources%d",i_pop);
+	sprintf(table_title,"sources%d_data",i_pop+1);
+	sprintf(table_name,"/sources%d",i_pop+1);
 	H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[i_pop],sizeof(Src),
 		       names,dst_offset,gal_types,chunk_size,NULL,0,par->srcs[i_pop]);
 	H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
@@ -842,7 +842,7 @@ void write_catalog(ParamCoLoRe *par)
 	    nrw_here=nrw;
 
 	  for(ii=0;ii<nrw_here;ii++) {
-	    type_arr[ii]=i_pop;
+	    type_arr[ii]=i_pop+1;
 	    ra_arr[ii]=par->srcs[i_pop][row_here+ii].ra;
 	    dec_arr[ii]=par->srcs[i_pop][row_here+ii].dec;
 	    z0_arr[ii]=par->srcs[i_pop][row_here+ii].z0;
@@ -893,7 +893,7 @@ void write_catalog(ParamCoLoRe *par)
       for(i_pop=0;i_pop<par->n_srcs;i_pop++) {
 	for(jj=0;jj<par->nsources_this[i_pop];jj++) {
 	  fprintf(fil,"%d %E %E %E %E ",
-		  i_pop,par->srcs[i_pop][jj].ra,par->srcs[i_pop][jj].dec,
+		  i_pop+1,par->srcs[i_pop][jj].ra,par->srcs[i_pop][jj].dec,
 		  par->srcs[i_pop][jj].z0,par->srcs[i_pop][jj].dz_rsd);
 	  if(par->do_lensing)
 	    fprintf(fil,"%E %E \n",par->srcs[i_pop][jj].e1,par->srcs[i_pop][jj].e2);
