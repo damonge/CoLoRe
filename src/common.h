@@ -365,9 +365,14 @@ static inline double bias_model(double d,double b)
     return 0;
 #ifdef _BIAS_MODEL_2
   return pow(1+d,b)/pow(1+d*d,0.5*(b-1));
-#else //_BIAS_MODEL_2
+#elif defined _BIAS_MODEL_3
+  if(1+b*d>0)
+    return 1+b*d;
+  else
+    return 0;
+#else //_BIAS_MODEL
   return pow(1+d,b);
-#endif //_BIAS_MODEL_2
+#endif //_BIAS_MODEL
 }
 
 

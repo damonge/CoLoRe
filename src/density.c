@@ -1079,9 +1079,13 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 						    unsigned long long *narr,
 						    double **norm_srcs_arr,double **norm_imap_arr)
 {
+  int ipp;
+  int *n_zeroes_srcs=my_calloc(par->n_srcs,sizeof(int));
+  int *n_zeroes_imap=my_calloc(par->n_srcs,sizeof(int));
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none)				\
-  shared(par,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr)
+  shared(par,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr)	\
+  shared(n_zeroes_srcs,n_zeroes_imap)
 #endif //_HAVE_OMP
   {
     int iz,ipop;
@@ -1090,6 +1094,8 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
     unsigned long long *narr_thr=my_calloc(nz,sizeof(unsigned long long));
     double **norm_srcs_arr_thr=my_malloc(par->n_srcs*sizeof(double *));
     double **norm_imap_arr_thr=my_malloc(par->n_imap*sizeof(double *));
+    double *n_zeroes_srcs_thr=my_calloc(par->n_srcs,sizeof(int));
+    double *n_zeroes_imap_thr=my_calloc(par->n_srcs,sizeof(int));
     for(ipop=0;ipop<par->n_srcs;ipop++)
       norm_srcs_arr_thr[ipop]=my_calloc(nz,sizeof(double));
     for(ipop=0;ipop<par->n_imap;ipop++)
@@ -1116,10 +1122,18 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	    double d=par->grid_dens[index];
 	    narr_thr[ind_z]++;
 	    zarr_thr[ind_z]+=redshift;
-	    for(ipop=0;ipop<par->n_srcs;ipop++)
-	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop));
-	    for(ipop=0;ipop<par->n_imap;ipop++)
-	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop));
+	    for(ipop=0;ipop<par->n_srcs;ipop++) {
+	      double dd=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop));
+	      norm_srcs_arr_thr[ipop][ind_z]+=dd;
+	      if(dd<=1E-200)
+		n_zeroes_srcs_thr[ipop]++;
+	    }
+	    for(ipop=0;ipop<par->n_imap;ipop++) {
+	      double dd=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop));
+	      norm_imap_arr_thr[ipop][ind_z]+=dd;
+	      if(dd<=1E-200)
+		n_zeroes_imap_thr[ipop]++;
+	    }
 	  }
 	}
       }
@@ -1136,6 +1150,10 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	for(ipop=0;ipop<par->n_imap;ipop++)
 	  norm_imap_arr[ipop][iz]+=norm_imap_arr_thr[ipop][iz];
       }
+      for(ipop=0;ipop<par->n_srcs;ipop++)
+	n_zeroes_srcs[ipop]+=n_zeroes_srcs_thr[ipop];
+      for(ipop=0;ipop<par->n_imap;ipop++)
+	n_zeroes_imap[ipop]+=n_zeroes_imap_thr[ipop];
     } //end omp critical
 
     free(narr_thr);
@@ -1146,19 +1164,33 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
     for(ipop=0;ipop<par->n_imap;ipop++)
       free(norm_imap_arr_thr[ipop]);
     free(norm_imap_arr_thr);
+    free(n_zeroes_srcs_thr);
+    free(n_zeroes_imap_thr);
   } //end omp parallel
+
+  for(ipp=0;ipp<par->n_srcs;ipp++)
+    printf("%d-th sources population: %d empty cells in node %d\n",ipp,n_zeroes_srcs[ipp],NodeThis);
+  for(ipp=0;ipp<par->n_imap;ipp++)
+    printf("%d-th int. mapp. species: %d empty cells in node %d\n",ipp,n_zeroes_imap[ipp],NodeThis);
+
+  free(n_zeroes_srcs);
+  free(n_zeroes_imap);
 }
 
 static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,double idz,double *zarr,
 						      unsigned long long *narr,
 						      double **norm_srcs_arr,double **norm_imap_arr)
 {
-  int ib;
+  int ipp,ib;
+  int *n_zeroes_srcs=my_calloc(par->n_srcs,sizeof(int));
+  int *n_zeroes_imap=my_calloc(par->n_srcs,sizeof(int));
 
   for(ib=0;ib<par->n_beams_here;ib++) {
     OnionInfo *oi=par->oi_beams[ib];
 #ifdef _HAVE_OMP
-#pragma omp parallel default(none) shared(par,oi,ib,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr)
+#pragma omp parallel default(none)				 \
+  shared(par,oi,ib,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr) \
+  shared(n_zeroes_srcs,n_zeroes_imap)
 #endif //_HAVE_OMP
     {
       int ir,ipop;
@@ -1168,6 +1200,8 @@ static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,do
       unsigned long long *narr_thr=my_calloc(nz,sizeof(unsigned long long));
       double **norm_srcs_arr_thr=my_malloc(par->n_srcs*sizeof(double *));
       double **norm_imap_arr_thr=my_malloc(par->n_imap*sizeof(double *));
+      double *n_zeroes_srcs_thr=my_calloc(par->n_srcs,sizeof(int));
+      double *n_zeroes_imap_thr=my_calloc(par->n_srcs,sizeof(int));
       for(ipop=0;ipop<par->n_srcs;ipop++)
 	norm_srcs_arr_thr[ipop]=my_calloc(nz,sizeof(double));
       for(ipop=0;ipop<par->n_imap;ipop++)
@@ -1190,10 +1224,18 @@ static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,do
 	zarr_thr[iz]+=redshift*oi->num_pix[ir];
 	for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	  double d=par->dens_beams[ib][ir][ipix];
-	  for(ipop=0;ipop<par->n_srcs;ipop++)
-	    norm_srcs_arr_thr[ipop][iz]+=bias_model(d,barr_srcs[ipop]);
-	  for(ipop=0;ipop<par->n_imap;ipop++)
-	    norm_imap_arr_thr[ipop][iz]+=bias_model(d,barr_imap[ipop]);
+	  for(ipop=0;ipop<par->n_srcs;ipop++) {
+	    double dd=bias_model(d,barr_srcs[ipop]);
+	    norm_srcs_arr_thr[ipop][iz]+=dd;
+	    if(dd<=1E-200)
+	      n_zeroes_srcs_thr[ipop]++;
+	  }
+	  for(ipop=0;ipop<par->n_imap;ipop++) {
+	    double dd=bias_model(d,barr_imap[ipop]);
+	    norm_imap_arr_thr[ipop][iz]+=dd;
+	    if(dd<=1E-200)
+	      n_zeroes_imap_thr[ipop]++;
+	  }
 	}
       } //end omp for
 #ifdef _HAVE_OMP
@@ -1208,6 +1250,10 @@ static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,do
 	  for(ipop=0;ipop<par->n_imap;ipop++)
 	    norm_imap_arr[ipop][ir]+=norm_imap_arr_thr[ipop][ir];
 	}
+	for(ipop=0;ipop<par->n_srcs;ipop++)
+	  n_zeroes_srcs[ipop]+=n_zeroes_srcs_thr[ipop];
+	for(ipop=0;ipop<par->n_imap;ipop++)
+	  n_zeroes_imap[ipop]+=n_zeroes_imap_thr[ipop];
       } //end omp critical
 
       free(narr_thr);
@@ -1220,8 +1266,18 @@ static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,do
 	free(norm_imap_arr_thr[ipop]);
       free(norm_imap_arr_thr);
       free(barr_imap);
+      free(n_zeroes_srcs_thr);
+      free(n_zeroes_imap_thr);
     } //end omp parallel
   }
+
+  for(ipp=0;ipp<par->n_srcs;ipp++)
+    printf("%d-th sources population: %d empty cells in node %d\n",ipp,n_zeroes_srcs[ipp],NodeThis);
+  for(ipp=0;ipp<par->n_imap;ipp++)
+    printf("%d-th int. mapp. species: %d empty cells in node %d\n",ipp,n_zeroes_imap[ipp],NodeThis);
+
+  free(n_zeroes_srcs);
+  free(n_zeroes_imap);
 }
 
 static void collect_density_normalization(ParamCoLoRe *par,int nz,double idz,double *zarr,
