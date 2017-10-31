@@ -33,8 +33,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/home/damonge/include
-GSL_LIB = -L/home/damonge/lib
+GSL_INC = -I/home/alonso/include
+GSL_LIB = -L/home/alonso/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =

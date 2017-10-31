@@ -122,6 +122,7 @@
 #define DENS_TYPE_LGNR 0
 #define DENS_TYPE_1LPT 1
 #define DENS_TYPE_2LPT 2
+#define DENS_TYPE_CLIP 3
 
 // End of interpolation parameters
 /////////
