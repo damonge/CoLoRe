@@ -7,38 +7,39 @@ You can choose whether to use GNU or Intel modules, here we use GNU
 You can load the modules by hand every time, or setup a script with the 
 following lines:
 
+```
 module swap PrgEnv-intel PrgEnv-gnu
 module load gsl
 module load fftw/3.3.4.11
 module load cfitsio
-
+```
 
 ## Compile libconfig
 
 Clone the github repository for libconfig, and type:
-
+```
 mkdir $HOME/Install.cori
 cd libconfig
 autoreconf
 ./configure --prefix=$HOME/Install.cori
 make 
 make install
-
+```
 
 ## Compile libsharp
 
 Clone the github repository for libsharp, and type:
-
+```
 cd libsharp
 autoreconf
 ./configure 
 make 
-
+```
 
 ## Modify the Makefile of CoLoRe 
 
 Instructions below are to run Lyman alpha skewers in DESI.
-
+```
 COMP_SER = gcc
 COMP_MPI = mpicc
 OPTIONS = -Wall -O3 -std=c99
@@ -72,3 +73,4 @@ CONF_LIB = -L/global/homes/f/font/Install.cori/lib
 
 SHT_INC = -I/global/homes/f/font/Programs/Others/libsharp/auto/include
 SHT_LIB = -L/global/homes/f/font/Programs/Others/libsharp/auto/lib
+```
