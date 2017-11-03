@@ -1,6 +1,8 @@
 # How to install CoLoRe in Cori (at NERSC)
 
-## load relevant modules
+These instructions worked in November 2nd 2017. 
+
+## Load relevant modules
 
 You can choose whether to use GNU or Intel modules, here we use GNU
 
