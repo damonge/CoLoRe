@@ -291,6 +291,7 @@ typedef struct {
   double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
   double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
   int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
+  int rsd_srcs[NPOP_MAX]; //Do we include RSDs for this source type?
   long *nsources_this; //Number of sources found in this node
   Src **srcs; //Galaxy objects stored in this node
 
@@ -304,6 +305,7 @@ typedef struct {
   double *imap_norm_arr[NPOP_MAX];
   double norm_imap_0[NPOP_MAX]; //Bottom edge of spline for density normalization
   double norm_imap_f[NPOP_MAX]; //Top edge of spline for density normalization
+  int rsd_imap[NPOP_MAX]; //Do we include RSDs for this source type?
   int nside_imap[NPOP_MAX]; //Output angular resolution for each IM species
   double nu0_imap[NPOP_MAX]; //Rest-frame frequency for each IM species
   HealpixShells **imap; //intensity maps for each IM species

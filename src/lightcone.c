@@ -206,9 +206,12 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
 	  int npp=nsources[index];
 	  if(npp>0) {
 	    int ip;
+	    double dz_rsd=0;
 	    double rr=sqrt(x0*x0+y0*y0+z0*z0);
-	    double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
-	    double dz_rsd=rvel*get_bg(par,rr,BG_V1,0);
+	    if(par->rsd_srcs[ipop]) {
+	      double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
+	      dz_rsd=rvel*get_bg(par,rr,BG_V1,0);
+	    }
 	    for(ip=0;ip<npp;ip++) {
 	      double cth,phi,r;
 	      long pid=np_tot_thr[ithr];
@@ -358,13 +361,13 @@ static void get_sources_single(ParamCoLoRe *par,int ipop)
 	for(ib=0;ib<par->n_beams_here;ib++) {
 	  int ipix;
 	  OnionInfo *oi=par->oi_beams[ib];
-	  flouble *vrad_slice=par->vrad_beams[ib][ir];
 	  int *nsrc_slice=par->nsrc_beams[ib][ir];
 	  for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	    int ip;
-	    double e1=0,e2=0;
+	    double dz_rsd=0,e1=0,e2=0;
 	    int npp=nsrc_slice[ipix];
-	    double dz_rsd=vrad_slice[ipix];
+	    if(par->rsd_srcs[ipop])
+	      dz_rsd=par->vrad_beams[ib][ir][ipix];
 	    if(par->shear_srcs[ipop]) {
 	      double pxx=par->p_xx_beams[ib][ir][ipix];
 	      double pxy=par->p_xy_beams[ib][ir][ipix];
@@ -700,11 +703,14 @@ static void get_imap_cartesian_single(ParamCoLoRe *par,int ipop)
 	  if(r0<par->l_box/2+20.) {
 	    if(tmean>0) {
 	      int isub,n_resample_here;
+	      double dr_rsd=0;
 	      double bias=get_bg(par,r0,BG_BZ_IMAP,ipop);
 	      double dnorm=get_bg(par,r0,BG_NORM_IMAP,ipop);
-	      double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,r0);
-	      double dr_rsd=rvel*get_bg(par,r0,BG_V1,0)*get_bg(par,r0,BG_IH,0);
 	      double temp=tmean*bias_model(par->grid_dens[index],bias)*dnorm;
+	      if(par->rsd_imap[ipop]) {
+		double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,r0);
+		dr_rsd=rvel*get_bg(par,r0,BG_V1,0)*get_bg(par,r0,BG_IH,0);
+	      }
 	      if((irad>=0) && (irad<par->imap[ipop]->nr)) {
 		double pixvol,rfh,r0h;
 		irad=get_r_index_imap(par->imap[ipop],r0,irad);
@@ -781,21 +787,24 @@ static void get_imap_single(ParamCoLoRe *par,int ipop)
 	if(tmean>0) {
 	  int ib;
 	  int irad=0;
+	  double prefac_rsd=0;
 	  double bias=get_bg(par,rm,BG_BZ_IMAP,ipop);
 	  double dnorm=get_bg(par,rm,BG_NORM_IMAP,ipop);
-	  double prefac_rsd=get_bg(par,rm,BG_IH,0);
 	  int nsub_perside=MAX((par->imap[ipop]->nside/par->oi_beams[0]->nside_arr[ir]),1);
 	  int nside_ratio=MAX((par->oi_beams[0]->nside_arr[ir]/par->imap[ipop]->nside),1);
+	  if(par->rsd_imap[ipop])
+	    prefac_rsd=get_bg(par,rm,BG_IH,0);
 	  for(ib=0;ib<par->n_beams_here;ib++) {
 	    int ipix;
 	    OnionInfo *oi=par->oi_beams[ib];
 	    flouble *dens_slice=par->dens_beams[ib][ir];
-	    flouble *vrad_slice=par->vrad_beams[ib][ir];
 	    for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
 	      int ipix_sub;
+	      double dr_rsd=0;
 	      double temp=tmean*bias_model(dens_slice[ipix],bias)*dnorm;
-	      double dr_rsd=prefac_rsd*vrad_slice[ipix];
 	      long ipix0=(oi->ipix0_arr[ir]+ipix)*nsub_perside*nsub_perside;
+	      if(par->rsd_imap[ipop])
+		dr_rsd=prefac_rsd*par->vrad_beams[ib][ir][ipix];
 	      for(ipix_sub=0;ipix_sub<nsub_perside*nsub_perside;ipix_sub++) {
 		int ir_sub;
 		long pix_id,ip_shell=(ipix0+ipix_sub)/(nside_ratio*nside_ratio);

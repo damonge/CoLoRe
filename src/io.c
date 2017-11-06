@@ -110,12 +110,14 @@ static ParamCoLoRe *param_colore_new(void)
     par->srcs_nz_arr[ii]=NULL;
     par->srcs_norm_arr[ii]=NULL;
     par->shear_srcs[ii]=0;
+    par->rsd_srcs[ii]=0;
     sprintf(par->fnameBzImap[ii],"default");
     sprintf(par->fnameTzImap[ii],"default");
     sprintf(par->fnameNuImap[ii],"default");
     par->imap_bz_arr[ii]=NULL;
     par->imap_tz_arr[ii]=NULL;
     par->imap_norm_arr[ii]=NULL;
+    par->rsd_imap[ii]=0;
     par->nside_imap[ii]=-1;
     par->z_kappa_out[ii]=-1;
     par->z_isw_out[ii]=-1;
@@ -275,6 +277,7 @@ ParamCoLoRe *read_run_params(char *fname)
     conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
     if(par->shear_srcs[ii])
       par->do_lensing=1;
+    conf_read_bool(conf,c_dum,"include_rsd",&(par->rsd_srcs[ii]));
   }
   if(par->n_srcs>0)
     par->do_sources=1;
@@ -299,6 +302,7 @@ ParamCoLoRe *read_run_params(char *fname)
     conf_read_string(conf,c_dum,"freq_list",par->fnameNuImap[ii]);
     conf_read_double(conf,c_dum,"freq_rest",&(par->nu0_imap[ii]));
     conf_read_int(conf,c_dum,"nside",&(par->nside_imap[ii]));
+    conf_read_bool(conf,c_dum,"include_rsd",&(par->rsd_imap[ii]));
   }
   if(par->n_imap>0)
     par->do_imap=1;
