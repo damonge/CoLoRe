@@ -33,8 +33,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/home/dmonge/include
-GSL_LIB = -L/home/dmonge/lib
+GSL_INC = -I/users/damonge/include
+GSL_LIB = -L/users/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
@@ -51,8 +51,8 @@ CONF_LIB =
 HPIX_INC =
 HPIX_LIB =
 #libsharp
-SHT_INC = -I/home/dmonge/Software/libsharp/auto/include
-SHT_LIB = -L/home/dmonge/Software/libsharp/auto/lib
+SHT_INC =
+SHT_LIB =
 #
 ########## End of user-definable ##########
 
