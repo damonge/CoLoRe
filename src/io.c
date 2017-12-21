@@ -334,12 +334,16 @@ ParamCoLoRe *read_run_params(char *fname)
     for(ii=0;ii<par->n_imap;ii++) {
       FILE *fnu=fopen(par->fnameNuImap[ii],"r");
       if(fnu==NULL) error_open_file(par->fnameNuImap[ii]);
+      if(par->nside_imap[ii]>NSIDE_MAX_HPX)
+	report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
       par->imap[ii]=new_hp_shell(par->nside_imap[ii],linecount(fnu));
       fclose(fnu);
     }
   }
 
   if(par->do_kappa) {
+    if(par->nside_kappa>NSIDE_MAX_HPX)
+      report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
     par->kmap=new_hp_shell(par->nside_kappa,par->n_kappa);
 #ifdef _ADD_EXTRA_KAPPA
     par->need_extra_kappa=my_calloc(par->nside_kappa,sizeof(int));
@@ -349,6 +353,8 @@ ParamCoLoRe *read_run_params(char *fname)
   }
 
   if(par->do_isw) {
+    if(par->nside_isw>NSIDE_MAX_HPX)
+      report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
     par->pd_map=new_hp_shell(par->nside_isw,par->n_isw);
 #ifdef _ADD_EXTRA_ISW
     par->need_extra_isw=my_calloc(par->nside_isw,sizeof(int));
@@ -382,6 +388,9 @@ ParamCoLoRe *read_run_params(char *fname)
   par->nside_base=2;
   while(he_nside2npix(par->nside_base)<NNodes)
     par->nside_base*=2;
+  if(par->nside_base>NSIDE_MAX_HPX)
+    report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
+  
 
   //  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
   par->need_onions=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;

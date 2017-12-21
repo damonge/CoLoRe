@@ -103,6 +103,9 @@
 #define NSUB_IMAP_PERP 4
 #endif //NSUB_IMAP_PERP
 
+//Maximum allowed healpix resolution
+#define NSIDE_MAX_HPX 8192
+
 //Background tags
 #define BG_Z 1000
 #define BG_D1 1001

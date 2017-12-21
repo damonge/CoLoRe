@@ -172,6 +172,10 @@ void pixelize(ParamCoLoRe *par)
 	    double cth_h=1,sth_h=0,cph_h=1,sph_h=0,u[3];
 	    int added_anything=0;
 	    flouble d=0,v[3]={0,0,0},t[6]={0,0,0,0,0,0},pd=0;
+	    int ns_perp=NSUB_PERP;
+	    while(oi->nside_arr[ir]*ns_perp>NSIDE_MAX_HPX)
+	      ns_perp/=2;
+	    if(ns_perp<=0) ns_perp=1; //This should never happen
 
 	    pix2vec_nest(oi->nside_arr[ir],oi->ipix0_arr[ir]+ipix,u);
 	    if(par->do_lensing) {
@@ -182,15 +186,15 @@ void pixelize(ParamCoLoRe *par)
 	      }
 	    }
 
-	    for(ipix_sub=0;ipix_sub<NSUB_PERP*NSUB_PERP;ipix_sub++) {
+	    for(ipix_sub=0;ipix_sub<ns_perp*ns_perp;ipix_sub++) {
 	      int ir2;
 	      double u1[3];
-	      if(NSUB_PERP==1) {
+	      if(ns_perp==1) {
 		u1[0]=u[0]; u1[1]=u[1]; u1[2]=u[2];
 	      }
 	      else {
-		pix2vec_nest(oi->nside_arr[ir]*NSUB_PERP,
-			     (oi->ipix0_arr[ir]+ipix)*NSUB_PERP*NSUB_PERP+ipix_sub,u1);
+		pix2vec_nest(oi->nside_arr[ir]*ns_perp,
+			     (oi->ipix0_arr[ir]+ipix)*ns_perp*ns_perp+ipix_sub,u1);
 	      }
 	      for(ir2=0;ir2<NSUB_PAR;ir2++) {
 		int ax;
@@ -303,7 +307,7 @@ void pixelize(ParamCoLoRe *par)
 	      }
 	    }
 	    if(added_anything) {
-	      double mean_norm=1./(NSUB_PAR*NSUB_PERP*NSUB_PERP);
+	      double mean_norm=1./(NSUB_PAR*ns_perp*ns_perp);
 	      par->dens_beams[ib][ir][ipix]+=d*mean_norm;
 	      par->vrad_beams[ib][ir][ipix]+=factor_vel*0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2])*mean_norm*vg;
 	      if(par->do_isw)

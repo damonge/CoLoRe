@@ -284,11 +284,16 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
 #define NS_RANDOM_EXTRA_HPX 4
 void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi)
 {
-  int i_extra=(int)(NS_RANDOM_EXTRA_HPX*NS_RANDOM_EXTRA_HPX*rng_01(rng));
-  pix2ang_nest(nside*NS_RANDOM_EXTRA_HPX,
-	       (ipix0+ipix_nest)*NS_RANDOM_EXTRA_HPX*NS_RANDOM_EXTRA_HPX+i_extra,th,phi);
-  (*phi)+=(rng_01(rng)-0.5)*0.57/(nside*NS_RANDOM_EXTRA_HPX);
-  (*th)+=(rng_01(rng)-0.5)*0.57/(nside*NS_RANDOM_EXTRA_HPX);
+  long n_extra=NS_RANDOM_EXTRA_HPX;
+  while(n_extra*nside>NSIDE_MAX_HPX)
+    n_extra/=2;
+  if(n_extra<=0) n_extra=1; //This should never happen
+  
+  int i_extra=(int)(n_extra*n_extra*rng_01(rng));
+  pix2ang_nest(nside*n_extra,
+	       (ipix0+ipix_nest)*n_extra*n_extra+i_extra,th,phi);
+  (*phi)+=(rng_01(rng)-0.5)*0.57/(nside*n_extra);
+  (*th)+=(rng_01(rng)-0.5)*0.57/(nside*n_extra);
 }
 
 static OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
@@ -314,7 +319,7 @@ static OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
     oi->r0_arr[ir]=ir*dr;
     oi->rf_arr[ir]=(ir+1)*dr;
 
-    while(dr_trans>FAC_CART2SPH_PERP*dx) {
+    while((dr_trans>FAC_CART2SPH_PERP*dx) && (nside_here<NSIDE_MAX_HPX)) {
       nside_here*=2;
       dr_trans=rm*sqrt(M_PI/3)/nside_here;
     }
