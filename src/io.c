@@ -900,23 +900,26 @@ void write_catalog(ParamCoLoRe *par,int i_pop)
 	float *za=my_malloc(par->oi_beams[0]->nr*sizeof(float));
 	float *gda=my_malloc(par->oi_beams[0]->nr*sizeof(float));
 	float *gva=my_malloc(par->oi_beams[0]->nr*sizeof(float));
-	char *tt[]={"R","Z","D","V"};
-	char *tf[]={"1E","1E","1E","1E"};
-	char *tu[]={"MPC_H","NA","NA","NA"};
+        float *s2a=my_malloc(par->oi_beams[0]->nr*sizeof(float));
+	char *tt[]={"R","Z","D","V","SIGMA_G"};
+	char *tf[]={"1E","1E","1E","1E","1E"};
+	char *tu[]={"MPC_H","NA","NA","NA","NA"};
 	for(ir=0;ir<par->oi_beams[0]->nr;ir++) {
 	  double r=(par->oi_beams[0]->rf_arr[ir]+par->oi_beams[0]->r0_arr[ir])*0.5;
 	  ra[ir]=r;
 	  za[ir]=get_bg(par,r,BG_Z,0);
 	  gda[ir]=get_bg(par,r,BG_D1,0);
 	  gva[ir]=get_bg(par,r,BG_V1,0);
+          s2a[ir]=sqrt(par->sigma2_gauss);
 	}
-	fits_create_tbl(fptr,BINARY_TBL,0,4,tt,tf,tu,NULL,&status);
+	fits_create_tbl(fptr,BINARY_TBL,0,5,tt,tf,tu,NULL,&status);
 	fits_update_key(fptr,TSTRING,"CONTENTS","Background cosmology",NULL,&status);
 	fits_write_col(fptr,TFLOAT,1,1,1,par->oi_beams[0]->nr,ra,&status);
 	fits_write_col(fptr,TFLOAT,2,1,1,par->oi_beams[0]->nr,za,&status);
 	fits_write_col(fptr,TFLOAT,3,1,1,par->oi_beams[0]->nr,gda,&status);
 	fits_write_col(fptr,TFLOAT,4,1,1,par->oi_beams[0]->nr,gva,&status);
-	free(ra); free(za); free(gda); free(gva);
+	fits_write_col(fptr,TFLOAT,5,1,1,par->oi_beams[0]->nr,s2a,&status);
+        free(ra); free(za); free(gda); free(gva), free(s2a);
       }
 
       fits_close_file(fptr,&status);
