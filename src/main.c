@@ -51,16 +51,19 @@ int main(int argc,char **argv)
   //Lognormalize density field
   compute_physical_density_field(par);
 
+  /*
   if(par->need_onions) {
     //Interpolate into beams
     alloc_beams(par);
     pixelize(par);
     end_fftw(par);
   }
+  */
   
   //Compute normalization of density field for biasing
   compute_density_normalization(par);
 
+  /*
   //Precompute lensing if needed
   if(par->do_lensing)
     integrate_lensing(par);
@@ -68,11 +71,13 @@ int main(int argc,char **argv)
   //Precompute isw if needed
   if(par->do_isw)
     integrate_isw(par);
-
+  */
+  
   //Poisson-sample the galaxies
   if(par->do_sources)
-    get_sources(par);
+    get_source_positions(par);
 
+  /*
   //Generate intensity maps
   if(par->do_imap)
     get_imap(par);
@@ -102,9 +107,11 @@ int main(int argc,char **argv)
 
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
-
-  if(!(par->need_onions))
-    end_fftw(par);
+  */
+  
+  //  if(!(par->need_onions))
+  //    end_fftw(par);
+  end_fftw(par);
   param_colore_free(par);
 
   if(NodeThis==0) timer(5);

@@ -29,8 +29,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/home/damonge/include
-GSL_LIB = -L/home/damonge/lib
+GSL_INC = -I/home/alonso/include
+GSL_LIB = -L/home/alonso/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
@@ -123,7 +123,8 @@ PIXO = src/pixelization.o
 PREDICTO = src/predictions.o
 FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(IOO) $(HPIXO) $(LCO) 
+#OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe
 

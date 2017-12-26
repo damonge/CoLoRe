@@ -29,8 +29,9 @@ static ParamCoLoRe *param_colore_new(void)
 #ifdef _DEBUG
   par->f_dbg=NULL;
 #endif //_DEBUG
-  sprintf(par->fnamePk,"default");
-  par->output_density=0;
+
+  //Cosmological parameters
+  // Background
   par->OmegaM=0.3;
   par->OmegaL=0.7;
   par->OmegaB=0.05;
@@ -45,23 +46,30 @@ static ParamCoLoRe *param_colore_new(void)
   par->z_min=0.5;
   par->r_max=-1;
   par->r_min=-1;
-  par->r2_smooth=2.0;
-  par->do_smoothing=1;
-  par->dens_type=DENS_TYPE_LGNR;
-  par->lpt_interp_type=INTERP_CIC;
-  par->lpt_buffer_fraction=0.2;
-  par->output_lpt=0;
-  par->smooth_potential=0;
+  par->glob_idr=-1;
+  // Powerspectra
+  sprintf(par->fnamePk,"default");
   par->numk=0;
   par->logkmax=1;
   par->logkmin=-3;
   par->idlogk=100;
   par->logkarr=NULL;
   par->pkarr=NULL;
-  par->glob_idr=-1;
+  
+  //Density parameters
+  // Density methods
+  par->output_density=0;
+  par->r2_smooth=2.0;
+  par->do_smoothing=1;
+  par->smooth_potential=0;
+  par->dens_type=DENS_TYPE_LGNR;
+  par->lpt_interp_type=INTERP_CIC;
+  par->lpt_buffer_fraction=0.2;
+  par->output_lpt=0;
   par->seed_rng=1234;
-  par->z_max=1.;
-  par->z_min=0.1;
+  par->z0_norm=0;
+  par->zf_norm=0;
+  // Box parameters
   par->n_grid=512;
   par->l_box=-1;
   par->nz_here=512;
@@ -69,35 +77,25 @@ static ParamCoLoRe *param_colore_new(void)
   par->nz_max=512;
   par->nz_all=NULL;
   par->iz0_all=NULL;
-  sprintf(par->prefixOut,"default");
-  par->output_format=0;
+  // Density grids
   par->grid_dens_f=NULL;
   par->grid_dens=NULL;
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
   par->sigma2_gauss=0;
-  par->z0_norm=0;
-  par->zf_norm=0;
 
-  par->do_lensing=0;
-  par->do_isw=0;
-  par->nside_base=-1;
-  par->n_beams_here=-1;
-  par->oi_beams=NULL;
-  par->dens_beams=NULL;
-  par->vrad_beams=NULL;
-  par->p_xx_beams=NULL;
-  par->p_xy_beams=NULL;
-  par->p_yy_beams=NULL;
-  par->pdot_beams=NULL;
-  par->nsrc_beams=NULL;
+  //IO parameters
+  sprintf(par->prefixOut,"default");
+  par->output_format=0;
 
+  //Tracers
   par->do_sources=0;
   par->do_skewers=0;
+  par->do_lensing=0;
+  par->do_isw=0;
   par->do_imap=0;
   par->do_kappa=0;
   par->do_isw=0;
-  par->do_pred=0;
   par->n_srcs=-1;
   par->n_imap=-1;
   par->n_kappa=-1;
@@ -123,12 +121,27 @@ static ParamCoLoRe *param_colore_new(void)
     par->z_isw_out[ii]=-1;
     par->nu0_imap[ii]=-1;
   }
-  par->cats=NULL;
+  par->cats_c=NULL;
+  par->nsources_c_this=NULL;
   par->imap=NULL;
   par->kmap=NULL;
   par->pd_map=NULL;
-  par->nsources_this=NULL;
 
+  //Beam distribution
+  par->nside_base=-1;
+  //STUFF TO CHECK
+  /*
+  par->n_beams_here=-1;
+  par->oi_beams=NULL;
+  par->dens_beams=NULL;
+  par->vrad_beams=NULL;
+  par->p_xx_beams=NULL;
+  par->p_xy_beams=NULL;
+  par->p_yy_beams=NULL;
+  par->pdot_beams=NULL;
+  par->nsrc_beams=NULL;
+
+  */
   return par;
 }
 
@@ -325,8 +338,12 @@ ParamCoLoRe *read_run_params(char *fname)
   }
 
   if(par->do_sources) {
-    par->cats=my_malloc(par->n_srcs*sizeof(Catalog *));
-    par->nsources_this=my_malloc(par->n_srcs*sizeof(long));
+    par->cats_c=my_malloc(par->n_srcs*sizeof(CatalogCartesian *));
+    par->nsources_c_this=my_malloc(par->n_srcs*sizeof(long));
+    for(ii=0;ii<par->n_srcs;ii++) {
+      par->cats_c[ii]=NULL;
+      par->nsources_c_this[ii]=0;
+    }
   }
 
   if(par->do_imap) {
@@ -390,14 +407,14 @@ ParamCoLoRe *read_run_params(char *fname)
     par->nside_base*=2;
   if(par->nside_base>NSIDE_MAX_HPX)
     report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
-  
 
-  //  par->need_onions=par->do_lensing+par->do_imap+par->do_kappa+par->do_isw;
+  /*
   par->need_onions=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
   if(par->need_onions) {
     par->oi_beams=alloc_onion_info_beams(par);
     par->nside_base=par->oi_beams[0]->nside_arr[0];
   }
+  */
   get_max_memory(par);
 
   double dk=2*M_PI/par->l_box;
@@ -424,8 +441,8 @@ ParamCoLoRe *read_run_params(char *fname)
     print_info("  %d ISW source planes\n",par->n_isw);
   if(par->do_lensing)
     print_info("  Will include lensing shear\n");
-  if(!par->need_onions)
-    print_info("  Will NOT use voxels in spherical coordinates\n");
+  //  if(!par->need_onions)
+  //    print_info("  Will NOT use voxels in spherical coordinates\n");
   print_info("\n");
   
   return par;
@@ -563,6 +580,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   fclose(fo);
 }
 
+/*
 void write_imap(ParamCoLoRe *par)
 {
   int i_pop;
@@ -958,6 +976,7 @@ void write_catalog(ParamCoLoRe *par,int i_pop)
     print_info("\n");
   }
 }
+*/
 
 void param_colore_free(ParamCoLoRe *par)
 {
@@ -967,31 +986,35 @@ void param_colore_free(ParamCoLoRe *par)
   free(par->logkarr);
   free(par->pkarr);
 
+  /*
   if(par->need_onions) {
     free_beams(par);
     for(ii=0;ii<par->n_beams_here;ii++)
       free_onion_info(par->oi_beams[ii]);
     free(par->oi_beams);
   }
-
+  */
+  
   if(par->do_sources) {
     for(ii=0;ii<par->n_srcs;ii++) {
       free(par->srcs_bz_arr[ii]);
       free(par->srcs_nz_arr[ii]);
       free(par->srcs_norm_arr[ii]);
-      if(par->cats[ii]!=NULL) {
-	if(par->cats[ii]->srcs!=NULL)
-	  free(par->cats[ii]->srcs);
-	if(par->cats[ii]->has_skw) {
-	  free(par->cats[ii]->d_skw);
-	  free(par->cats[ii]->v_skw);
-	}
-	free(par->cats[ii]);
-      }
+      if(par->cats_c[ii]!=NULL)
+	free_catalog_cartesian(par->cats_c[ii]);
+      //      if(par->cats[ii]!=NULL) {
+	//	if(par->cats[ii]->srcs!=NULL)
+	//	  free(par->cats[ii]->srcs);
+	//	if(par->cats[ii]->has_skw) {
+	//	  free(par->cats[ii]->d_skw);
+	//	  free(par->cats[ii]->v_skw);
+	//	}
+	//	free(par->cats[ii]);
+      //      }
     }
-    if(par->cats!=NULL)
-      free(par->cats);
-    free(par->nsources_this);
+    if(par->cats_c!=NULL)
+      free(par->cats_c);
+    free(par->nsources_c_this);
   }
 
   if(par->do_imap) {
@@ -1010,7 +1033,7 @@ void param_colore_free(ParamCoLoRe *par)
 #ifdef _ADD_EXTRA_KAPPA
     for(ii=0;ii<par->n_kappa;ii++) {
       if(par->need_extra_kappa[ii]) {
-	free(par->fl_mean_extra_kappa[ii]);
+    	free(par->fl_mean_extra_kappa[ii]);
 	free(par->cl_extra_kappa[ii]);
       }
     }
@@ -1025,8 +1048,8 @@ void param_colore_free(ParamCoLoRe *par)
 #ifdef _ADD_EXTRA_ISW
     for(ii=0;ii<par->n_isw;ii++) {
       if(par->need_extra_isw[ii]) {
-	free(par->fl_mean_extra_isw[ii]);
-	free(par->cl_extra_isw[ii]);
+    	free(par->fl_mean_extra_isw[ii]);
+    	free(par->cl_extra_isw[ii]);
       }
     }
     free(par->need_extra_isw);

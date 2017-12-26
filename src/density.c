@@ -1149,6 +1149,7 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
   } //end omp parallel
 }
 
+/*
 static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,double idz,double *zarr,
 						      unsigned long long *narr,
 						      double **norm_srcs_arr,double **norm_imap_arr)
@@ -1223,15 +1224,16 @@ static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,do
     } //end omp parallel
   }
 }
-
+*/
 static void collect_density_normalization(ParamCoLoRe *par,int nz,double idz,double *zarr,
 					  unsigned long long *narr,
 					  double **norm_srcs_arr,double **norm_imap_arr)
 {
-  if(par->need_onions)
-    collect_density_normalization_from_pixels(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
-  else 
-    collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
+  //  if(par->need_onions)
+  //    collect_density_normalization_from_pixels(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
+  //  else 
+  //    collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
+  collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
 }
 
 //Computes sigma2(z) for physical density field

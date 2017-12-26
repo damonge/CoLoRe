@@ -281,6 +281,7 @@ size_t my_fwrite(const void *ptr, size_t size, size_t nmemb,FILE *stream)
   return nmemb;
 }
 
+/*
 #define NS_RANDOM_EXTRA_HPX 4
 void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi)
 {
@@ -440,10 +441,10 @@ void free_beams(ParamCoLoRe *par)
   }
   free(par->nsrc_beams);
 }
+*/
 
 unsigned long long get_max_memory(ParamCoLoRe *par)
 {
-  int ib;
   unsigned long long total_GB=0;
   unsigned long long total_GB_gau=0;
   unsigned long long total_GB_pix=0;
@@ -451,7 +452,9 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
 
   total_GB_gau=(2*(par->nz_here+1)*((long)(par->n_grid*(par->n_grid/2+1))))*sizeof(dftw_complex);
 
+  /*
   if(par->need_onions) {
+    int ib;
     for(ib=0;ib<par->n_beams_here;ib++) {
       int ii;
       for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
@@ -468,6 +471,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
       }
     }
   }
+  */
 
   if(par->dens_type==DENS_TYPE_1LPT) {
     total_GB_lpt=(unsigned long long)(3*(1+par->lpt_buffer_fraction)*par->nz_here*
@@ -485,8 +489,8 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
   printf("Node %d will allocate %.3lf GB (Gaussian)",NodeThis,(double)(total_GB_gau/pow(1024.,3)));
   if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
     printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
-  if(par->need_onions)
-    printf(", %.3lf GB (pixels)",(double)(total_GB_pix/pow(1024.,3)));
+  //  if(par->need_onions)
+  //    printf(", %.3lf GB (pixels)",(double)(total_GB_pix/pow(1024.,3)));
   printf("\n");
 #endif //_DEBUG
 
@@ -495,6 +499,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
   return total_GB;
 }
 
+/*
 void alloc_beams(ParamCoLoRe *par)
 {
   int ib;
@@ -538,14 +543,52 @@ void alloc_beams(ParamCoLoRe *par)
     }
   }
 }
+*/
+
+CatalogCartesian *new_catalog_cartesian(int nsrcs)
+{
+  CatalogCartesian *cat=my_malloc(sizeof(CatalogCartesian));
+  
+  if(nsrcs>0) {
+    cat->nsrc=nsrcs;
+    cat->pos=my_malloc(3*nsrcs*sizeof(float));
+    cat->dz_rsd=my_malloc(nsrcs*sizeof(float));
+    cat->ipix=my_malloc(nsrcs*sizeof(int));
+  }
+  else {
+    cat->nsrc=0;
+    cat->pos=NULL;
+    cat->dz_rsd=NULL;
+    cat->ipix=NULL;
+  }
+
+  return cat;
+}
+
+void free_catalog_cartesian(CatalogCartesian *cat)
+{
+  if(cat->nsrc>0) {
+    free(cat->pos);
+    free(cat->dz_rsd);
+    free(cat->ipix);
+  }
+  free(cat);
+}
+
 
 void free_hp_shell(HealpixShells *shell)
 {
-  free(shell->listpix);
-  free(shell->r0);
-  free(shell->rf);
-  free(shell->data);
-  free(shell->nadd);
+  if(shell->listpix!=NULL)
+    free(shell->listpix);
+  if(shell->r0!=NULL)
+    free(shell->r0);
+  if(shell->rf!=NULL)
+    free(shell->rf);
+  if(shell->data!=NULL)
+    free(shell->data);
+  if(shell->nadd!=NULL)
+    free(shell->nadd);
+  free(shell);
 }
 
 HealpixShells *new_hp_shell(int nside,int nr)
@@ -557,6 +600,10 @@ HealpixShells *new_hp_shell(int nside,int nr)
   shell->nr=nr;
   shell->r0=my_malloc(shell->nr*sizeof(flouble));
   shell->rf=my_malloc(shell->nr*sizeof(flouble));
+
+  shell->listpix=NULL;
+  shell->data=NULL;
+  shell->nadd=NULL;
 
   return shell;
 }
