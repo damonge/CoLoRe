@@ -67,10 +67,15 @@
 #define INTERP_NGP 0
 #define INTERP_CIC 1
 #define INTERP_TSC 2
+#define RETURN_DENS 1
+#define RETURN_VEL  2
+#define RETURN_TID  4
+#define RETURN_PDOT 8
 
 //Interpolation type
 #ifndef INTERP_TYPE
-#define INTERP_TYPE INTERP_CIC
+//#define INTERP_TYPE INTERP_CIC
+#define INTERP_TYPE INTERP_NGP
 #endif //INTERP_TYPE
 
 //Resolution parameter for nearest onion shell
@@ -79,9 +84,9 @@
 #endif //NSIDE_ONION_BASE
 
 //dr_par = FAC_CART2SPH_PAR * dx
-#ifndef FAC_CART2SPH_PAR
-#define FAC_CART2SPH_PAR 1.
-#endif //FAC_CART2SPH_PAR
+#ifndef NSAMP_RAD
+#define NSAMP_RAD 1
+#endif //NSAMP_RAD
 
 //dr_perp = FAC_CART2SPH_PERP * dx
 #ifndef FAC_CART2SPH_PERP
@@ -167,15 +172,13 @@ extern int NNodes;
 extern int IThread0;
 extern int MPIThreadsOK;
 
+#define NPOS_CC 4
 typedef struct {
   int nsrc;
   float *pos;
-  float *dz_rsd;
   int *ipix;
 } CatalogCartesian;
 
-
-/*
 typedef struct {
   float ra;     //Right ascension
   float dec;    //Declination
@@ -187,13 +190,19 @@ typedef struct {
 
 typedef struct {
   int nsrc;
-  int nr;
   Src *srcs;
+  int nr;
+  double rmax;
+  double dr;
+  double idr;
   int has_skw;
   float *d_skw;
   float *v_skw;
 } Catalog;
 
+
+
+/*
 typedef struct {
   int nr;
   flouble *r0_arr;
@@ -293,7 +302,7 @@ typedef struct {
   double pos_obs[3]; //Observer position
 
   //Tracers
-  int do_sources; //Do we include sources?
+  int do_srcs; //Do we include sources?
   int do_skewers; //Do we include skewer information?
   int do_lensing; //Do we need to compute the lensing potential?
   int n_srcs; //Number of source types
@@ -327,8 +336,10 @@ typedef struct {
   double z_isw_out[NPOP_MAX]; //Array of source plane redshifts
   int nside_isw;
   // Tracer data
-  long *nsources_c_this; //Number of sources found in this node
+  long *nsources_c_this; //Number of sources initially found in this node
   CatalogCartesian **cats_c; //Galaxy positions initially stored in this node
+  long *nsources_this; //Number of sources finally found in this node
+  Catalog **cats; //Final galaxy properties
   HealpixShells **imap; //intensity maps for each IM species
   HealpixShells *kmap; //Kappa maps at each redshift
 #ifdef _ADD_EXTRA_KAPPA
@@ -349,9 +360,10 @@ typedef struct {
 
   //Beam distribution
   int nside_base; //Minimum n_side used in the pixelization
+  int npix_base; //Corresponding number of pixels
+  int need_beaming; //Do we need spherical voxels at all?
   
   /*
-  int need_onions; //Do we need spherical voxels at all?
   int n_beams_here; //Number of beams stored in this node for the lightcone
   OnionInfo **oi_beams; //Onion beams stored in this node
   flouble ***dens_beams; //Density beams
@@ -394,6 +406,8 @@ void free_hp_shell(HealpixShells *shell);
 HealpixShells *new_hp_shell(int nside,int nr);
 void free_catalog_cartesian(CatalogCartesian *cat);
 CatalogCartesian *new_catalog_cartesian(int nsrcs);
+Catalog *new_catalog(int nsrcs,int has_skw,double rmax,int nr);
+void free_catalog(Catalog *cat);
 
 static inline double bias_model(double d,double b)
 {
@@ -420,7 +434,7 @@ double get_bg(ParamCoLoRe *par,double r,int tag,int ipop);
 ParamCoLoRe *read_run_params(char *fname);
 void write_density_grid(ParamCoLoRe *par,char *prefix_dens);
 void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z);
-//void write_catalog(ParamCoLoRe *par,int i_pop);
+void write_catalog(ParamCoLoRe *par,int ipop);
 //void write_imap(ParamCoLoRe *par);
 //void write_kappa(ParamCoLoRe *par);
 //void write_isw(ParamCoLoRe *par);
@@ -443,6 +457,10 @@ void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout);
 
 //////
 // Functions defined in pixelization.c
+int interpolate_from_grid(ParamCoLoRe *par,double *x,
+			  flouble *d,flouble v[3],flouble t[6],flouble *pd,
+			  int flag_return);
+void get_beam_properties(ParamCoLoRe *par);
 //void pixelize(ParamCoLoRe *par);
 
 
@@ -454,7 +472,12 @@ void compute_density_normalization(ParamCoLoRe *par);
 
 //////
 // Functions defined in lightcone.c
-void get_source_positions(ParamCoLoRe *par);
+void srcs_set_cartesian(ParamCoLoRe *par);
+void srcs_distribute(ParamCoLoRe *par);
+void srcs_get_local_properties(ParamCoLoRe *par);
+void srcs_beams_preproc(ParamCoLoRe *par);
+void srcs_get_beam_properties(ParamCoLoRe *par);
+void srcs_beams_postproc(ParamCoLoRe *par);
 //void integrate_lensing(ParamCoLoRe *par);
 //void integrate_isw(ParamCoLoRe *par);
 //void get_imap(ParamCoLoRe *par);

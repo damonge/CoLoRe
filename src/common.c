@@ -551,14 +551,12 @@ CatalogCartesian *new_catalog_cartesian(int nsrcs)
   
   if(nsrcs>0) {
     cat->nsrc=nsrcs;
-    cat->pos=my_malloc(3*nsrcs*sizeof(float));
-    cat->dz_rsd=my_malloc(nsrcs*sizeof(float));
+    cat->pos=my_malloc(4*nsrcs*sizeof(float));
     cat->ipix=my_malloc(nsrcs*sizeof(int));
   }
   else {
     cat->nsrc=0;
     cat->pos=NULL;
-    cat->dz_rsd=NULL;
     cat->ipix=NULL;
   }
 
@@ -569,12 +567,48 @@ void free_catalog_cartesian(CatalogCartesian *cat)
 {
   if(cat->nsrc>0) {
     free(cat->pos);
-    free(cat->dz_rsd);
     free(cat->ipix);
   }
   free(cat);
 }
 
+Catalog *new_catalog(int nsrcs,int has_skw,double rmax,int nr)
+{
+  Catalog *cat=my_malloc(sizeof(Catalog));
+  
+  if(nsrcs>0) {
+    cat->nsrc=nsrcs;
+    cat->srcs=my_malloc(nsrcs*sizeof(Src));
+    cat->has_skw=has_skw;
+    cat->nr=nr;
+    cat->rmax=rmax;
+    cat->dr=rmax/nr;
+    cat->idr=1./cat->dr;
+    if(has_skw) {
+      cat->d_skw=my_calloc(nsrcs*nr,sizeof(float));
+      cat->v_skw=my_calloc(nsrcs*nr,sizeof(float));
+    }
+  }
+  else {
+    cat->nsrc=0;
+    cat->srcs=NULL;
+    cat->has_skw=0;
+  }
+
+  return cat;
+}
+
+void free_catalog(Catalog *cat)
+{
+  if(cat->nsrc>0) {
+    free(cat->srcs);
+    if(cat->has_skw) {
+      free(cat->d_skw);
+      free(cat->v_skw);
+    }
+  }
+  free(cat);
+}
 
 void free_hp_shell(HealpixShells *shell)
 {

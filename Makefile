@@ -116,14 +116,14 @@ COSMOMADO = src/cosmo_mad.o
 COSMOO = src/cosmo.o
 FOURIERO = src/fourier.o
 DENSO = src/density.o
-LCO = src/lightcone.o
+SRCSO = src/srcs.o
 IOO = src/io.o
 HPIXO = src/healpix_extra.o
 PIXO = src/pixelization.o
 PREDICTO = src/predictions.o
 FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(IOO) $(HPIXO) $(LCO) 
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(IOO) $(HPIXO) $(SRCSO) $(PIXO)
 #OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe

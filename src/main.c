@@ -74,9 +74,16 @@ int main(int argc,char **argv)
   */
   
   //Poisson-sample the galaxies
-  if(par->do_sources)
-    get_source_positions(par);
+  if(par->do_srcs)
+    srcs_set_cartesian(par);
 
+  if(par->do_srcs)
+    srcs_distribute(par);
+
+  if(par->do_srcs)
+    srcs_get_local_properties(par);
+
+  get_beam_properties(par);
   /*
   //Generate intensity maps
   if(par->do_imap)
@@ -89,13 +96,15 @@ int main(int argc,char **argv)
   //Generate isw maps
   if(par->do_isw)
     get_isw(par);
-
+  */
   //Write output
-  if(par->do_sources) {
+  if(par->do_srcs) {
     int i_pop;
     for(i_pop=0;i_pop<par->n_srcs;i_pop++)
       write_catalog(par,i_pop);
   }
+
+  /*
   if(par->do_imap)
     write_imap(par);
   if(par->do_kappa)
@@ -104,10 +113,10 @@ int main(int argc,char **argv)
     write_isw(par);
   if(par->do_pred)
     write_predictions(par);
+  */
 
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
-  */
   
   //  if(!(par->need_onions))
   //    end_fftw(par);

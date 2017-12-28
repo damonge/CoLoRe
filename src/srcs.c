@@ -73,7 +73,7 @@ static double get_rvel(ParamCoLoRe *par,int ix,int iy,int iz,
   return 0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
 }
 
-static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
+static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 {
   int ii,nthr;
   int ngx=2*(par->n_grid/2+1);
@@ -167,9 +167,9 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
   }
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
-  
-  par->cats_c[ipop]=new_catalog_cartesian(par->nsources_c_this[ipop]);
 
+  par->cats_c[ipop]=new_catalog_cartesian(par->nsources_c_this[ipop]);
+  
   if(NodeThis==0) timer(0);
   print_info("   Assigning coordinates\n");
 #ifdef _HAVE_OMP
@@ -217,10 +217,10 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
 	      pos[0]=x0+dx*(rng_01(rng_thr)-0.5);
 	      pos[1]=y0+dx*(rng_01(rng_thr)-0.5);
 	      pos[2]=z0+dx*(rng_01(rng_thr)-0.5);
-	      par->cats_c[ipop]->pos[3*pid+0]=pos[0];
-	      par->cats_c[ipop]->pos[3*pid+1]=pos[1];
-	      par->cats_c[ipop]->pos[3*pid+2]=pos[2];
-	      par->cats_c[ipop]->dz_rsd[pid]=dz_rsd;
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+0]=pos[0];
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+1]=pos[1];
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+2]=pos[2];
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+3]=dz_rsd;
 	      
 	      vec2pix_ring(par->nside_base,pos,&pix_id_ring);
 	      ring2nest(par->nside_base,pix_id_ring,&pix_id_nest);
@@ -239,13 +239,255 @@ static void get_sources_cartesian_single(ParamCoLoRe *par,int ipop)
   free(nsources);
 }  
 
-void get_source_positions(ParamCoLoRe *par)
+void srcs_set_cartesian(ParamCoLoRe *par)
 {
   int ipop;
 
   //First, compute lensing Hessian
   print_info("*** Getting point sources\n");
   for(ipop=0;ipop<par->n_srcs;ipop++)
-    get_sources_cartesian_single(par,ipop);
+    srcs_set_cartesian_single(par,ipop);
   print_info("\n");
+}
+
+static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
+{
+  int ii;
+  long *ns_to_nodes=my_calloc(NNodes,sizeof(long));
+  long *i0_in_nodes=my_calloc(NNodes,sizeof(long));
+  long *ns_transfer_matrix=my_calloc(NNodes*NNodes,sizeof(long));
+  CatalogCartesian *cat=par->cats_c[ipop];
+
+  //Count how many objects need to be sent to each node
+  for(ii=0;ii<par->nsources_c_this[ipop];ii++) {
+    int i_node=cat->ipix[ii]%NNodes;
+    ns_to_nodes[i_node]++;
+  }
+
+  //Gather all transfers into a 
+  MPI_Allgather(ns_to_nodes,NNodes,MPI_LONG,
+		ns_transfer_matrix,NNodes,MPI_LONG,MPI_COMM_WORLD);
+
+  //Calculate position of each particle going to each node
+  for(ii=0;ii<NNodes;ii++) {
+    int jj;
+    i0_in_nodes[ii]=0;
+    for(jj=0;jj<ii;jj++)
+      i0_in_nodes[ii]+=ns_to_nodes[jj];
+  }
+  for(ii=0;ii<NNodes;ii++)
+    ns_to_nodes[ii]=i0_in_nodes[ii];
+
+  //Reorganize positions so they are ordered by destination node
+  float *pos_ordered=my_malloc(NPOS_CC*par->nsources_c_this[ipop]*sizeof(float));
+  for(ii=0;ii<par->nsources_c_this[ipop];ii++) {
+    int ax;
+    int i_node=cat->ipix[ii]%NNodes;
+    long id_here=ns_to_nodes[i_node];
+    for(ax=0;ax<NPOS_CC;ax++)
+      pos_ordered[NPOS_CC*id_here+ax]=cat->pos[NPOS_CC*ii+ax];
+    ns_to_nodes[i_node]++;
+  }
+
+  //Count particles this node will receive
+  par->nsources_this[ipop]=0;
+  for(ii=0;ii<NNodes;ii++)
+    par->nsources_this[ipop]+=ns_transfer_matrix[ii*NNodes+NodeThis];
+
+  //Loop through all nodes and receive particles
+  //Free up old catalog and create new one
+  free_catalog_cartesian(par->cats_c[ipop]);
+  par->cats_c[ipop]=new_catalog_cartesian(par->nsources_this[ipop]);
+  par->nsources_c_this[ipop]=par->nsources_this[ipop];
+  long i_sofar=0;
+  for(ii=0;ii<NNodes;ii++) {
+    int node_to  =(NodeRight+ii+NNodes)%NNodes;
+    int node_from=(NodeLeft -ii+NNodes)%NNodes;
+    int npart_send=ns_transfer_matrix[NodeThis*NNodes+node_to];
+    int npart_recv=ns_transfer_matrix[node_from*NNodes+NodeThis];
+    //    print_info("Node %d: %d-th iteration. to->%d from->%d.",NodeThis,ii,node_to,node_from);
+    //    print_info(" Should get %07ld objects, and will send %07ld.\n",npart_recv,npart_send);
+    MPI_Sendrecv(&(pos_ordered[NPOS_CC*i0_in_nodes[node_to]]),NPOS_CC*npart_send,MPI_FLOAT,node_to  ,ii,
+		 &(par->cats_c[ipop]->pos[NPOS_CC*i_sofar])  ,NPOS_CC*npart_recv,MPI_FLOAT,node_from,ii,
+		 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    i_sofar+=npart_recv;
+    //    print_info(" %07ld sources gathered so far\n",i_sofar);
+  }
+
+  free(pos_ordered);
+  free(i0_in_nodes);
+  free(ns_to_nodes);
+  free(ns_transfer_matrix);
+}
+
+void srcs_distribute(ParamCoLoRe *par)
+{
+  if(NodeThis==0) timer(0);
+  int ipop;
+  print_info("*** Re-distributing sources across nodes\n");
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    srcs_distribute_single(par,ipop);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+static void srcs_beams_preproc_single(ParamCoLoRe *par,int ipop)
+{
+#pragma omp parallel default(none) \
+  shared(par,ipop)
+  {
+    int ii;
+
+#pragma omp for
+    for(ii=0;ii<par->cats[ipop]->nsrc;ii++) {
+      par->cats[ipop]->srcs[ii].dz_rsd=0;
+      par->cats[ipop]->srcs[ii].e1=0;
+      par->cats[ipop]->srcs[ii].e2=0;
+    }//end omp for
+  }//end omp parallel
+}
+
+void srcs_beams_preproc(ParamCoLoRe *par)
+{
+  int ipop;
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    srcs_beams_preproc_single(par,ipop);
+}
+
+static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
+{
+  par->cats[ipop]=new_catalog(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],
+			      par->r_max,NSAMP_RAD*par->n_grid/2);
+
+#pragma omp parallel default(none) \
+  shared(par,ipop)
+  {
+    int ii;
+
+#pragma omp for
+    for(ii=0;ii<par->cats[ipop]->nsrc;ii++) {
+      double r,cth,phi;
+      float *pos=&(par->cats_c[ipop]->pos[NPOS_CC*ii]);
+      cart2sph(pos[0],pos[1],pos[2],&r,&cth,&phi);
+      par->cats[ipop]->srcs[ii].ra=RTOD*phi;
+      par->cats[ipop]->srcs[ii].dec=90-RTOD*acos(cth);
+      par->cats[ipop]->srcs[ii].z0=get_bg(par,r,BG_Z,0);
+      par->cats[ipop]->srcs[ii].dz_rsd=pos[3];
+      par->cats[ipop]->srcs[ii].e1=-1;
+      par->cats[ipop]->srcs[ii].e2=-1;
+    }//end omp for
+  }//end omp parallel
+}
+
+void srcs_get_local_properties(ParamCoLoRe *par)
+{
+  if(NodeThis==0) timer(0);
+  int ipop;
+  print_info("*** Computing source properties\n");
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    srcs_get_local_properties_single(par,ipop);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
+{
+  Catalog *cat=par->cats[ipop];
+  CatalogCartesian *catc=par->cats_c[ipop];
+
+#pragma omp parallel default(none)		\
+  shared(par,cat,catc)
+  {
+    long ip;
+    double idx=par->n_grid/par->l_box;
+
+#pragma omp for
+    for(ip=0;ip<catc->nsrc;ip++) {
+      int ax,added;
+      double xn[3],u[3];
+      flouble v[3],vr,dens;
+      float *pos=&(catc->pos[NPOS_CC*ip]);
+      double r=sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
+      double ir=1./r;
+      for(ax=0;ax<3;ax++) {//TODO these could be precomputed in the cartesian catalog
+	xn[ax]=(pos[ax]+par->pos_obs[ax])*idx;
+	u[ax]=pos[ax]*ir;
+      }
+
+      //Compute RSD
+      added=interpolate_from_grid(par,xn,NULL,v,NULL,NULL,RETURN_VEL);
+      if(added) {
+	vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+	cat->srcs[ip].dz_rsd+=vr;
+      }
+
+      //Fill up skewers
+      if(cat->has_skw) {
+	int i_r,i_r_max=MAX((int)(r*cat->idr+0.5),cat->nr-1);
+	long offp=ip*cat->nr;
+	for(i_r=0;i_r<=i_r_max;i_r++) {
+	  double rr=(i_r+0.5)*cat->dr;
+	  for(ax=0;ax<3;ax++)
+	    xn[ax]=(rr*u[ax]+par->pos_obs[ax])*idx;
+	  added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,RETURN_DENS | RETURN_VEL);
+	  if(added) {
+	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+	    cat->d_skw[offp+i_r]+=dens;
+	    cat->v_skw[offp+i_r]+=vr;
+	  }
+	}
+      }
+      
+    }//end omp for
+  }//end omp parallel
+}
+
+void srcs_get_beam_properties(ParamCoLoRe *par)
+{
+  int ipop;
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    srcs_get_beam_properties_single(par,ipop);
+}
+
+static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
+{
+  Catalog *cat=par->cats[ipop];
+  
+#pragma omp parallel default(none) \
+  shared(par,cat)
+  {
+    int ii;
+    double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
+
+#pragma omp for
+    for(ii=0;ii<cat->nsrc;ii++) {
+      double z=cat->srcs[ii].z0;
+      double r=r_of_z(par,z);
+      double vg=get_bg(par,r,BG_V1,0);
+
+      //RSDs
+      cat->srcs[ii].dz_rsd*=vg*factor_vel;
+
+      //Shear
+      cat->srcs[ii].e1=-1;
+      cat->srcs[ii].e2=-1;
+
+      //Skewers
+      if(cat->has_skw) {
+	int i_r,i_r_max=MAX((int)(r*cat->idr+0.5),cat->nr-1);
+	long offp=ii*cat->nr;
+	for(i_r=0;i_r<=i_r_max;i_r++) {
+	  vg=get_bg(par,(i_r+0.5)*cat->dr,BG_V1,0);
+	  cat->v_skw[offp+i_r]*=vg*factor_vel;
+	}
+      }	
+    }//end omp for
+  }//end omp parallel
+}
+
+void srcs_beams_postproc(ParamCoLoRe *par)
+{
+  int ipop;
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    srcs_beams_postproc_single(par,ipop);
 }
