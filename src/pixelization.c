@@ -241,10 +241,10 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
   return added_anything;
 }
 
+#ifdef _HAVE_MPI 
 static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 {
   // still need to compile even if never called
-#ifdef _HAVE_MPI 
 #define SENDRECV_BATCH 1073741824
   int remainder;
   long i_sofar=0;
@@ -261,8 +261,8 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 		 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
   }
   memcpy(data,buff,count*sizeof(flouble));
-#endif
 }
+#endif //_HAVE_MPI
 
 void get_beam_properties(ParamCoLoRe *par)
 {
@@ -278,9 +278,11 @@ void get_beam_properties(ParamCoLoRe *par)
   if(NodeThis==0) timer(0);
 
   int i;
+#ifdef _HAVE_MPI
   long size_slice_npot=(par->nz_max+2)*((long)(2*par->n_grid*(par->n_grid/2+1)));
   long size_slice_dens=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
   flouble *buffer_sr=my_malloc(size_slice_npot*sizeof(flouble));
+#endif //_HAVE_MPI
 
   for(i=0;i<NNodes;i++) {
     int node_i_am_now=(NodeThis-i-1+NNodes)%NNodes;
@@ -298,7 +300,9 @@ void get_beam_properties(ParamCoLoRe *par)
     if(par->do_srcs)
       srcs_get_beam_properties(par);
   }
+#ifdef _HAVE_MPI
   free(buffer_sr);
+#endif //_HAVE_MPI
 
   if(par->do_srcs)
     srcs_beams_postproc(par);

@@ -264,9 +264,13 @@ static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
     ns_to_nodes[i_node]++;
   }
 
-  //Gather all transfers into a 
+  //Gather all transfers into a 2D array
+#ifdef _HAVE_MPI
   MPI_Allgather(ns_to_nodes,NNodes,MPI_LONG,
 		ns_transfer_matrix,NNodes,MPI_LONG,MPI_COMM_WORLD);
+#else //_HAVE_MPI
+  ns_transfer_matrix[0]=ns_to_nodes[0];
+#endif //_HAVE_MPI
 
   //Calculate position of each particle going to each node
   for(ii=0;ii<NNodes;ii++) {
@@ -307,9 +311,14 @@ static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
     int npart_recv=ns_transfer_matrix[node_from*NNodes+NodeThis];
     //    print_info("Node %d: %d-th iteration. to->%d from->%d.",NodeThis,ii,node_to,node_from);
     //    print_info(" Should get %07ld objects, and will send %07ld.\n",npart_recv,npart_send);
+#ifdef _HAVE_MPI
     MPI_Sendrecv(&(pos_ordered[NPOS_CC*i0_in_nodes[node_to]]),NPOS_CC*npart_send,MPI_FLOAT,node_to  ,ii,
 		 &(par->cats_c[ipop]->pos[NPOS_CC*i_sofar])  ,NPOS_CC*npart_recv,MPI_FLOAT,node_from,ii,
 		 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+#else //_HAVE_MPI
+    memcpy(&(par->cats_c[ipop]->pos[NPOS_CC*i_sofar]),&(pos_ordered[NPOS_CC*i0_in_nodes[node_to]]),
+	   NPOS_CC*npart_send*sizeof(float));
+#endif //_HAVE_MPI
     i_sofar+=npart_recv;
     //    print_info(" %07ld sources gathered so far\n",i_sofar);
   }
@@ -333,12 +342,16 @@ void srcs_distribute(ParamCoLoRe *par)
 
 static void srcs_beams_preproc_single(ParamCoLoRe *par,int ipop)
 {
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none) \
   shared(par,ipop)
+#endif //_HAVE_OMP
   {
     int ii;
 
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ii=0;ii<par->cats[ipop]->nsrc;ii++) {
       par->cats[ipop]->srcs[ii].dz_rsd=0;
       par->cats[ipop]->srcs[ii].e1=0;
@@ -359,12 +372,16 @@ static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
   par->cats[ipop]=new_catalog(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],
 			      par->r_max,NSAMP_RAD*par->n_grid/2);
 
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none) \
   shared(par,ipop)
+#endif //_HAVE_OMP
   {
     int ii;
 
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ii=0;ii<par->cats[ipop]->nsrc;ii++) {
       double r,cth,phi;
       float *pos=&(par->cats_c[ipop]->pos[NPOS_CC*ii]);
@@ -395,13 +412,17 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
   Catalog *cat=par->cats[ipop];
   CatalogCartesian *catc=par->cats_c[ipop];
 
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none)		\
   shared(par,cat,catc)
+#endif //_HAVE_OMP
   {
     long ip;
     double idx=par->n_grid/par->l_box;
 
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ip=0;ip<catc->nsrc;ip++) {
       int ax,added;
       double xn[3],u[3];
@@ -453,13 +474,17 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
 {
   Catalog *cat=par->cats[ipop];
   
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none) \
   shared(par,cat)
+#endif //_HAVE_OMP
   {
     int ii;
     double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
 
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ii=0;ii<cat->nsrc;ii++) {
       double z=cat->srcs[ii].z0;
       double r=r_of_z(par,z);

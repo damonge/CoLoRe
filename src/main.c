@@ -77,13 +77,18 @@ int main(int argc,char **argv)
   if(par->do_srcs)
     srcs_set_cartesian(par);
 
+  //Distribute across nodes
   if(par->do_srcs)
     srcs_distribute(par);
 
+  //Postprocess after 
   if(par->do_srcs)
     srcs_get_local_properties(par);
 
+  //All-to-all communication of density field
+  //and computation of all required quantities
   get_beam_properties(par);
+
   /*
   //Generate intensity maps
   if(par->do_imap)

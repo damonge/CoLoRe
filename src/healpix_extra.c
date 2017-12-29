@@ -266,16 +266,16 @@ void he_ring2nest_inplace(flouble *map_in,long nside)
   long npix=12*nside*nside;
   flouble *map_out=my_malloc(npix*sizeof(flouble));
 
-#ifdef _WITH_OMP
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none)		\
   shared(map_in,nside,npix,map_out)
-#endif //_WITH_OMP
+#endif //_HAVE_OMP
   {
     long ip;
 
-#ifdef _WITH_OMP
+#ifdef _HAVE_OMP
 #pragma omp for
-#endif //_WITH_OMP
+#endif //_HAVE_OMP
     for(ip=0;ip<npix;ip++) {
       long inest;
       ring2nest(nside,ip,&inest);
@@ -293,16 +293,16 @@ void he_nest2ring_inplace(flouble *map_in,long nside)
   long npix=12*nside*nside;
   flouble *map_out=my_malloc(npix*sizeof(flouble));
 
-#ifdef _WITH_OMP
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none)		\
   shared(map_in,nside,npix,map_out)
-#endif //_WITH_OMP
+#endif //_HAVE_OMP
   {
     long ip;
 
-#ifdef _WITH_OMP
+#ifdef _HAVE_OMP
 #pragma omp for
-#endif //_WITH_OMP
+#endif //_HAVE_OMP
     for(ip=0;ip<npix;ip++) {
       long iring;
       nest2ring(nside,ip,&iring);

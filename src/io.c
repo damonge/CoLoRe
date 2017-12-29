@@ -515,7 +515,6 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   FILE *fo;
   char fname[256];
   unsigned long long ipart,np_total;
-  unsigned long long np_send=npart;
   unsigned long long np_total_expected=par->n_grid*((long)(par->n_grid*par->n_grid));
 
   sprintf(fname,"%s_lpt_out.%d",par->prefixOut,NodeThis);
@@ -523,6 +522,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   if(fo==NULL) error_open_file(fname);
 
 #ifdef _HAVE_MPI
+  unsigned long long np_send=npart;
   MPI_Reduce(&np_send,&np_total,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,0,MPI_COMM_WORLD);
   MPI_Bcast(&np_total,1,MPI_UNSIGNED_LONG_LONG,0,MPI_COMM_WORLD);
 #else //_HAVE_MPI
