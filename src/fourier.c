@@ -248,8 +248,6 @@ void end_fftw(ParamCoLoRe *par)
 #endif //_SPREC
 
 #ifdef _HAVE_MPI
-  //  free(par->slice_left);
-  //  free(par->slice_right);
 
 #ifdef _HAVE_OMP
   if(MPIThreadsOK) {

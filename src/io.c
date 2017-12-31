@@ -220,6 +220,14 @@ ParamCoLoRe *read_run_params(char *fname)
   config_setting_t *cset;
   ParamCoLoRe *par=param_colore_new();
   config_t *conf=malloc(sizeof(config_t));
+
+  par->nside_base=2;
+  while(he_nside2npix(par->nside_base)<NNodes)
+    par->nside_base*=2;
+  par->npix_base=he_nside2npix(par->nside_base);
+  if(par->nside_base>NSIDE_MAX_HPX)
+    report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
+
   config_init(conf);
 
   config_set_options(conf,CONFIG_OPTION_AUTOCONVERT);
@@ -357,17 +365,13 @@ ParamCoLoRe *read_run_params(char *fname)
     for(ii=0;ii<par->n_imap;ii++) {
       FILE *fnu=fopen(par->fnameNuImap[ii],"r");
       if(fnu==NULL) error_open_file(par->fnameNuImap[ii]);
-      if(par->nside_imap[ii]>NSIDE_MAX_HPX)
-	report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
-      par->imap[ii]=new_hp_shell(par->nside_imap[ii],linecount(fnu));
+      par->imap[ii]=hp_shell_alloc(par->nside_imap[ii],par->nside_base,linecount(fnu));
       fclose(fnu);
     }
   }
 
   if(par->do_kappa) {
-    if(par->nside_kappa>NSIDE_MAX_HPX)
-      report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
-    par->kmap=new_hp_shell(par->nside_kappa,par->n_kappa);
+    par->kmap=hp_shell_alloc(par->nside_kappa,par->nside_base,par->n_kappa);
 #ifdef _ADD_EXTRA_KAPPA
     par->need_extra_kappa=my_calloc(par->nside_kappa,sizeof(int));
     par->fl_mean_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
@@ -376,9 +380,7 @@ ParamCoLoRe *read_run_params(char *fname)
   }
 
   if(par->do_isw) {
-    if(par->nside_isw>NSIDE_MAX_HPX)
-      report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
-    par->pd_map=new_hp_shell(par->nside_isw,par->n_isw);
+    par->pd_map=hp_shell_alloc(par->nside_isw,par->nside_base,par->n_isw);
 #ifdef _ADD_EXTRA_ISW
     par->need_extra_isw=my_calloc(par->nside_isw,sizeof(int));
     par->fl_mean_extra_isw=my_malloc(par->nside_isw*sizeof(flouble));
@@ -408,20 +410,7 @@ ParamCoLoRe *read_run_params(char *fname)
 
   init_fftw(par);
 
-  par->nside_base=2;
-  while(he_nside2npix(par->nside_base)<NNodes)
-    par->nside_base*=2;
-  par->npix_base=he_nside2npix(par->nside_base);
-  if(par->nside_base>NSIDE_MAX_HPX)
-    report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
-
   par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
-  /*
-  if(par->need_onions) {
-    par->oi_beams=alloc_onion_info_beams(par);
-    par->nside_base=par->oi_beams[0]->nside_arr[0];
-  }
-  */
   get_max_memory(par);
 
   double dk=2*M_PI/par->l_box;
@@ -645,6 +634,7 @@ void write_imap(ParamCoLoRe *par)
     print_info("\n");
   }
 }
+*/
 
 void write_kappa(ParamCoLoRe *par)
 {
@@ -661,17 +651,17 @@ void write_kappa(ParamCoLoRe *par)
       long ir_t=ir*par->kmap->num_pix;
       
       //Write local pixels to dummy map
-      memset(map_write,0,npx*sizeof(flouble));
-      memset(map_nadd,0,npx*sizeof(int));
-      sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
       for(ip=0;ip<npx;ip++) {
-	int id_pix=par->kmap->listpix[ip];
-	if(id_pix>=0) {
-	  map_write[ip]+=par->kmap->data[ir_t+id_pix];
-	  map_nadd[ip]+=par->kmap->nadd[ir_t+id_pix];
-	}
+	map_write[ip]=0;
+	map_nadd[ip]=0;
       }
-
+      sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
+      for(ip=0;ip<par->kmap->num_pix;ip++) {
+	int id_pix=par->kmap->listpix[ip];
+	map_write[id_pix]+=par->kmap->data[ir_t+ip];
+	map_nadd[ id_pix]+=par->kmap->nadd[ir_t+ip];
+      }
+      
       //Collect all dummy maps
 #ifdef _HAVE_MPI
       if(NodeThis==0)
@@ -736,15 +726,15 @@ void write_isw(ParamCoLoRe *par)
       long ir_t=ir*par->pd_map->num_pix;
       
       //Write local pixels to dummy map
-      memset(map_write,0,npx*sizeof(flouble));
-      memset(map_nadd,0,npx*sizeof(int));
-      sprintf(fname,"!%s_isw_z%03d.fits",par->prefixOut,ir);
       for(ip=0;ip<npx;ip++) {
+	map_write[ip]=0;
+	map_nadd[ip]=0;
+      }
+      sprintf(fname,"!%s_isw_z%03d.fits",par->prefixOut,ir);
+      for(ip=0;ip<par->pd_map->num_pix;ip++) {
 	int id_pix=par->pd_map->listpix[ip];
-	if(id_pix>=0) {
-	  map_write[ip]+=par->pd_map->data[ir_t+id_pix];
-	  map_nadd[ip]+=par->pd_map->nadd[ir_t+id_pix];
-	}
+	map_write[id_pix]+=par->pd_map->data[ir_t+ip];
+	map_nadd[ id_pix]+=par->pd_map->nadd[ir_t+ip];
       }
 
       //Collect all dummy maps
@@ -795,7 +785,6 @@ void write_isw(ParamCoLoRe *par)
     print_info("\n");
   }
 }
-*/
 
 void write_catalog(ParamCoLoRe *par,int ipop)
 {
@@ -992,15 +981,7 @@ void param_colore_free(ParamCoLoRe *par)
   free(par->iz0_all);
   free(par->logkarr);
   free(par->pkarr);
-
-  /*
-  if(par->need_onions) {
-    free_beams(par);
-    for(ii=0;ii<par->n_beams_here;ii++)
-      free_onion_info(par->oi_beams[ii]);
-    free(par->oi_beams);
-  }
-  */
+  end_fftw(par);
   
   if(par->do_srcs) {
     for(ii=0;ii<par->n_srcs;ii++) {
@@ -1008,9 +989,9 @@ void param_colore_free(ParamCoLoRe *par)
       free(par->srcs_nz_arr[ii]);
       free(par->srcs_norm_arr[ii]);
       if(par->cats_c[ii]!=NULL)
-	free_catalog_cartesian(par->cats_c[ii]);
+	catalog_cartesian_free(par->cats_c[ii]);
       if(par->cats[ii]!=NULL)
-	free_catalog(par->cats[ii]);
+	catalog_free(par->cats[ii]);
     }
     if(par->cats_c!=NULL)
       free(par->cats_c);
@@ -1025,14 +1006,14 @@ void param_colore_free(ParamCoLoRe *par)
       free(par->imap_bz_arr[ii]);
       free(par->imap_tz_arr[ii]);
       free(par->imap_norm_arr[ii]);
-      free_hp_shell(par->imap[ii]);
+      hp_shell_free(par->imap[ii]);
     }
     if(par->imap!=NULL)
       free(par->imap);
   }
 
   if(par->do_kappa) {
-    free_hp_shell(par->kmap);
+    hp_shell_free(par->kmap);
 #ifdef _ADD_EXTRA_KAPPA
     for(ii=0;ii<par->n_kappa;ii++) {
       if(par->need_extra_kappa[ii]) {
@@ -1047,7 +1028,7 @@ void param_colore_free(ParamCoLoRe *par)
   }
 
   if(par->do_isw) {
-    free_hp_shell(par->pd_map);
+    hp_shell_free(par->pd_map);
 #ifdef _ADD_EXTRA_ISW
     for(ii=0;ii<par->n_isw;ii++) {
       if(par->need_extra_isw[ii]) {

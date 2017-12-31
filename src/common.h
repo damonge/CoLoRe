@@ -200,24 +200,11 @@ typedef struct {
   float *v_skw;
 } Catalog;
 
-
-
-/*
-typedef struct {
-  int nr;
-  flouble *r0_arr;
-  flouble *rf_arr;
-  int *nside_arr;
-  int *nside_ratio_arr;
-  int *ipix0_arr;
-  int *num_pix;
-} OnionInfo;
-*/
-
 typedef struct {
   int nside; //Resolution parameter
   long num_pix;
   long *listpix;
+  double *pos;
   int nr; //Number of spherical shells
   flouble *r0; //r_min in this shell
   flouble *rf; //r_max in this shell
@@ -302,6 +289,7 @@ typedef struct {
   double pos_obs[3]; //Observer position
 
   //Tracers
+  // Sources
   int do_srcs; //Do we include sources?
   int do_skewers; //Do we include skewer information?
   int do_lensing; //Do we need to compute the lensing potential?
@@ -315,6 +303,11 @@ typedef struct {
   double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization  
   int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
   int skw_srcs[NPOP_MAX]; //Do we want to store skewers for each source of this type?
+  long *nsources_c_this; //Number of sources initially found in this node
+  CatalogCartesian **cats_c; //Galaxy positions initially stored in this node
+  long *nsources_this; //Number of sources finally found in this node
+  Catalog **cats; //Final galaxy properties
+  // Intensity mapping
   int do_imap; //Do we include intensity mapping
   int n_imap; //Number of IM species
   char fnameBzImap[NPOP_MAX][256]; //Files containing b(z) for each IM species
@@ -327,26 +320,23 @@ typedef struct {
   double norm_imap_f[NPOP_MAX]; //Top edge of spline for density normalization
   int nside_imap[NPOP_MAX]; //Output angular resolution for each IM species
   double nu0_imap[NPOP_MAX]; //Rest-frame frequency for each IM species
+  HealpixShells **imap; //intensity maps for each IM species
+  // Kappa
   int do_kappa; //Do you want to output kappa maps?
   int n_kappa; //How many maps?
   double z_kappa_out[NPOP_MAX]; //Array of source plane redshifts
   int nside_kappa;
-  int do_isw; //Do you want to output isw maps?
-  int n_isw; //How many maps?
-  double z_isw_out[NPOP_MAX]; //Array of source plane redshifts
-  int nside_isw;
-  // Tracer data
-  long *nsources_c_this; //Number of sources initially found in this node
-  CatalogCartesian **cats_c; //Galaxy positions initially stored in this node
-  long *nsources_this; //Number of sources finally found in this node
-  Catalog **cats; //Final galaxy properties
-  HealpixShells **imap; //intensity maps for each IM species
   HealpixShells *kmap; //Kappa maps at each redshift
 #ifdef _ADD_EXTRA_KAPPA
   int *need_extra_kappa;
   flouble **fl_mean_extra_kappa;
   flouble **cl_extra_kappa;
 #endif //_ADD_EXTRA_KAPPA
+  // ISW
+  int do_isw; //Do you want to output isw maps?
+  int n_isw; //How many maps?
+  double z_isw_out[NPOP_MAX]; //Array of source plane redshifts
+  int nside_isw;
   HealpixShells *pd_map; //Isw maps at each redshift
 #ifdef _ADD_EXTRA_ISW
   int *need_extra_isw;
@@ -362,21 +352,6 @@ typedef struct {
   int nside_base; //Minimum n_side used in the pixelization
   int npix_base; //Corresponding number of pixels
   int need_beaming; //Do we need spherical voxels at all?
-  
-  /*
-  int n_beams_here; //Number of beams stored in this node for the lightcone
-  OnionInfo **oi_beams; //Onion beams stored in this node
-  flouble ***dens_beams; //Density beams
-  flouble ***vrad_beams; //v_r beams
-  flouble ***p_xx_beams; //phi_xx beams
-  flouble ***p_xy_beams; //phi_xy beams
-  flouble ***p_yy_beams; //phi_yy beams
-  flouble ***pdot_beams; //phi_t beams
-  int ***nsrc_beams; //Beams with total number of sources
-
-
-
-  */
 } ParamCoLoRe;
 
 void mpi_init(int* p_argc,char*** p_argv);
@@ -388,6 +363,7 @@ void error_read_line(char *fname,int nlin);
 void print_info(char *fmt,...);
 void report_error(int level,char *fmt,...);
 int linecount(FILE *f);
+int *ind_sort(int n,flouble *arr);
 void timer(int i);
 gsl_rng *init_rng(unsigned int seed);
 double rng_01(gsl_rng *rng);
@@ -399,15 +375,16 @@ void end_rng(gsl_rng *rng);
 //OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
 //void free_onion_info(OnionInfo *oi);
 unsigned long long get_max_memory(ParamCoLoRe *par);
+void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 //void alloc_beams(ParamCoLoRe *par);
 //void free_beams(ParamCoLoRe *par);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
-void free_hp_shell(HealpixShells *shell);
-HealpixShells *new_hp_shell(int nside,int nr);
-void free_catalog_cartesian(CatalogCartesian *cat);
-CatalogCartesian *new_catalog_cartesian(int nsrcs);
-Catalog *new_catalog(int nsrcs,int has_skw,double rmax,int nr);
-void free_catalog(Catalog *cat);
+HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr);
+void hp_shell_free(HealpixShells *shell);
+CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
+void catalog_cartesian_free(CatalogCartesian *cat);
+Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng);
+void catalog_free(Catalog *cat);
 
 static inline double bias_model(double d,double b)
 {
@@ -436,8 +413,8 @@ void write_density_grid(ParamCoLoRe *par,char *prefix_dens);
 void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z);
 void write_catalog(ParamCoLoRe *par,int ipop);
 //void write_imap(ParamCoLoRe *par);
-//void write_kappa(ParamCoLoRe *par);
-//void write_isw(ParamCoLoRe *par);
+void write_kappa(ParamCoLoRe *par);
+void write_isw(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
 
@@ -471,13 +448,33 @@ void compute_density_normalization(ParamCoLoRe *par);
 
 
 //////
-// Functions defined in lightcone.c
+// Functions defined in srcs.c
 void srcs_set_cartesian(ParamCoLoRe *par);
 void srcs_distribute(ParamCoLoRe *par);
 void srcs_get_local_properties(ParamCoLoRe *par);
 void srcs_beams_preproc(ParamCoLoRe *par);
 void srcs_get_beam_properties(ParamCoLoRe *par);
 void srcs_beams_postproc(ParamCoLoRe *par);
+
+//////
+// Functions defined in kappa.c
+void kappa_set_cartesian(ParamCoLoRe *par);
+void kappa_distribute(ParamCoLoRe *par);
+void kappa_get_local_properties(ParamCoLoRe *par);
+void kappa_beams_preproc(ParamCoLoRe *par);
+void kappa_get_beam_properties(ParamCoLoRe *par);
+void kappa_beams_postproc(ParamCoLoRe *par);
+
+//////
+// Functions defined in isw.c
+void isw_set_cartesian(ParamCoLoRe *par);
+void isw_distribute(ParamCoLoRe *par);
+void isw_get_local_properties(ParamCoLoRe *par);
+void isw_beams_preproc(ParamCoLoRe *par);
+void isw_get_beam_properties(ParamCoLoRe *par);
+void isw_beams_postproc(ParamCoLoRe *par);
+
+
 //void integrate_lensing(ParamCoLoRe *par);
 //void integrate_isw(ParamCoLoRe *par);
 //void get_imap(ParamCoLoRe *par);

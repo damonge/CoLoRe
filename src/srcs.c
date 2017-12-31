@@ -168,7 +168,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
 
-  par->cats_c[ipop]=new_catalog_cartesian(par->nsources_c_this[ipop]);
+  par->cats_c[ipop]=catalog_cartesian_alloc(par->nsources_c_this[ipop]);
   
   if(NodeThis==0) timer(0);
   print_info("   Assigning coordinates\n");
@@ -300,8 +300,8 @@ static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
 
   //Loop through all nodes and receive particles
   //Free up old catalog and create new one
-  free_catalog_cartesian(par->cats_c[ipop]);
-  par->cats_c[ipop]=new_catalog_cartesian(par->nsources_this[ipop]);
+  catalog_cartesian_free(par->cats_c[ipop]);
+  par->cats_c[ipop]=catalog_cartesian_alloc(par->nsources_this[ipop]);
   par->nsources_c_this[ipop]=par->nsources_this[ipop];
   long i_sofar=0;
   for(ii=0;ii<NNodes;ii++) {
@@ -340,37 +340,10 @@ void srcs_distribute(ParamCoLoRe *par)
   print_info("\n");
 }
 
-static void srcs_beams_preproc_single(ParamCoLoRe *par,int ipop)
-{
-#ifdef _HAVE_OMP
-#pragma omp parallel default(none) \
-  shared(par,ipop)
-#endif //_HAVE_OMP
-  {
-    int ii;
-
-#ifdef _HAVE_OMP
-#pragma omp for
-#endif //_HAVE_OMP
-    for(ii=0;ii<par->cats[ipop]->nsrc;ii++) {
-      par->cats[ipop]->srcs[ii].dz_rsd=0;
-      par->cats[ipop]->srcs[ii].e1=0;
-      par->cats[ipop]->srcs[ii].e2=0;
-    }//end omp for
-  }//end omp parallel
-}
-
-void srcs_beams_preproc(ParamCoLoRe *par)
-{
-  int ipop;
-  for(ipop=0;ipop<par->n_srcs;ipop++)
-    srcs_beams_preproc_single(par,ipop);
-}
-
 static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
 {
-  par->cats[ipop]=new_catalog(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],
-			      par->r_max,NSAMP_RAD*par->n_grid/2);
+  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],
+				par->r_max,par->n_grid);
 
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none) \
@@ -405,6 +378,33 @@ void srcs_get_local_properties(ParamCoLoRe *par)
     srcs_get_local_properties_single(par,ipop);
   if(NodeThis==0) timer(2);
   print_info("\n");
+}
+
+static void srcs_beams_preproc_single(ParamCoLoRe *par,int ipop)
+{
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) \
+  shared(par,ipop)
+#endif //_HAVE_OMP
+  {
+    int ii;
+
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(ii=0;ii<par->cats[ipop]->nsrc;ii++) {
+      par->cats[ipop]->srcs[ii].dz_rsd=0;
+      par->cats[ipop]->srcs[ii].e1=0;
+      par->cats[ipop]->srcs[ii].e2=0;
+    }//end omp for
+  }//end omp parallel
+}
+
+void srcs_beams_preproc(ParamCoLoRe *par)
+{
+  int ipop;
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    srcs_beams_preproc_single(par,ipop);
 }
 
 static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)

@@ -205,7 +205,7 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       for(ax=0;ax<6;ax++)
 	t[ax]+=(t_000[ax]*w_000+t_001[ax]*w_001+t_010[ax]*w_010+t_011[ax]*w_011);
     }
-    if(par->do_isw)
+    if(flag_return & RETURN_PDOT)
       *pd+=(pd_000*w_000+pd_001*w_001+pd_010*w_010+pd_011*w_011);
   }
   if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
@@ -274,6 +274,10 @@ void get_beam_properties(ParamCoLoRe *par)
 
   if(par->do_srcs)
     srcs_beams_preproc(par);
+  if(par->do_kappa)
+    kappa_beams_preproc(par);
+  if(par->do_isw)
+    isw_beams_preproc(par);
   
   if(NodeThis==0) timer(0);
 
@@ -299,6 +303,10 @@ void get_beam_properties(ParamCoLoRe *par)
 
     if(par->do_srcs)
       srcs_get_beam_properties(par);
+    if(par->do_kappa)
+      kappa_get_beam_properties(par);
+    if(par->do_isw)
+      isw_get_beam_properties(par);
   }
 #ifdef _HAVE_MPI
   free(buffer_sr);
@@ -306,11 +314,15 @@ void get_beam_properties(ParamCoLoRe *par)
 
   if(par->do_srcs)
     srcs_beams_postproc(par);
+  if(par->do_kappa)
+    kappa_beams_postproc(par);
+  if(par->do_isw)
+    isw_beams_postproc(par);
   
   if(NodeThis==0) timer(2);
   print_info("\n");
 }
-    
+
 #ifdef _NOWAY
 void pixelize(ParamCoLoRe *par)
 {

@@ -79,6 +79,38 @@ int linecount(FILE *f)
   return i0;
 }
 
+typedef struct {
+  int i;
+  flouble d;
+} IsortStruct;
+
+static int compareIsort(const void *a,const void *b)
+{
+  IsortStruct *ia=(IsortStruct *)a;
+  IsortStruct *ib=(IsortStruct *)b;
+  if(ia->d<ib->d) return -1;
+  else return 1;
+}
+
+int *ind_sort(int n,flouble *arr)
+{
+  int i;
+  IsortStruct *st=my_malloc(n*sizeof(IsortStruct));
+  for(i=0;i<n;i++) {
+    st[i].i=i;
+    st[i].d=arr[i];
+  }
+
+  qsort(st,n,sizeof(IsortStruct),compareIsort);
+  
+  int *iarr=my_malloc(n*sizeof(int));
+  for(i=0;i<n;i++)
+    iarr[i]=st[i].i;
+
+  free(st);
+  return iarr;
+}
+
 void timer(int i)
 {
   /////
@@ -499,6 +531,12 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
   return total_GB;
 }
 
+void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
+{
+  *nr=NSAMP_RAD*ngrid/2;
+  *dr=rmax/(*nr);
+}
+
 /*
 void alloc_beams(ParamCoLoRe *par)
 {
@@ -545,13 +583,13 @@ void alloc_beams(ParamCoLoRe *par)
 }
 */
 
-CatalogCartesian *new_catalog_cartesian(int nsrcs)
+CatalogCartesian *catalog_cartesian_alloc(int nsrcs)
 {
   CatalogCartesian *cat=my_malloc(sizeof(CatalogCartesian));
   
   if(nsrcs>0) {
     cat->nsrc=nsrcs;
-    cat->pos=my_malloc(4*nsrcs*sizeof(float));
+    cat->pos=my_malloc(NPOS_CC*nsrcs*sizeof(float));
     cat->ipix=my_malloc(nsrcs*sizeof(int));
   }
   else {
@@ -563,7 +601,7 @@ CatalogCartesian *new_catalog_cartesian(int nsrcs)
   return cat;
 }
 
-void free_catalog_cartesian(CatalogCartesian *cat)
+void catalog_cartesian_free(CatalogCartesian *cat)
 {
   if(cat->nsrc>0) {
     free(cat->pos);
@@ -572,7 +610,7 @@ void free_catalog_cartesian(CatalogCartesian *cat)
   free(cat);
 }
 
-Catalog *new_catalog(int nsrcs,int has_skw,double rmax,int nr)
+Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng)
 {
   Catalog *cat=my_malloc(sizeof(Catalog));
   
@@ -580,13 +618,12 @@ Catalog *new_catalog(int nsrcs,int has_skw,double rmax,int nr)
     cat->nsrc=nsrcs;
     cat->srcs=my_malloc(nsrcs*sizeof(Src));
     cat->has_skw=has_skw;
-    cat->nr=nr;
+    get_radial_params(rmax,ng,&(cat->nr),&(cat->dr));
     cat->rmax=rmax;
-    cat->dr=rmax/nr;
     cat->idr=1./cat->dr;
     if(has_skw) {
-      cat->d_skw=my_calloc(nsrcs*nr,sizeof(float));
-      cat->v_skw=my_calloc(nsrcs*nr,sizeof(float));
+      cat->d_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+      cat->v_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
     }
   }
   else {
@@ -598,7 +635,7 @@ Catalog *new_catalog(int nsrcs,int has_skw,double rmax,int nr)
   return cat;
 }
 
-void free_catalog(Catalog *cat)
+void catalog_free(Catalog *cat)
 {
   if(cat->nsrc>0) {
     free(cat->srcs);
@@ -610,10 +647,60 @@ void free_catalog(Catalog *cat)
   free(cat);
 }
 
-void free_hp_shell(HealpixShells *shell)
+HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
+{
+  if(nside>NSIDE_MAX_HPX)
+    report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
+  if(nside<nside_base)
+    report_error(1,"Can't go below nside=%d\n",nside_base);
+
+  int ib;
+  long ip;
+  HealpixShells *shell=my_malloc(sizeof(HealpixShells));
+
+  //Figure out pixel angular positions
+  int nbases=he_nside2npix(nside_base);
+  int nside_ratio=nside/nside_base;
+  long npix_perbeam=nside_ratio*nside_ratio;
+  int nbeams_here=0;
+  
+  for(ib=NodeThis;ib<nbases;ib+=NNodes)
+    nbeams_here++;
+  shell->nside=nside;
+  shell->num_pix=nside_ratio*nside_ratio*nbeams_here;
+  shell->listpix=my_malloc(shell->num_pix*sizeof(long));
+  shell->pos=my_malloc(3*shell->num_pix*sizeof(double));
+
+  double *u=shell->pos;
+  long ipix=0;
+  for(ib=NodeThis;ib<nbases;ib+=NNodes) {
+    for(ip=0;ip<npix_perbeam;ip++) {
+      long id_nest=ib*npix_perbeam+ip;
+      shell->listpix[ipix]=id_nest;
+      pix2vec_nest(shell->nside,id_nest,u);
+      u+=3;
+      ipix++;
+    }
+  }
+
+  //Figure out radial shells
+  shell->nr=nr;
+  shell->r0=my_malloc(shell->nr*sizeof(flouble));
+  shell->rf=my_malloc(shell->nr*sizeof(flouble));
+
+  //Zero all data and clear
+  shell->data=my_calloc(shell->nr*shell->num_pix,sizeof(flouble));
+  shell->nadd=my_calloc(shell->nr*shell->num_pix,sizeof(int));
+  
+  return shell;
+}
+
+void hp_shell_free(HealpixShells *shell)
 {
   if(shell->listpix!=NULL)
     free(shell->listpix);
+  if(shell->pos!=NULL)
+    free(shell->pos);
   if(shell->r0!=NULL)
     free(shell->r0);
   if(shell->rf!=NULL)
@@ -623,21 +710,4 @@ void free_hp_shell(HealpixShells *shell)
   if(shell->nadd!=NULL)
     free(shell->nadd);
   free(shell);
-}
-
-HealpixShells *new_hp_shell(int nside,int nr)
-{
-  HealpixShells *shell=my_malloc(sizeof(HealpixShells));
-  shell->nside=nside;
-
-  //Figure out radial shells
-  shell->nr=nr;
-  shell->r0=my_malloc(shell->nr*sizeof(flouble));
-  shell->rf=my_malloc(shell->nr*sizeof(flouble));
-
-  shell->listpix=NULL;
-  shell->data=NULL;
-  shell->nadd=NULL;
-
-  return shell;
 }

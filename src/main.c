@@ -51,56 +51,50 @@ int main(int argc,char **argv)
   //Lognormalize density field
   compute_physical_density_field(par);
 
-  /*
-  if(par->need_onions) {
-    //Interpolate into beams
-    alloc_beams(par);
-    pixelize(par);
-    end_fftw(par);
-  }
-  */
-  
   //Compute normalization of density field for biasing
   compute_density_normalization(par);
 
   /*
   //Precompute lensing if needed
-  if(par->do_lensing)
-    integrate_lensing(par);
 
   //Precompute isw if needed
   if(par->do_isw)
     integrate_isw(par);
   */
-  
-  //Poisson-sample the galaxies
+
+  //Get information from slabs
   if(par->do_srcs)
     srcs_set_cartesian(par);
+  if(par->do_kappa)
+    kappa_set_cartesian(par);
+  if(par->do_isw)
+    isw_set_cartesian(par);
 
-  //Distribute across nodes
+  //Distribute information across
   if(par->do_srcs)
     srcs_distribute(par);
+  if(par->do_kappa)
+    kappa_distribute(par);
+  if(par->do_isw)
+    isw_distribute(par);
 
   //Postprocess after 
   if(par->do_srcs)
     srcs_get_local_properties(par);
+  if(par->do_kappa)
+    kappa_get_local_properties(par);
+  if(par->do_isw)
+    isw_get_local_properties(par);
 
   //All-to-all communication of density field
   //and computation of all required quantities
-  get_beam_properties(par);
+  if(par->need_beaming)
+    get_beam_properties(par);
 
   /*
   //Generate intensity maps
   if(par->do_imap)
     get_imap(par);
-
-  //Generate kappa maps
-  if(par->do_kappa)
-    get_kappa(par);
-
-  //Generate isw maps
-  if(par->do_isw)
-    get_isw(par);
   */
   //Write output
   if(par->do_srcs) {
@@ -112,10 +106,12 @@ int main(int argc,char **argv)
   /*
   if(par->do_imap)
     write_imap(par);
+  */
   if(par->do_kappa)
     write_kappa(par);
   if(par->do_isw)
     write_isw(par);
+  /*
   if(par->do_pred)
     write_predictions(par);
   */
@@ -123,9 +119,6 @@ int main(int argc,char **argv)
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
   
-  //  if(!(par->need_onions))
-  //    end_fftw(par);
-  end_fftw(par);
   param_colore_free(par);
 
   if(NodeThis==0) timer(5);
