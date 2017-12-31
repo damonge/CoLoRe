@@ -419,7 +419,21 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
   {
     long ip;
     double idx=par->n_grid/par->l_box;
+    double *fac_r_1=NULL,*fac_r_2=NULL;
 
+    //Kernels for the LOS integrals
+    if(par->do_lensing) {
+      fac_r_1=my_malloc(cat->nr*sizeof(double));
+      fac_r_2=my_malloc(cat->nr*sizeof(double));
+
+      for(ip=0;ip<cat->nr;ip++) {
+	double rm=(ip+0.5)*cat->dr;
+	double pg=get_bg(par,rm,BG_D1,0)*(1+get_bg(par,rm,BG_Z,0));
+	fac_r_1[ip]=rm*pg*cat->dr;
+	fac_r_2[ip]=rm*rm*pg*cat->dr;
+      }
+    }
+    
 #ifdef _HAVE_OMP
 #pragma omp for
 #endif //_HAVE_OMP
@@ -429,7 +443,8 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       flouble v[3],vr,dens;
       float *pos=&(catc->pos[NPOS_CC*ip]);
       double r=sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
-      double ir=1./r;
+      double ir=1./(MAX(r,0.001));
+      
       for(ax=0;ax<3;ax++) {//TODO these could be precomputed in the cartesian catalog
 	xn[ax]=(pos[ax]+par->pos_obs[ax])*idx;
 	u[ax]=pos[ax]*ir;
@@ -444,12 +459,12 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 
       //Fill up skewers
       if(cat->has_skw) {
-	int i_r,i_r_max=MAX((int)(r*cat->idr+0.5),cat->nr-1);
+	int i_r,i_r_max=MIN((int)(r*cat->idr+0.5),cat->nr-1);
 	long offp=ip*cat->nr;
 	for(i_r=0;i_r<=i_r_max;i_r++) {
-	  double rr=(i_r+0.5)*cat->dr;
+	  double rm=(i_r+0.5)*cat->dr;
 	  for(ax=0;ax<3;ax++)
-	    xn[ax]=(rr*u[ax]+par->pos_obs[ax])*idx;
+	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
 	  added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,RETURN_DENS | RETURN_VEL);
 	  if(added) {
 	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
@@ -458,8 +473,65 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  }
 	}
       }
-      
+
+      //Compute lensing shear
+      if(par->do_lensing) {
+	//Compute linear transformations needed for shear
+	double r1[6],r2[6];
+	double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
+	double prefac=2*idx*idx*ir; //2/(Dx^2 * r)
+
+	cth_h=u[2];
+	if(cth_h>=1) cth_h=1;
+	if(cth_h<=-1) cth_h=-1;
+	sth_h=sqrt((1-cth_h)*(1+cth_h));
+	if(sth_h!=0) {
+	  cph_h=u[0]/sth_h;
+	  sph_h=u[1]/sth_h;
+	}
+	
+	r1[0]=(cth_h*cth_h*cph_h*cph_h-sph_h*sph_h)*prefac;
+	r1[1]=(2*cph_h*sph_h*(cth_h*cth_h+1))*prefac;
+	r1[2]=(-2*cth_h*sth_h*cph_h)*prefac;
+	r1[3]=(cth_h*cth_h*sph_h*sph_h-cph_h*cph_h)*prefac;
+	r1[4]=(-2*cth_h*sth_h*sph_h)*prefac;
+	r1[5]=(sth_h*sth_h)*prefac;
+	
+	r2[0]=(-2*cth_h*cph_h*sph_h)*prefac;
+	r2[1]=(2*cth_h*(cph_h*cph_h-sph_h*sph_h))*prefac;
+	r2[2]=(2*sth_h*sph_h)*prefac;
+	r2[3]=(2*cth_h*sph_h*cph_h)*prefac;
+	r2[4]=(-2*sth_h*cph_h)*prefac;
+	r2[5]=0;
+
+	//Integrate along the LOS
+	flouble t[6];
+	double e1=0,e2=0;
+	int i_r,i_r_max=MIN((int)(r*cat->idr+0.5),cat->nr-1);
+	for(i_r=0;i_r<=i_r_max;i_r++) {
+	  double rm=(i_r+0.5)*cat->dr;
+	  for(ax=0;ax<3;ax++)
+	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
+	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,RETURN_TID);
+	  if(added) {
+	    double fr=fac_r_1[i_r]*r-fac_r_2[i_r];
+	    double dotp1=0,dotp2=0;
+	    for(ax=0;ax<6;ax++) {
+	      dotp1+=r1[ax]*t[ax];
+	      dotp2+=r2[ax]*t[ax];
+	    }
+	    e1+=dotp1*fr;
+	    e2+=dotp2*fr;
+	  }
+	}
+	cat->srcs[ip].e1+=e1;
+	cat->srcs[ip].e2+=e2;
+      }
     }//end omp for
+    if(par->do_lensing) {
+      free(fac_r_1);
+      free(fac_r_2);
+    }
   }//end omp parallel
 }
 
@@ -494,8 +566,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       cat->srcs[ii].dz_rsd*=vg*factor_vel;
 
       //Shear
-      cat->srcs[ii].e1=-1;
-      cat->srcs[ii].e2=-1;
+      //Nothing else to do here
 
       //Skewers
       if(cat->has_skw) {
