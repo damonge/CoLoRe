@@ -330,7 +330,7 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th
 }
 */
 
-unsigned long long get_max_memory(ParamCoLoRe *par)
+unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
 {
   unsigned long long total_GB=0;
   unsigned long long total_GB_gau=0;
@@ -377,6 +377,8 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
 	nztot+=nzarr[ii]*(zarr[ii+1]-zarr[ii]);
       nztot*=4*M_PI/NNodes;
       nsrc+=(long)(nztot);
+      if(just_test)
+	print_info(" Expect %ld type-%d sources\n",(long)(nztot),ipop);
       free(zarr);
       free(nzarr);
       fclose(fi);
@@ -432,23 +434,31 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
   total_GB=total_GB_gau+total_GB_lpt+total_GB_srcs+total_GB_imap+total_GB_kappa+total_GB_isw;
 
 #ifdef _DEBUG
-  printf("Node %d will allocate %.3lf GB [",NodeThis,(double)(total_GB/pow(1024.,3)));
-  printf("%.3lf GB (Gaussian)",(double)(total_GB_gau/pow(1024.,3)));
-  if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
-    printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
-  if(par->do_srcs)
-    printf(", %.3lf GB (srcs)",(double)(total_GB_srcs/pow(1024.,3)));
-  if(par->do_imap)
-    printf(", %.3lf GB (imap)",(double)(total_GB_imap/pow(1024.,3)));
-  if(par->do_kappa)
-    printf(", %.3lf MB (kappa)",(double)(total_GB_kappa/pow(1024.,2)));
-  if(par->do_isw)
-    printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
-  printf("]\n");
+  int jj;
+  for(jj=0;jj<NNodes;jj++) {
+    if(jj==NodeThis) {
+      printf("Node %d will allocate %.3lf GB [",NodeThis,(double)(total_GB/pow(1024.,3)));
+      printf("%.3lf GB (Gaussian)",(double)(total_GB_gau/pow(1024.,3)));
+      if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
+	printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
+      if(par->do_srcs)
+	printf(", %.3lf GB (srcs)",(double)(total_GB_srcs/pow(1024.,3)));
+      if(par->do_imap)
+	printf(", %.3lf GB (imap)",(double)(total_GB_imap/pow(1024.,3)));
+      if(par->do_kappa)
+	printf(", %.3lf MB (kappa)",(double)(total_GB_kappa/pow(1024.,2)));
+      if(par->do_isw)
+	printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
+      printf("]\n");
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+  }
 #endif //_DEBUG
-
-  void *ptest=my_malloc(total_GB);
-  free(ptest);
+      
+  if(just_test==0) {
+    void *ptest=my_malloc(total_GB);
+    free(ptest);
+  }
 
   return total_GB;
 }

@@ -118,9 +118,11 @@ static ParamCoLoRe *param_colore_new(void)
     par->imap_tz_arr[ii]=NULL;
     par->imap_norm_arr[ii]=NULL;
     par->nside_imap[ii]=-1;
+    par->nu0_imap[ii]=-1;
+  }
+  for(ii=0;ii<NPLANES_MAX;ii++) {
     par->z_kappa_out[ii]=-1;
     par->z_isw_out[ii]=-1;
-    par->nu0_imap[ii]=-1;
   }
   par->cats_c=NULL;
   par->nsources_c_this=NULL;
@@ -202,7 +204,7 @@ static void conf_read_bool(config_t *conf,char *secname,char *varname,int *out)
     report_error(1,"Couldn't read variable %s\n",fullpath);
 }
 
-ParamCoLoRe *read_run_params(char *fname)
+ParamCoLoRe *read_run_params(char *fname,int test_memory)
 {
   int stat,ii,i_dum,found;
   char c_dum[256]="default";
@@ -327,14 +329,14 @@ ParamCoLoRe *read_run_params(char *fname)
   if(cset!=NULL) {
     par->do_kappa=1;
     par->do_lensing=1;
-    conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPOP_MAX);
+    conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPLANES_MAX);
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
 
   cset=config_lookup(conf,"isw");
   if(cset!=NULL) {
     par->do_isw=1;
-    conf_read_double_array(conf,"isw","z_out",par->z_isw_out,&(par->n_isw),NPOP_MAX);
+    conf_read_double_array(conf,"isw","z_out",par->z_isw_out,&(par->n_isw),NPLANES_MAX);
     conf_read_int(conf,"isw","nside",&(par->nside_isw));
   }
 
@@ -360,7 +362,45 @@ ParamCoLoRe *read_run_params(char *fname)
   par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
   init_fftw(par);
 
-  get_max_memory(par);
+  get_max_memory(par,test_memory);
+
+  cosmo_set(par);
+
+  double dk=2*M_PI/par->l_box;
+  print_info("Run parameters: \n");
+  print_info("  %.3lf < z < %.3lf\n",par->z_min,par->z_max);
+  print_info("  %.3lf < r/(Mpc/h) < %.3lf\n",par->r_min,par->r_max);
+  print_info("  L_box = %.3lf Mpc/h, N_grid = %d \n",(double)(par->l_box),par->n_grid);
+  print_info("  Scales resolved: %.3lE < k < %.3lE h/Mpc\n",dk,0.5*(par->n_grid-1)*dk);
+  print_info("  Fourier-space resolution: dk = %.3lE h/Mpc\n",dk);
+  print_info("  Real-space resolution: dx = %.3lE Mpc/h\n",par->l_box/par->n_grid);
+  if(par->do_smoothing)
+    print_info("  Density field pre-smoothed on scales: x_s = %.3lE Mpc/h\n",sqrt(par->r2_smooth));
+  else
+    print_info("  No extra smoothing\n");
+  if(par->do_srcs)
+    print_info("  %d galaxy populations\n",par->n_srcs);
+  if(par->do_skewers)
+    print_info("  Some populations will include LoS skewers\n");
+  if(par->do_imap)
+    print_info("  %d intensity mapping species\n",par->n_imap);
+  if(par->do_kappa)
+    print_info("  %d lensing source planes\n",par->n_kappa);
+  if(par->do_isw)
+    print_info("  %d ISW source planes\n",par->n_isw);
+  if(par->do_lensing)
+    print_info("  Will include lensing shear\n");
+  if(!par->need_beaming)
+    print_info("  Will NOT need to all-to-all communicate fields\n");
+  print_info("\n");
+
+  if(test_memory) {
+#ifdef _DEBUG
+    fclose(par->f_dbg);
+#endif //_DEBUG
+    free(par);
+    return NULL;
+  }
 
   allocate_fftw(par);
 
@@ -403,35 +443,7 @@ ParamCoLoRe *read_run_params(char *fname)
 #endif //_ADD_EXTRA_ISW
   }
   
-  cosmo_set(par);
-
-  double dk=2*M_PI/par->l_box;
-  print_info("Run parameters: \n");
-  print_info("  %.3lf < z < %.3lf\n",par->z_min,par->z_max);
-  print_info("  %.3lf < r/(Mpc/h) < %.3lf\n",par->r_min,par->r_max);
-  print_info("  L_box = %.3lf Mpc/h, N_grid = %d \n",(double)(par->l_box),par->n_grid);
-  print_info("  Scales resolved: %.3lE < k < %.3lE h/Mpc\n",dk,0.5*(par->n_grid-1)*dk);
-  print_info("  Fourier-space resolution: dk = %.3lE h/Mpc\n",dk);
-  print_info("  Real-space resolution: dx = %.3lE Mpc/h\n",par->l_box/par->n_grid);
-  if(par->do_smoothing)
-    print_info("  Density field pre-smoothed on scales: x_s = %.3lE Mpc/h\n",sqrt(par->r2_smooth));
-  else
-    print_info("  No extra smoothing\n");
-  if(par->do_srcs)
-    print_info("  %d galaxy populations\n",par->n_srcs);
-  if(par->do_skewers)
-    print_info("  Some populations will include LoS skewers\n");
-  if(par->do_imap)
-    print_info("  %d intensity mapping species\n",par->n_imap);
-  if(par->do_kappa)
-    print_info("  %d lensing source planes\n",par->n_kappa);
-  if(par->do_isw)
-    print_info("  %d ISW source planes\n",par->n_isw);
-  if(par->do_lensing)
-    print_info("  Will include lensing shear\n");
-  if(!par->need_beaming)
-    print_info("  Will NOT need to all-to-all communicate fields\n");
-  print_info("\n");
+  compute_tracer_cosmo(par);
   
   return par;
 }

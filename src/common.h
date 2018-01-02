@@ -145,6 +145,7 @@
 #define TWOPIPIINV  0.05066059182116889 //1/(2*pi^2)
 #define NA 5001
 #define NPOP_MAX 10
+#define NPLANES_MAX 100
 
 #ifdef _HAVE_MPI
 #ifdef _SPREC
@@ -324,7 +325,7 @@ typedef struct {
   // Kappa
   int do_kappa; //Do you want to output kappa maps?
   int n_kappa; //How many maps?
-  double z_kappa_out[NPOP_MAX]; //Array of source plane redshifts
+  double z_kappa_out[NPLANES_MAX]; //Array of source plane redshifts
   int nside_kappa;
   HealpixShells *kmap; //Kappa maps at each redshift
 #ifdef _ADD_EXTRA_KAPPA
@@ -335,7 +336,7 @@ typedef struct {
   // ISW
   int do_isw; //Do you want to output isw maps?
   int n_isw; //How many maps?
-  double z_isw_out[NPOP_MAX]; //Array of source plane redshifts
+  double z_isw_out[NPLANES_MAX]; //Array of source plane redshifts
   int nside_isw;
   HealpixShells *pd_map; //Isw maps at each redshift
 #ifdef _ADD_EXTRA_ISW
@@ -372,7 +373,7 @@ void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
 void rng_gauss(gsl_rng *rng,double *r1,double *r2);
 void end_rng(gsl_rng *rng);
-unsigned long long get_max_memory(ParamCoLoRe *par);
+unsigned long long get_max_memory(ParamCoLoRe *par,int just_test);
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
 HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr);
@@ -400,11 +401,11 @@ double pk_linear0(ParamCoLoRe *par,double lgk);
 void cosmo_set(ParamCoLoRe *par);
 double r_of_z(ParamCoLoRe *par,double z);
 double get_bg(ParamCoLoRe *par,double r,int tag,int ipop);
-
+void compute_tracer_cosmo(ParamCoLoRe *par);
 
 //////
 // Functions defined in io.c
-ParamCoLoRe *read_run_params(char *fname);
+ParamCoLoRe *read_run_params(char *fname,int test_memory);
 void write_density_grid(ParamCoLoRe *par,char *prefix_dens);
 void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z);
 void write_srcs(ParamCoLoRe *par);
