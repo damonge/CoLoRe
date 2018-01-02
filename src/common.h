@@ -74,8 +74,8 @@
 
 //Interpolation type
 #ifndef INTERP_TYPE
-//#define INTERP_TYPE INTERP_CIC
-#define INTERP_TYPE INTERP_NGP
+#define INTERP_TYPE INTERP_CIC
+//#define INTERP_TYPE INTERP_NGP
 #endif //INTERP_TYPE
 
 //Resolution parameter for nearest onion shell
