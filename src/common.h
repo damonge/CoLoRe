@@ -422,6 +422,7 @@ void write_predictions(ParamCoLoRe *par);
 //////
 // Functions defined in fourier.c
 void init_fftw(ParamCoLoRe *par);
+void allocate_fftw(ParamCoLoRe *par);
 void create_cartesian_fields(ParamCoLoRe *par);
 void end_fftw(ParamCoLoRe *par);
 void fftw_wrap_c2r(int ng,dftw_complex *pin,flouble *pout);

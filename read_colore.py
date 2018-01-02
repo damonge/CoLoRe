@@ -84,8 +84,9 @@ def read_fits(fname) :
     while os.path.isfile(fname+"_%d.fits"%ifile) :
         fi=fits.open(fname+"_%d.fits"%ifile)
         data=(fi[1]).data
-        dens_skw=(fi[2]).data
-        vrad_skw=(fi[3]).data
+        if with_skewers :
+            dens_skw=(fi[2]).data
+            vrad_skw=(fi[3]).data
     
         ra_arr=np.concatenate((ra_arr,data['RA']))
         dec_arr=np.concatenate((dec_arr,data['DEC']))
@@ -116,13 +117,12 @@ elif fmt=='HDF5' :
 
 nside=64
 npix=hp.nside2npix(nside)
-mp=np.histogram(hp.ang2pix(nside,np.pi*(90-dec_arr[np.where(type_arr==0)])/180,np.pi*ra_arr[np.where(type_arr==0)]/180),bins=npix,range=[0,npix])[0]
-mpr=np.histogram(hp.ang2pix(nside,np.pi*(90-dec_arr[np.where(type_arr==0)])/180,np.pi*ra_arr[np.where(type_arr==0)]/180),bins=npix,range=[0,npix],weights=rsd_arr)[0]
-mpe1=np.histogram(hp.ang2pix(nside,np.pi*(90-dec_arr[np.where(type_arr==0)])/180,np.pi*ra_arr[np.where(type_arr==0)]/180),bins=npix,range=[0,npix],weights=e1_arr)[0]
-mpe2=np.histogram(hp.ang2pix(nside,np.pi*(90-dec_arr[np.where(type_arr==0)])/180,np.pi*ra_arr[np.where(type_arr==0)]/180),bins=npix,range=[0,npix],weights=e2_arr)[0]
+mp=np.histogram(hp.ang2pix(nside,np.pi*(90-dec_arr)/180,np.pi*ra_arr/180),bins=npix,range=[0,npix])[0]
+mpr=np.histogram(hp.ang2pix(nside,np.pi*(90-dec_arr)/180,np.pi*ra_arr/180),bins=npix,range=[0,npix],weights=rsd_arr)[0]
+mpe1=np.histogram(hp.ang2pix(nside,np.pi*(90-dec_arr)/180,np.pi*ra_arr/180),bins=npix,range=[0,npix],weights=e1_arr)[0]
+mpe2=np.histogram(hp.ang2pix(nside,np.pi*(90-dec_arr)/180,np.pi*ra_arr/180),bins=npix,range=[0,npix],weights=e2_arr)[0]
 plt.figure();
-plt.hist(z_arr[np.where(type_arr==0)],bins=100,histtype='step');
-plt.hist(z_arr[np.where(type_arr==1)],bins=100,histtype='step');
+plt.hist(z_arr,bins=100,histtype='step');
 plt.xlabel('$z$',fontsize=16); plt.ylabel('$N(z)$',fontsize=16);
 hp.mollview(mp,title='$N_g(\\hat{\\bf n})$')
 hp.mollview(mpr/mp,title='$v_r$')

@@ -334,10 +334,11 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
 {
   unsigned long long total_GB=0;
   unsigned long long total_GB_gau=0;
-  unsigned long long total_GB_pix=0;
   unsigned long long total_GB_lpt=0;
+  int fac_gau=2;
+  if(par->need_beaming) fac_gau=3;
 
-  total_GB_gau=(2*(par->nz_here+1)*((long)(par->n_grid*(par->n_grid/2+1))))*sizeof(dftw_complex);
+  total_GB_gau=(fac_gau*(par->nz_here+1)*((long)(par->n_grid*(par->n_grid/2+1))))*sizeof(dftw_complex);
 
   if(par->dens_type==DENS_TYPE_1LPT) {
     total_GB_lpt=(unsigned long long)(3*(1+par->lpt_buffer_fraction)*par->nz_here*
@@ -349,17 +350,106 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
 				      ((long)((par->n_grid/2+1)*par->n_grid))*sizeof(dftw_complex));
   }
 
-  total_GB=total_GB_gau+MAX(total_GB_lpt,total_GB_pix);
+  unsigned long long total_GB_srcs=0;
+  if(par->do_srcs) {
+    int ipop;
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      int nz,ii;
+      long nsrc=0;
+      double nztot=0;
+      FILE *fi=fopen(par->fnameNzSrcs[ipop],"r");
+
+      double *zarr,*nzarr;
+      if(fi==NULL) error_open_file(par->fnameNzSrcs[ipop]);
+      nz=linecount(fi); rewind(fi);
+      zarr=my_malloc(nz*sizeof(double));
+      nzarr=my_malloc(nz*sizeof(double));
+      for(ii=0;ii<nz;ii++) {
+	int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(nzarr[ii]));
+	if(stat!=2) error_read_line(par->fnameNzSrcs[ipop],ii+1);
+	nzarr[ii]*=RTOD*RTOD;
+      }
+      for(ii=0;ii<nz-1;ii++) {
+	if((zarr[ii]>=par->z_min) && (zarr[ii]<=par->z_max))
+	  nztot+=nzarr[ii]*(zarr[ii+1]-zarr[ii]);
+      }
+      if((zarr[ii]>=par->z_min) && (zarr[ii]<=par->z_max))
+	nztot+=nzarr[ii]*(zarr[ii+1]-zarr[ii]);
+      nztot*=4*M_PI/NNodes;
+      nsrc+=(long)(nztot);
+      free(zarr);
+      free(nzarr);
+      fclose(fi);
+
+      long size_source=sizeof(Src)+NPOS_CC*sizeof(float)+sizeof(int);
+      if(par->skw_srcs[ipop]) {
+	int nr=NSAMP_RAD*par->n_grid/2;
+	size_source+=2*nr*sizeof(float);
+      }
+      total_GB_srcs+=size_source*nsrc;
+    }
+  }
+  
+  unsigned long long total_GB_imap=0;
+  if(par->do_imap) {
+    int ipop;
+    for(ipop=0;ipop<par->n_imap;ipop++) {
+      int nr;
+      unsigned long long size_map=he_nside2npix(par->nside_imap[ipop]);
+      FILE *fnu=fopen(par->fnameNuImap[ipop],"r");
+      if(fnu==NULL) error_open_file(par->fnameNuImap[ipop]);
+      nr=linecount(fnu);
+      fclose(fnu);
+      total_GB_imap+=size_map*nr*(sizeof(flouble)+sizeof(int));
+    }
+  }
+
+  unsigned long long total_GB_kappa=0;
+  if(par->do_kappa) {
+    int ib;
+    int nr=par->n_kappa;
+    int nbases=he_nside2npix(par->nside_base);
+    int nside_ratio=par->nside_kappa/par->nside_base;
+    int npix_perbeam=nside_ratio*nside_ratio;
+    unsigned long long size_map=0;
+    for(ib=NodeThis;ib<nbases;ib+=NNodes)
+      size_map+=npix_perbeam;
+    total_GB_kappa+=size_map*nr*(sizeof(flouble)+sizeof(int));
+  }
+
+  unsigned long long total_GB_isw=0;
+  if(par->do_isw) {
+    int ib;
+    int nr=par->n_isw;
+    int nbases=he_nside2npix(par->nside_base);
+    int nside_ratio=par->nside_isw/par->nside_base;
+    int npix_perbeam=nside_ratio*nside_ratio;
+    unsigned long long size_map=0;
+    for(ib=NodeThis;ib<nbases;ib+=NNodes)
+      size_map+=npix_perbeam;
+    total_GB_isw+=size_map*nr*(sizeof(flouble)+sizeof(int));
+  }
+  total_GB=total_GB_gau+total_GB_lpt+total_GB_srcs+total_GB_imap+total_GB_kappa+total_GB_isw;
 
 #ifdef _DEBUG
-  printf("Node %d will allocate %.3lf GB (Gaussian)",NodeThis,(double)(total_GB_gau/pow(1024.,3)));
+  printf("Node %d will allocate %.3lf GB [",NodeThis,(double)(total_GB/pow(1024.,3)));
+  printf("%.3lf GB (Gaussian)",(double)(total_GB_gau/pow(1024.,3)));
   if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
     printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
-  printf("\n");
+  if(par->do_srcs)
+    printf(", %.3lf GB (srcs)",(double)(total_GB_srcs/pow(1024.,3)));
+  if(par->do_imap)
+    printf(", %.3lf GB (imap)",(double)(total_GB_imap/pow(1024.,3)));
+  if(par->do_kappa)
+    printf(", %.3lf MB (kappa)",(double)(total_GB_kappa/pow(1024.,2)));
+  if(par->do_isw)
+    printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
+  printf("]\n");
 #endif //_DEBUG
 
   void *ptest=my_malloc(total_GB);
   free(ptest);
+
   return total_GB;
 }
 

@@ -338,6 +338,32 @@ ParamCoLoRe *read_run_params(char *fname)
     conf_read_int(conf,"isw","nside",&(par->nside_isw));
   }
 
+#ifdef _DEBUG
+  sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
+  par->f_dbg=fopen(c_dum,"w");
+  if(par->f_dbg==NULL) error_open_file(c_dum);
+  if(NodeThis==0) {
+    sprintf(c_dum,"%s_params.cfg",par->prefixOut);
+    config_write_file(conf,c_dum);
+  }
+#endif //_DEBUG
+
+  config_destroy(conf);
+
+  if(par->r2_smooth>0) {
+    par->r2_smooth=pow(par->r2_smooth,2);
+    par->do_smoothing=1;
+  }
+  else
+    par->do_smoothing=0;
+
+  par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
+  init_fftw(par);
+
+  get_max_memory(par);
+
+  allocate_fftw(par);
+
   if(par->do_srcs) {
     par->cats_c=my_malloc(par->n_srcs*sizeof(CatalogCartesian *));
     par->cats=my_malloc(par->n_srcs*sizeof(CatalogCartesian *));
@@ -376,31 +402,8 @@ ParamCoLoRe *read_run_params(char *fname)
     par->cl_extra_isw=my_malloc(par->nside_isw*sizeof(flouble));
 #endif //_ADD_EXTRA_ISW
   }
-
-#ifdef _DEBUG
-  sprintf(c_dum,"%s_node%d.dbg",par->prefixOut,NodeThis);
-  par->f_dbg=fopen(c_dum,"w");
-  if(par->f_dbg==NULL) error_open_file(c_dum);
-  if(NodeThis==0) {
-    sprintf(c_dum,"%s_params.cfg",par->prefixOut);
-    config_write_file(conf,c_dum);
-  }
-#endif //_DEBUG
-
-  config_destroy(conf);
-
-  if(par->r2_smooth>0) {
-    par->r2_smooth=pow(par->r2_smooth,2);
-    par->do_smoothing=1;
-  }
-  else
-    par->do_smoothing=0;
+  
   cosmo_set(par);
-
-  init_fftw(par);
-
-  par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
-  get_max_memory(par);
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");
