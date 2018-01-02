@@ -87,6 +87,7 @@ static ParamCoLoRe *param_colore_new(void)
   //IO parameters
   sprintf(par->prefixOut,"default");
   par->output_format=0;
+  par->do_pred=0;
 
   //Tracers
   par->do_srcs=0;

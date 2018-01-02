@@ -415,8 +415,8 @@ void param_colore_free(ParamCoLoRe *par);
 
 
 /////
-// Functions defined in predictions.h
-//void write_predictions(ParamCoLoRe *par);
+// Functions defined in predictions.c
+void write_predictions(ParamCoLoRe *par);
 
 
 //////
@@ -429,12 +429,11 @@ void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout);
 
 
 //////
-// Functions defined in pixelization.c
+// Functions defined in beaming.c
 int interpolate_from_grid(ParamCoLoRe *par,double *x,
 			  flouble *d,flouble v[3],flouble t[6],flouble *pd,
 			  int flag_return);
 void get_beam_properties(ParamCoLoRe *par);
-//void pixelize(ParamCoLoRe *par);
 
 
 //////

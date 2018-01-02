@@ -98,10 +98,8 @@ int main(int argc,char **argv)
     write_kappa(par);
   if(par->do_isw)
     write_isw(par);
-  /*
   if(par->do_pred)
     write_predictions(par);
-  */
 
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
