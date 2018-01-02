@@ -339,11 +339,11 @@ typedef struct {
   double z_isw_out[NPLANES_MAX]; //Array of source plane redshifts
   int nside_isw;
   HealpixShells *pd_map; //Isw maps at each redshift
-#ifdef _ADD_EXTRA_ISW
+#ifdef _ADD_EXTRA_KAPPA
   int *need_extra_isw;
   flouble **fl_mean_extra_isw;
   flouble **cl_extra_isw;
-#endif //_ADD_EXTRA_ISW
+#endif //_ADD_EXTRA_KAPPA
 
   //Lognormal predictions
   int do_pred;

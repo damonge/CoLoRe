@@ -378,7 +378,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
       nztot*=4*M_PI/NNodes;
       nsrc+=(long)(nztot);
       if(just_test)
-	print_info(" Expect %ld type-%d sources\n",(long)(nztot),ipop);
+	print_info(" Expect %ld type-%d sources\n",(long)(nztot*NNodes),ipop);
       free(zarr);
       free(nzarr);
       fclose(fi);

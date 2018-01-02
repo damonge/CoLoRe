@@ -350,6 +350,19 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   }
 #endif //_DEBUG
 
+#ifdef _ADD_EXTRA_KAPPA
+  if(par->do_kappa) {
+    par->need_extra_kappa=my_calloc(par->n_kappa,sizeof(int));
+    par->fl_mean_extra_kappa=my_malloc(par->n_kappa*sizeof(flouble *));
+    par->cl_extra_kappa=my_malloc(par->n_kappa*sizeof(flouble *));
+  }
+  if(par->do_isw) {
+    par->need_extra_isw=my_calloc(par->n_isw,sizeof(int));
+    par->fl_mean_extra_isw=my_malloc(par->n_isw*sizeof(flouble *));
+    par->cl_extra_isw=my_malloc(par->n_isw*sizeof(flouble *));
+  }
+#endif //_ADD_EXTRA_KAPPA
+
   config_destroy(conf);
 
   if(par->r2_smooth>0) {
@@ -365,6 +378,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   get_max_memory(par,test_memory);
 
   cosmo_set(par);
+  print_info("\n");
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");
@@ -425,23 +439,11 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     }
   }
 
-  if(par->do_kappa) {
+  if(par->do_kappa)
     par->kmap=hp_shell_alloc(par->nside_kappa,par->nside_base,par->n_kappa);
-#ifdef _ADD_EXTRA_KAPPA
-    par->need_extra_kappa=my_calloc(par->nside_kappa,sizeof(int));
-    par->fl_mean_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
-    par->cl_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
-#endif //_ADD_EXTRA_KAPPA
-  }
 
-  if(par->do_isw) {
+  if(par->do_isw)
     par->pd_map=hp_shell_alloc(par->nside_isw,par->nside_base,par->n_isw);
-#ifdef _ADD_EXTRA_ISW
-    par->need_extra_isw=my_calloc(par->nside_isw,sizeof(int));
-    par->fl_mean_extra_isw=my_malloc(par->nside_isw*sizeof(flouble));
-    par->cl_extra_isw=my_malloc(par->nside_isw*sizeof(flouble));
-#endif //_ADD_EXTRA_ISW
-  }
   
   compute_tracer_cosmo(par);
   
@@ -752,7 +754,7 @@ void write_isw(ParamCoLoRe *par)
 	map_write[ip]/=map_nadd[ip];
     }
     
-#ifdef _ADD_EXTRA_ISW
+#ifdef _ADD_EXTRA_KAPPA
     if(par->need_extra_isw[ir]) {
       if(NodeThis==0) {
 	int lmax=3*par->pd_map->nside;
@@ -771,7 +773,7 @@ void write_isw(ParamCoLoRe *par)
 	free(map_mean);
       }
     }
-#endif //_ADD_EXTRA_ISW
+#endif //_ADD_EXTRA_KAPPA
     
     //Write dummy map
     if(NodeThis==0)
@@ -1032,7 +1034,7 @@ void param_colore_free(ParamCoLoRe *par)
 
   if(par->do_isw) {
     hp_shell_free(par->pd_map);
-#ifdef _ADD_EXTRA_ISW
+#ifdef _ADD_EXTRA_KAPPA
     for(ii=0;ii<par->n_isw;ii++) {
       if(par->need_extra_isw[ii]) {
     	free(par->fl_mean_extra_isw[ii]);
@@ -1042,7 +1044,7 @@ void param_colore_free(ParamCoLoRe *par)
     free(par->need_extra_isw);
     free(par->fl_mean_extra_isw);
     free(par->cl_extra_isw);
-#endif //_ADD_EXTRA_ISW
+#endif //_ADD_EXTRA_KAPPA
   }
 
 #ifdef _DEBUG

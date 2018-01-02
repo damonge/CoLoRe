@@ -701,7 +701,7 @@ void cosmo_set(ParamCoLoRe *par)
     for(ii=0;ii<par->n_isw;ii++) {
       double z=par->z_isw_out[ii];
       if(z>par->z_max) {
-#ifdef _ADD_EXTRA_ISW
+#ifdef _ADD_EXTRA_KAPPA
 	int l,nl=3*par->nside_isw;
 	double chi_here=r_of_z(par,z);
 #ifdef _DEBUG
@@ -730,9 +730,9 @@ void cosmo_set(ParamCoLoRe *par)
 	if(NodeThis==0)
 	  fprintf(par->f_dbg,"\n");
 #endif //_DEBUG
-#else //_ADD_EXTRA_ISW
+#else //_ADD_EXTRA_KAPPA
 	report_error(1,"Source plane %d outside redshift range\n",ii+1);
-#endif //_ADD_EXTRA_ISW
+#endif //_ADD_EXTRA_KAPPA
       }
     }
   }
@@ -753,8 +753,6 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
     for(ipop=0;ipop<par->n_imap;ipop++) {
       int ii;
       compute_hp_shell_distances_imap(par->imap[ipop],par->nu0_imap[ipop],par->fnameNuImap[ipop],pars);
-      for(ii=0;ii<par->imap[ipop]->nr;ii++)
-	print_info(" * %d %lE %lE\n",ii,par->imap[ipop]->r0[ii],par->imap[ipop]->rf[ii]);
     }
   }
   if(par->do_kappa) {
@@ -763,7 +761,6 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
       double z=par->z_kappa_out[ii];
       par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
       par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
-      print_info(" * %lE %lE\n",par->kmap->r0[ii],par->kmap->rf[ii]);
     }
   }
   if(par->do_isw) {
@@ -772,7 +769,6 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
       double z=par->z_isw_out[ii];
       par->pd_map->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
       par->pd_map->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
-      print_info(" * %lE %lE\n",par->pd_map->r0[ii],par->pd_map->rf[ii]);
     }
   }
 
