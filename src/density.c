@@ -1281,7 +1281,7 @@ void compute_density_normalization(ParamCoLoRe *par)
       print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_SRCS,ipop));
     for(ipop=0;ipop<par->n_imap;ipop++)
       print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_IMAP,ipop));
-    print_info("%llu\n",narr[iz]);
+    print_info("%011llu\n",narr[iz]);
   }
 #endif //_DEBUG
   if(NodeThis==0) timer(2);

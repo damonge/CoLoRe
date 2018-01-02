@@ -133,19 +133,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->nside_base=-1;
   par->npix_base=-1;
   par->need_beaming=0;
-  //STUFF TO CHECK
-  /*
-  par->n_beams_here=-1;
-  par->oi_beams=NULL;
-  par->dens_beams=NULL;
-  par->vrad_beams=NULL;
-  par->p_xx_beams=NULL;
-  par->p_xy_beams=NULL;
-  par->p_yy_beams=NULL;
-  par->pdot_beams=NULL;
-  par->nsrc_beams=NULL;
 
-  */
   return par;
 }
 
@@ -576,90 +564,33 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   fclose(fo);
 }
 
-/*
 void write_imap(ParamCoLoRe *par)
 {
-  int i_pop;
+  int ipop;
   char fname[256];
 
-  if(par->do_imap) {
-    if(NodeThis==0) timer(0);
-    print_info("*** Writing intensity maps\n");
-    for(i_pop=0;i_pop<par->n_imap;i_pop++) {
-      int ir;
-      long npx=he_nside2npix(par->imap[i_pop]->nside);
-      flouble *map_write=my_malloc(npx*sizeof(flouble));
-      int *map_nadd=my_malloc(npx*sizeof(int));
-      for(ir=0;ir<par->imap[i_pop]->nr;ir++) {
-	long ip;
-	long ir_t=ir*par->imap[i_pop]->num_pix;
-
-	//Write local pixels to dummy map
-	memset(map_write,0,npx*sizeof(flouble));
-	memset(map_nadd,0,npx*sizeof(int));
-	sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,i_pop,ir);
-	for(ip=0;ip<npx;ip++) {
-	  int id_pix=par->imap[i_pop]->listpix[ip];
-	  if(id_pix>=0) {
-	    map_write[ip]+=par->imap[i_pop]->data[ir_t+id_pix];
-	    map_nadd[ip]+=par->imap[i_pop]->nadd[ir_t+id_pix];
-	  }
-	}
-
-	//Collect all dummy maps
-#ifdef _HAVE_MPI
-	if(NodeThis==0)
-	  MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
-	else
-	  MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
-	if(NodeThis==0)
-	  MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-	else
-	  MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-#endif //_HAVE_MPI
-
-	for(ip=0;ip<npx;ip++) {
-	  if(map_nadd[ip]>0)
-	    map_write[ip]/=map_nadd[ip];
-	}
-
-	//Write dummy map
-	if(NodeThis==0)
-	  he_write_healpix_map(&map_write,1,par->imap[i_pop]->nside,fname,1);
-      }
-      free(map_write);
-      free(map_nadd);
-    }
-    if(NodeThis==0) timer(2);
-    print_info("\n");
-  }
-}
-*/
-
-void write_kappa(ParamCoLoRe *par)
-{
-  if(par->do_kappa) {
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing intensity maps\n");
+  for(ipop=0;ipop<par->n_imap;ipop++) {
     int ir;
-    char fname[256];
-    long npx=he_nside2npix(par->nside_kappa);
+    HealpixShells *imap=par->imap[ipop];
+    long npx=he_nside2npix(imap->nside);
     flouble *map_write=my_malloc(npx*sizeof(flouble));
     int *map_nadd=my_malloc(npx*sizeof(int));
-    if(NodeThis==0) timer(0);
-    print_info("*** Writing kappa source maps\n");
-    for(ir=0;ir<par->kmap->nr;ir++) {
+    print_info(" %d-th species\n",ipop);
+    for(ir=0;ir<imap->nr;ir++) {
       long ip;
-      long ir_t=ir*par->kmap->num_pix;
+      long ir_t=ir*imap->num_pix;
       
       //Write local pixels to dummy map
       for(ip=0;ip<npx;ip++) {
 	map_write[ip]=0;
 	map_nadd[ip]=0;
       }
-      sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
-      for(ip=0;ip<par->kmap->num_pix;ip++) {
-	int id_pix=par->kmap->listpix[ip];
-	map_write[id_pix]+=par->kmap->data[ir_t+ip];
-	map_nadd[ id_pix]+=par->kmap->nadd[ir_t+ip];
+      sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,ipop,ir);
+      for(ip=0;ip<npx;ip++) {
+	map_write[ip]+=imap->data[ir_t+ip];
+	map_nadd[ip]+=imap->nadd[ir_t+ip];
       }
       
       //Collect all dummy maps
@@ -673,305 +604,361 @@ void write_kappa(ParamCoLoRe *par)
       else
 	MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
-
+      
       for(ip=0;ip<npx;ip++) {
 	if(map_nadd[ip]>0)
 	  map_write[ip]/=map_nadd[ip];
       }
-
-#ifdef _ADD_EXTRA_KAPPA
-      if(par->need_extra_kappa[ir]) {
-	if(NodeThis==0) {
-	  int lmax=3*par->kmap->nside;
-	  flouble *map_extra;
-	  flouble *map_mean=my_calloc(npx,sizeof(flouble));
-	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
-	  print_info("Adding perturbations to kappa shell #%d\n",ir+1);
-	  he_map2alm(par->kmap->nside,lmax,1,&map_write,&alm);
-	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_kappa[ir]);
-	  he_alm2map(par->kmap->nside,lmax,1,&map_mean,&alm);
-	  free(alm);
-	  map_extra=he_synfast(par->cl_extra_kappa[ir],par->kmap->nside,lmax,par->seed_rng);
-	  for(ip=0;ip<npx;ip++)
-	    map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
-	  free(map_extra);
-	  free(map_mean);
-	}
-      }
-#endif //_ADD_EXTRA_KAPPA
-
+      
       //Write dummy map
       if(NodeThis==0)
-	he_write_healpix_map(&map_write,1,par->nside_kappa,fname,1);
+	he_write_healpix_map(&map_write,1,imap->nside,fname,0);
     }
     free(map_write);
     free(map_nadd);
-    if(NodeThis==0) timer(2);
-    print_info("\n");
   }
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+void write_kappa(ParamCoLoRe *par)
+{
+  int ir;
+  char fname[256];
+  long npx=he_nside2npix(par->nside_kappa);
+  flouble *map_write=my_malloc(npx*sizeof(flouble));
+  int *map_nadd=my_malloc(npx*sizeof(int));
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing kappa source maps\n");
+  for(ir=0;ir<par->kmap->nr;ir++) {
+    long ip;
+    long ir_t=ir*par->kmap->num_pix;
+    
+    //Write local pixels to dummy map
+    for(ip=0;ip<npx;ip++) {
+      map_write[ip]=0;
+      map_nadd[ip]=0;
+    }
+    sprintf(fname,"!%s_kappa_z%03d.fits",par->prefixOut,ir);
+    for(ip=0;ip<par->kmap->num_pix;ip++) {
+      int id_pix=par->kmap->listpix[ip];
+      map_write[id_pix]+=par->kmap->data[ir_t+ip];
+      map_nadd[ id_pix]+=par->kmap->nadd[ir_t+ip];
+    }
+    
+    //Collect all dummy maps
+#ifdef _HAVE_MPI
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+    
+    for(ip=0;ip<npx;ip++) {
+      if(map_nadd[ip]>0)
+	map_write[ip]/=map_nadd[ip];
+    }
+    
+#ifdef _ADD_EXTRA_KAPPA
+    if(par->need_extra_kappa[ir]) {
+      if(NodeThis==0) {
+	int lmax=3*par->kmap->nside;
+	flouble *map_extra;
+	flouble *map_mean=my_calloc(npx,sizeof(flouble));
+	fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
+	print_info("Adding perturbations to kappa shell #%d\n",ir+1);
+	he_map2alm(par->kmap->nside,lmax,1,&map_write,&alm);
+	he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_kappa[ir]);
+	he_alm2map(par->kmap->nside,lmax,1,&map_mean,&alm);
+	free(alm);
+	map_extra=he_synfast(par->cl_extra_kappa[ir],par->kmap->nside,lmax,par->seed_rng);
+	for(ip=0;ip<npx;ip++)
+	  map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
+	free(map_extra);
+	free(map_mean);
+      }
+    }
+#endif //_ADD_EXTRA_KAPPA
+    
+    //Write dummy map
+    if(NodeThis==0)
+      he_write_healpix_map(&map_write,1,par->nside_kappa,fname,1);
+  }
+  free(map_write);
+  free(map_nadd);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
 }
 
 void write_isw(ParamCoLoRe *par)
 {
-  if(par->do_isw) {
-    int ir;
-    char fname[256];
-    long npx=he_nside2npix(par->nside_isw);
-    flouble *map_write=my_malloc(npx*sizeof(flouble));
-    int *map_nadd=my_malloc(npx*sizeof(int));
-    if(NodeThis==0) timer(0);
-    print_info("*** Writing isw source maps\n");
-    for(ir=0;ir<par->pd_map->nr;ir++) {
-      long ip;
-      long ir_t=ir*par->pd_map->num_pix;
-      
-      //Write local pixels to dummy map
-      for(ip=0;ip<npx;ip++) {
-	map_write[ip]=0;
-	map_nadd[ip]=0;
-      }
-      sprintf(fname,"!%s_isw_z%03d.fits",par->prefixOut,ir);
-      for(ip=0;ip<par->pd_map->num_pix;ip++) {
-	int id_pix=par->pd_map->listpix[ip];
-	map_write[id_pix]+=par->pd_map->data[ir_t+ip];
-	map_nadd[ id_pix]+=par->pd_map->nadd[ir_t+ip];
-      }
-
-      //Collect all dummy maps
-#ifdef _HAVE_MPI
-      if(NodeThis==0)
-	MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
-      else
-	MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
-      if(NodeThis==0)
-	MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-      else
-	MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-#endif //_HAVE_MPI
-
-      for(ip=0;ip<npx;ip++) {
-	if(map_nadd[ip]>0)
-	  map_write[ip]/=map_nadd[ip];
-      }
-
-#ifdef _ADD_EXTRA_ISW
-      if(par->need_extra_isw[ir]) {
-	if(NodeThis==0) {
-	  int lmax=3*par->pd_map->nside;
-	  flouble *map_extra;
-	  flouble *map_mean=my_calloc(npx,sizeof(flouble));
-	  fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
-	  print_info("Adding perturbations to isw shell #%d\n",ir+1);
-	  he_map2alm(par->pd_map->nside,lmax,1,&map_write,&alm);
-	  he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_isw[ir]);
-	  he_alm2map(par->pd_map->nside,lmax,1,&map_mean,&alm);
-	  free(alm);
-	  map_extra=he_synfast(par->cl_extra_isw[ir],par->pd_map->nside,lmax,par->seed_rng);
-	  for(ip=0;ip<npx;ip++)
-	    map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
-	  free(map_extra);
-	  free(map_mean);
-	}
-      }
-#endif //_ADD_EXTRA_ISW
-
-      //Write dummy map
-      if(NodeThis==0)
-	he_write_healpix_map(&map_write,1,par->nside_isw,fname,1);
+  int ir;
+  char fname[256];
+  long npx=he_nside2npix(par->nside_isw);
+  flouble *map_write=my_malloc(npx*sizeof(flouble));
+  int *map_nadd=my_malloc(npx*sizeof(int));
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing isw source maps\n");
+  for(ir=0;ir<par->pd_map->nr;ir++) {
+    long ip;
+    long ir_t=ir*par->pd_map->num_pix;
+    
+    //Write local pixels to dummy map
+    for(ip=0;ip<npx;ip++) {
+      map_write[ip]=0;
+      map_nadd[ip]=0;
     }
-    free(map_write);
-    free(map_nadd);
-    if(NodeThis==0) timer(2);
-    print_info("\n");
+    sprintf(fname,"!%s_isw_z%03d.fits",par->prefixOut,ir);
+    for(ip=0;ip<par->pd_map->num_pix;ip++) {
+      int id_pix=par->pd_map->listpix[ip];
+      map_write[id_pix]+=par->pd_map->data[ir_t+ip];
+      map_nadd[ id_pix]+=par->pd_map->nadd[ir_t+ip];
+    }
+    
+    //Collect all dummy maps
+#ifdef _HAVE_MPI
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+    
+    for(ip=0;ip<npx;ip++) {
+      if(map_nadd[ip]>0)
+	map_write[ip]/=map_nadd[ip];
+    }
+    
+#ifdef _ADD_EXTRA_ISW
+    if(par->need_extra_isw[ir]) {
+      if(NodeThis==0) {
+	int lmax=3*par->pd_map->nside;
+	flouble *map_extra;
+	flouble *map_mean=my_calloc(npx,sizeof(flouble));
+	fcomplex *alm=my_malloc(he_nalms(lmax)*sizeof(fcomplex));
+	print_info("Adding perturbations to isw shell #%d\n",ir+1);
+	he_map2alm(par->pd_map->nside,lmax,1,&map_write,&alm);
+	he_alter_alm(lmax,0,alm,alm,par->fl_mean_extra_isw[ir]);
+	he_alm2map(par->pd_map->nside,lmax,1,&map_mean,&alm);
+	free(alm);
+	map_extra=he_synfast(par->cl_extra_isw[ir],par->pd_map->nside,lmax,par->seed_rng);
+	for(ip=0;ip<npx;ip++)
+	  map_write[ip]=map_write[ip]+map_mean[ip]+map_extra[ip];
+	free(map_extra);
+	free(map_mean);
+      }
+    }
+#endif //_ADD_EXTRA_ISW
+    
+    //Write dummy map
+    if(NodeThis==0)
+      he_write_healpix_map(&map_write,1,par->nside_isw,fname,1);
   }
+  free(map_write);
+  free(map_nadd);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
 }
 
-void write_catalog(ParamCoLoRe *par,int ipop)
+static void write_catalog(ParamCoLoRe *par,int ipop)
 {
   char fname[256];
 
-  if(par->do_srcs) {
-    if(NodeThis==0) timer(0);
-    if(par->output_format==2) { //HDF5
+  if(NodeThis==0) timer(0);
+  if(par->output_format==2) { //HDF5
 #ifdef _HAVE_HDF5
-      hid_t file_id,gal_types[6];
-      hsize_t chunk_size=128;
-      size_t dst_offset[6]={HOFFSET(Src,ra),HOFFSET(Src,dec),HOFFSET(Src,z0),HOFFSET(Src,dz_rsd),HOFFSET(Src,e1),HOFFSET(Src,e2)};
-      const char *names[6]={"RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
-      char *tunit[6]=      {"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
-      gal_types[0]=H5T_NATIVE_FLOAT;
-      gal_types[1]=H5T_NATIVE_FLOAT;
-      gal_types[2]=H5T_NATIVE_FLOAT;
-      gal_types[3]=H5T_NATIVE_FLOAT;
-      gal_types[4]=H5T_NATIVE_FLOAT;
-      gal_types[5]=H5T_NATIVE_FLOAT;
-
-      print_info("*** Writing catalog (HDF5)\n");
-      sprintf(fname,"%s_srcs_s%d_%d.h5",par->prefixOut,ipop,NodeThis);
-
-      //Create file
-      file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
-      //Write table for each galaxy type
-      char table_title[256],table_name[256];
-      sprintf(table_title,"sources%d_data",ipop);
-      sprintf(table_name,"/sources%d",ipop);
-      H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[ipop],sizeof(Src),
-		     names,dst_offset,gal_types,chunk_size,NULL,0,par->cats[ipop]->srcs);
-      H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
-      H5LTset_attribute_string(file_id,table_name,"FIELD_1_UNITS",tunit[1]);
-      H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
-      H5LTset_attribute_string(file_id,table_name,"FIELD_3_UNITS",tunit[3]);
-      H5LTset_attribute_string(file_id,table_name,"FIELD_4_UNITS",tunit[4]);
-      H5LTset_attribute_string(file_id,table_name,"FIELD_5_UNITS",tunit[5]);
-
-      //End file
-      H5Fclose(file_id);
+    hid_t file_id,gal_types[6];
+    hsize_t chunk_size=128;
+    size_t dst_offset[6]={HOFFSET(Src,ra),HOFFSET(Src,dec),HOFFSET(Src,z0),HOFFSET(Src,dz_rsd),HOFFSET(Src,e1),HOFFSET(Src,e2)};
+    const char *names[6]={"RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
+    char *tunit[6]=      {"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
+    gal_types[0]=H5T_NATIVE_FLOAT;
+    gal_types[1]=H5T_NATIVE_FLOAT;
+    gal_types[2]=H5T_NATIVE_FLOAT;
+    gal_types[3]=H5T_NATIVE_FLOAT;
+    gal_types[4]=H5T_NATIVE_FLOAT;
+    gal_types[5]=H5T_NATIVE_FLOAT;
+    
+    print_info(" %d-th population (HDF5)\n",ipop);
+    sprintf(fname,"%s_srcs_s%d_%d.h5",par->prefixOut,ipop,NodeThis);
+    
+    //Create file
+    file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
+    //Write table for each galaxy type
+    char table_title[256],table_name[256];
+    sprintf(table_title,"sources%d_data",ipop);
+    sprintf(table_name,"/sources%d",ipop);
+    H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[ipop],sizeof(Src),
+		   names,dst_offset,gal_types,chunk_size,NULL,0,par->cats[ipop]->srcs);
+    H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
+    H5LTset_attribute_string(file_id,table_name,"FIELD_1_UNITS",tunit[1]);
+    H5LTset_attribute_string(file_id,table_name,"FIELD_2_UNITS",tunit[2]);
+    H5LTset_attribute_string(file_id,table_name,"FIELD_3_UNITS",tunit[3]);
+    H5LTset_attribute_string(file_id,table_name,"FIELD_4_UNITS",tunit[4]);
+    H5LTset_attribute_string(file_id,table_name,"FIELD_5_UNITS",tunit[5]);
+    
+    //End file
+    H5Fclose(file_id);
 #else //_HAVE_HDF5
-      printf("HDF5 not supported\n");
+    printf("HDF5 not supported\n");
 #endif //_HAVE_HDF5
-    }
-    else if(par->output_format==1) { //FITS
+  }
+  else if(par->output_format==1) { //FITS
 #ifdef _HAVE_FITS
-      long ii,nrw=0;
-      int status=0;
-      fitsfile *fptr;
-      int *type_arr;
-      float *ra_arr,*dec_arr,*z0_arr,*rsd_arr,*e1_arr,*e2_arr;
-      int nfields=5;
-      char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
-      char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    ,"1E","1E"};
-      char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
-      if(par->do_lensing)
-	nfields=7;
-
-      print_info("*** Writing catalog (FITS)\n");
-      sprintf(fname,"!%s_srcs_s%d_%d.fits",par->prefixOut,ipop,NodeThis);
+    long ii,nrw=0;
+    int status=0;
+    fitsfile *fptr;
+    int *type_arr;
+    float *ra_arr,*dec_arr,*z0_arr,*rsd_arr,*e1_arr,*e2_arr;
+    int nfields=5;
+    char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
+    char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    ,"1E","1E"};
+    char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
+    if(par->do_lensing)
+      nfields=7;
+    
+    print_info(" %d-th population (FITS)\n",ipop);
+    sprintf(fname,"!%s_srcs_s%d_%d.fits",par->prefixOut,ipop,NodeThis);
+    
+    fits_create_file(&fptr,fname,&status);
+    fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
+    fits_update_key(fptr,TSTRING,"CONTENTS","Source catalog",NULL,&status);
+    
+    fits_get_rowsize(fptr,&nrw,&status);
+    type_arr=my_malloc(nrw*sizeof(int));
+    ra_arr=my_malloc(nrw*sizeof(float));
+    dec_arr=my_malloc(nrw*sizeof(float));
+    z0_arr=my_malloc(nrw*sizeof(float));
+    rsd_arr=my_malloc(nrw*sizeof(float));
+    e1_arr=my_malloc(nrw*sizeof(float));
+    e2_arr=my_malloc(nrw*sizeof(float));
+    
+    long row_here=0;
+    while(row_here<par->nsources_this[ipop]) {
+      long nrw_here;
+      if(row_here+nrw>par->nsources_this[ipop])
+	nrw_here=par->nsources_this[ipop]-row_here;
+      else
+	nrw_here=nrw;
       
-      fits_create_file(&fptr,fname,&status);
-      fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
-      fits_update_key(fptr,TSTRING,"CONTENTS","Source catalog",NULL,&status);
-
-      fits_get_rowsize(fptr,&nrw,&status);
-      type_arr=my_malloc(nrw*sizeof(int));
-      ra_arr=my_malloc(nrw*sizeof(float));
-      dec_arr=my_malloc(nrw*sizeof(float));
-      z0_arr=my_malloc(nrw*sizeof(float));
-      rsd_arr=my_malloc(nrw*sizeof(float));
-      e1_arr=my_malloc(nrw*sizeof(float));
-      e2_arr=my_malloc(nrw*sizeof(float));
-
-      long row_here=0;
-      while(row_here<par->nsources_this[ipop]) {
-	long nrw_here;
-	if(row_here+nrw>par->nsources_this[ipop])
-	  nrw_here=par->nsources_this[ipop]-row_here;
-	else
-	  nrw_here=nrw;
-	
-	for(ii=0;ii<nrw_here;ii++) {
-	  type_arr[ii]=ipop;
-	  ra_arr[ii]=par->cats[ipop]->srcs[row_here+ii].ra;
-	  dec_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dec;
-	  z0_arr[ii]=par->cats[ipop]->srcs[row_here+ii].z0;
-	  rsd_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dz_rsd;
-	  if(par->do_lensing) {
+      for(ii=0;ii<nrw_here;ii++) {
+	type_arr[ii]=ipop;
+	ra_arr[ii]=par->cats[ipop]->srcs[row_here+ii].ra;
+	dec_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dec;
+	z0_arr[ii]=par->cats[ipop]->srcs[row_here+ii].z0;
+	rsd_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dz_rsd;
+	if(par->do_lensing) {
 	    e1_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e1;
 	    e2_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e2;
-	  }
 	}
-	fits_write_col(fptr,TINT  ,1,row_here+1,1,nrw_here,type_arr,&status);
-	fits_write_col(fptr,TFLOAT,2,row_here+1,1,nrw_here,ra_arr,&status);
-	fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,dec_arr,&status);
-	fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,z0_arr,&status);
-	fits_write_col(fptr,TFLOAT,5,row_here+1,1,nrw_here,rsd_arr,&status);
-	if(par->do_lensing) {
-	  fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
-	  fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
-	}
-
-	row_here+=nrw_here;
       }
-
-      if(par->cats[ipop]->has_skw) {
-	int ir;
-	long nelements,naxis=2;
-	long naxes[2];
-
-	//Write density skewers
-	naxes[0]=par->cats[ipop]->nr;
-	naxes[1]=par->cats[ipop]->nsrc;
-	nelements=naxes[0]*naxes[1];
-	fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
-	fits_update_key(fptr, TSTRING, "CONTENTS", "density skewers",NULL, &status);
-	fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->d_skw,&status);
-
-	//Write velocity skewers
-	fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
-	fits_update_key(fptr, TSTRING, "CONTENTS", "velocity skewers",NULL, &status);
-	fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->v_skw,&status);
-
-	//Write slicing information
-	float *ra=my_malloc(par->cats[ipop]->nr*sizeof(float));
-	float *za=my_malloc(par->cats[ipop]->nr*sizeof(float));
-	float *gda=my_malloc(par->cats[ipop]->nr*sizeof(float));
-	float *gva=my_malloc(par->cats[ipop]->nr*sizeof(float));
-	char *tt[]={"R","Z","D","V"};
-	char *tf[]={"1E","1E","1E","1E"};
-	char *tu[]={"MPC_H","NA","NA","NA"};
-	for(ir=0;ir<par->cats[ipop]->nr;ir++) {
-	  double r=par->cats[ipop]->dr*(ir+0.5);
-	  ra[ir]=r;
-	  za[ir]=get_bg(par,r,BG_Z,0);
-	  gda[ir]=get_bg(par,r,BG_D1,0);
-	  gva[ir]=get_bg(par,r,BG_V1,0);
-	}
-	fits_create_tbl(fptr,BINARY_TBL,0,4,tt,tf,tu,NULL,&status);
-	fits_update_key(fptr,TSTRING,"CONTENTS","Background cosmology",NULL,&status);
-	fits_write_col(fptr,TFLOAT,1,1,1,par->cats[ipop]->nr,ra,&status);
-	fits_write_col(fptr,TFLOAT,2,1,1,par->cats[ipop]->nr,za,&status);
-	fits_write_col(fptr,TFLOAT,3,1,1,par->cats[ipop]->nr,gda,&status);
-	fits_write_col(fptr,TFLOAT,4,1,1,par->cats[ipop]->nr,gva,&status);
-	free(ra); free(za); free(gda); free(gva);
+      fits_write_col(fptr,TINT  ,1,row_here+1,1,nrw_here,type_arr,&status);
+      fits_write_col(fptr,TFLOAT,2,row_here+1,1,nrw_here,ra_arr,&status);
+      fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,dec_arr,&status);
+      fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,z0_arr,&status);
+      fits_write_col(fptr,TFLOAT,5,row_here+1,1,nrw_here,rsd_arr,&status);
+      if(par->do_lensing) {
+	fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
+	fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
       }
       
-      fits_close_file(fptr,&status);
-      free(ra_arr);
-      free(dec_arr);
-      free(z0_arr);
-      free(rsd_arr);
-      free(type_arr);
-      free(e1_arr);
-      free(e2_arr);
-#else //_HAVE_FITS
-      printf("FITS not supported\n");
-#endif //_HAVE_FITS
+      row_here+=nrw_here;
     }
-    else {
-      print_info("*** Writing catalog (ASCII)\n");
-      sprintf(fname,"%s_srcs_s%d_%d.txt",par->prefixOut,ipop,NodeThis);
-
-      long jj;
-      FILE *fil=fopen(fname,"w");
-      if(fil==NULL) error_open_file(fname);
-      fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");
+    
+    if(par->cats[ipop]->has_skw) {
+      int ir;
+      long nelements,naxis=2;
+      long naxes[2];
+      
+      //Write density skewers
+      naxes[0]=par->cats[ipop]->nr;
+      naxes[1]=par->cats[ipop]->nsrc;
+      nelements=naxes[0]*naxes[1];
+      fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
+      fits_update_key(fptr, TSTRING, "CONTENTS", "density skewers",NULL, &status);
+      fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->d_skw,&status);
+      
+      //Write velocity skewers
+      fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
+      fits_update_key(fptr, TSTRING, "CONTENTS", "velocity skewers",NULL, &status);
+      fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->v_skw,&status);
+      
+      //Write slicing information
+      float *ra=my_malloc(par->cats[ipop]->nr*sizeof(float));
+      float *za=my_malloc(par->cats[ipop]->nr*sizeof(float));
+      float *gda=my_malloc(par->cats[ipop]->nr*sizeof(float));
+      float *gva=my_malloc(par->cats[ipop]->nr*sizeof(float));
+      char *tt[]={"R","Z","D","V"};
+      char *tf[]={"1E","1E","1E","1E"};
+      char *tu[]={"MPC_H","NA","NA","NA"};
+      for(ir=0;ir<par->cats[ipop]->nr;ir++) {
+	double r=par->cats[ipop]->dr*(ir+0.5);
+	ra[ir]=r;
+	za[ir]=get_bg(par,r,BG_Z,0);
+	gda[ir]=get_bg(par,r,BG_D1,0);
+	gva[ir]=get_bg(par,r,BG_V1,0);
+      }
+      fits_create_tbl(fptr,BINARY_TBL,0,4,tt,tf,tu,NULL,&status);
+      fits_update_key(fptr,TSTRING,"CONTENTS","Background cosmology",NULL,&status);
+      fits_write_col(fptr,TFLOAT,1,1,1,par->cats[ipop]->nr,ra,&status);
+      fits_write_col(fptr,TFLOAT,2,1,1,par->cats[ipop]->nr,za,&status);
+      fits_write_col(fptr,TFLOAT,3,1,1,par->cats[ipop]->nr,gda,&status);
+      fits_write_col(fptr,TFLOAT,4,1,1,par->cats[ipop]->nr,gva,&status);
+      free(ra); free(za); free(gda); free(gva);
+    }
+    
+    fits_close_file(fptr,&status);
+    free(ra_arr);
+    free(dec_arr);
+    free(z0_arr);
+    free(rsd_arr);
+    free(type_arr);
+    free(e1_arr);
+    free(e2_arr);
+#else //_HAVE_FITS
+    printf("FITS not supported\n");
+#endif //_HAVE_FITS
+  }
+  else {
+    print_info(" %d-th population (ASCII)\n",ipop);
+    sprintf(fname,"%s_srcs_s%d_%d.txt",par->prefixOut,ipop,NodeThis);
+    
+    long jj;
+    FILE *fil=fopen(fname,"w");
+    if(fil==NULL) error_open_file(fname);
+    fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");
+    if(par->do_lensing)
+      fprintf(fil,"#[6]e1, [7]e2\n");
+    else
+      fprintf(fil,"\n");
+    for(jj=0;jj<par->nsources_this[ipop];jj++) {
+      fprintf(fil,"%d %E %E %E %E ",
+	      ipop,par->cats[ipop]->srcs[jj].ra,par->cats[ipop]->srcs[jj].dec,
+	      par->cats[ipop]->srcs[jj].z0,par->cats[ipop]->srcs[jj].dz_rsd);
       if(par->do_lensing)
-	fprintf(fil,"#[6]e1, [7]e2\n");
+	fprintf(fil,"%E %E \n",par->cats[ipop]->srcs[jj].e1,par->cats[ipop]->srcs[jj].e2);
       else
 	fprintf(fil,"\n");
-      for(jj=0;jj<par->nsources_this[ipop];jj++) {
-	fprintf(fil,"%d %E %E %E %E ",
-		ipop,par->cats[ipop]->srcs[jj].ra,par->cats[ipop]->srcs[jj].dec,
-		par->cats[ipop]->srcs[jj].z0,par->cats[ipop]->srcs[jj].dz_rsd);
-	if(par->do_lensing)
-	  fprintf(fil,"%E %E \n",par->cats[ipop]->srcs[jj].e1,par->cats[ipop]->srcs[jj].e2);
-	else
-	  fprintf(fil,"\n");
-      }
-      fclose(fil);
     }
-    if(NodeThis==0) timer(2);
-    print_info("\n");
+    fclose(fil);
   }
+  if(NodeThis==0) timer(2);
+}
+
+void write_srcs(ParamCoLoRe *par)
+{
+  print_info("*** Writing source catalogs\n");
+  int ipop;
+  for(ipop=0;ipop<par->n_srcs;ipop++)
+    write_catalog(par,ipop);
+  print_info("\n");
 }
 
 void param_colore_free(ParamCoLoRe *par)

@@ -54,17 +54,11 @@ int main(int argc,char **argv)
   //Compute normalization of density field for biasing
   compute_density_normalization(par);
 
-  /*
-  //Precompute lensing if needed
-
-  //Precompute isw if needed
-  if(par->do_isw)
-    integrate_isw(par);
-  */
-
   //Get information from slabs
   if(par->do_srcs)
     srcs_set_cartesian(par);
+  if(par->do_imap)
+    imap_set_cartesian(par);
   if(par->do_kappa)
     kappa_set_cartesian(par);
   if(par->do_isw)
@@ -73,6 +67,8 @@ int main(int argc,char **argv)
   //Distribute information across
   if(par->do_srcs)
     srcs_distribute(par);
+  if(par->do_imap)
+    imap_distribute(par);
   if(par->do_kappa)
     kappa_distribute(par);
   if(par->do_isw)
@@ -81,6 +77,8 @@ int main(int argc,char **argv)
   //Postprocess after 
   if(par->do_srcs)
     srcs_get_local_properties(par);
+  if(par->do_imap)
+    imap_get_local_properties(par);
   if(par->do_kappa)
     kappa_get_local_properties(par);
   if(par->do_isw)
@@ -91,22 +89,11 @@ int main(int argc,char **argv)
   if(par->need_beaming)
     get_beam_properties(par);
 
-  /*
-  //Generate intensity maps
-  if(par->do_imap)
-    get_imap(par);
-  */
   //Write output
-  if(par->do_srcs) {
-    int i_pop;
-    for(i_pop=0;i_pop<par->n_srcs;i_pop++)
-      write_catalog(par,i_pop);
-  }
-
-  /*
+  if(par->do_srcs)
+    write_srcs(par);
   if(par->do_imap)
     write_imap(par);
-  */
   if(par->do_kappa)
     write_kappa(par);
   if(par->do_isw)

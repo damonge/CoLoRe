@@ -140,7 +140,6 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 
     end_rng(rng_thr);
   }//end omp parallel
-  if(NodeThis==0) timer(2);
 
   par->nsources_c_this[ipop]=0;
   for(ii=0;ii<nthr;ii++)
@@ -170,7 +169,6 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 
   par->cats_c[ipop]=catalog_cartesian_alloc(par->nsources_c_this[ipop]);
   
-  if(NodeThis==0) timer(0);
   print_info("   Assigning coordinates\n");
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none)			\
@@ -371,13 +369,9 @@ static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
 
 void srcs_get_local_properties(ParamCoLoRe *par)
 {
-  if(NodeThis==0) timer(0);
   int ipop;
-  print_info("*** Computing source properties\n");
   for(ipop=0;ipop<par->n_srcs;ipop++)
     srcs_get_local_properties_single(par,ipop);
-  if(NodeThis==0) timer(2);
-  print_info("\n");
 }
 
 static void srcs_beams_preproc_single(ParamCoLoRe *par,int ipop)

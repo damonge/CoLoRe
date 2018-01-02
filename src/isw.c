@@ -56,12 +56,16 @@ void isw_beams_preproc(ParamCoLoRe *par)
   free(i_sorted);
 
   //Zero all data and clear
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none)		\
   shared(par)
+#endif //_HAVE_OMP
   {
     long ipp;
 
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ipp=0;ipp<par->pd_map->num_pix*par->pd_map->nr;ipp++) {
       par->pd_map->data[ipp]=0;
       par->pd_map->nadd[ipp]=1;
@@ -75,8 +79,10 @@ void isw_get_beam_properties(ParamCoLoRe *par)
 {
   HealpixShells *pd_map=par->pd_map;
 
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none)		\
   shared(par,pd_map)
+#endif //_HAVE_OMP
   {
     double idx=par->n_grid/par->l_box;
 
@@ -106,7 +112,9 @@ void isw_get_beam_properties(ParamCoLoRe *par)
     }
 
     long ip;
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ip=0;ip<pd_map->num_pix;ip++) {
       int ax,added;
       flouble pd;

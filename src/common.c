@@ -328,151 +328,6 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th
   (*phi)+=(rng_01(rng)-0.5)*0.57/(nside*n_extra);
   (*th)+=(rng_01(rng)-0.5)*0.57/(nside*n_extra);
 }
-
-static OnionInfo *alloc_onion_empty(ParamCoLoRe *par,int nside_base)
-{
-  int ir;
-  OnionInfo *oi=my_malloc(sizeof(OnionInfo));
-  double dx=par->l_box/par->n_grid;
-  double dr=FAC_CART2SPH_PAR*dx;
-
-  oi->nr=(int)(par->r_max/dr+1);
-  dr=par->r_max/oi->nr; //Redefine radial interval
-  oi->r0_arr=my_malloc(oi->nr*sizeof(flouble));
-  oi->rf_arr=my_malloc(oi->nr*sizeof(flouble));
-  oi->nside_arr=my_malloc(oi->nr*sizeof(int));
-  oi->nside_ratio_arr=my_malloc(oi->nr*sizeof(int));
-  oi->ipix0_arr=my_malloc(oi->nr*sizeof(int));
-  oi->num_pix=my_malloc(oi->nr*sizeof(int));
-
-  for(ir=0;ir<oi->nr;ir++) {
-    int nside_here=nside_base;
-    flouble rm=(ir+0.5)*dr;
-    flouble dr_trans=rm*sqrt(M_PI/3)/nside_here;
-    oi->r0_arr[ir]=ir*dr;
-    oi->rf_arr[ir]=(ir+1)*dr;
-
-    while((dr_trans>FAC_CART2SPH_PERP*dx) && (nside_here<NSIDE_MAX_HPX)) {
-      nside_here*=2;
-      dr_trans=rm*sqrt(M_PI/3)/nside_here;
-    }
-    oi->nside_arr[ir]=nside_here;
-  }
-
-  return oi;
-}
-
-OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par)
-{
-  int i_base,ir,i_base_here;
-  OnionInfo **oi;
-  OnionInfo *oi_dum=alloc_onion_empty(par,par->nside_base);
-  int nside_base=oi_dum->nside_arr[0];
-  int npix_base=he_nside2npix(nside_base);
-  int nbase_per_node=npix_base/NNodes;
-  int nbase_extra=npix_base%NNodes;
-  int nbase_here=nbase_per_node;
-  if(NodeThis<nbase_extra)
-    nbase_here++;
-  free_onion_info(oi_dum);
-
-  par->n_beams_here=nbase_here;
-
-  oi=my_malloc(nbase_here*sizeof(OnionInfo *));
-  for(i_base=0;i_base<nbase_here;i_base++)
-    oi[i_base]=alloc_onion_empty(par,nside_base);
-
-  i_base_here=0;
-  for(i_base=0;i_base<npix_base;i_base++) {
-    if(i_base%NNodes==NodeThis) {
-      for(ir=0;ir<oi[i_base_here]->nr;ir++) {
-	int nside_ratio=oi[i_base_here]->nside_arr[ir]/nside_base;
-	oi[i_base_here]->nside_ratio_arr[ir]=nside_ratio;
-	oi[i_base_here]->ipix0_arr[ir]=i_base*nside_ratio*nside_ratio;
-	oi[i_base_here]->num_pix[ir]=nside_ratio*nside_ratio;
-      }
-      i_base_here++;
-    }
-  }
-
-#ifdef _DEBUG
-  double dx=par->l_box/par->n_grid;
-  fprintf(par->f_dbg,"Beams: %d\n",par->n_beams_here);
-  for(ir=0;ir<oi[0]->nr;ir++) {
-    int ib;
-    double r0=oi[0]->r0_arr[ir];
-    double rf=oi[0]->rf_arr[ir];
-    double rm=0.5*(r0+rf);
-    int nside_here=oi[0]->nside_arr[ir];
-    fprintf(par->f_dbg,
-	    "  Shell %d, r=%lf, nside=%d, angular resolution %lf Mpc/h, cell size %lf",
-	    ir,rm,nside_here,rm*sqrt(M_PI/3)/nside_here,dx);
-    fprintf(par->f_dbg,"[ ");
-    for(ib=0;ib<par->n_beams_here;ib++)
-      fprintf(par->f_dbg,"%d ",oi[ib]->num_pix[ir]);
-    fprintf(par->f_dbg,"]\n");
-  }
-#endif //_DEBUG
-
-  return oi;
-}
-
-void free_onion_info(OnionInfo *oi)
-{
-  if(oi->nr>0) {
-    free(oi->r0_arr);
-    free(oi->rf_arr);
-    free(oi->nside_arr);
-    free(oi->nside_ratio_arr);
-    free(oi->ipix0_arr);
-    free(oi->num_pix);
-  }
-  free(oi);
-}
-
-void free_beams(ParamCoLoRe *par)
-{
-  int ib;
-
-  for(ib=0;ib<par->n_beams_here;ib++) {
-    int ii;
-    for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
-      free(par->dens_beams[ib][ii]);
-      free(par->vrad_beams[ib][ii]);
-      if(par->do_lensing) {
-	free(par->p_xx_beams[ib][ii]);
-	free(par->p_xy_beams[ib][ii]);
-	free(par->p_yy_beams[ib][ii]);
-      }
-      if(par->do_isw) {
-	free(par->pdot_beams[ib][ii]);
-      }
-      free(par->nsrc_beams[ib][ii]);
-    }
-    free(par->dens_beams[ib]);
-    free(par->vrad_beams[ib]);
-    if(par->do_lensing) {
-      free(par->p_xx_beams[ib]);
-      free(par->p_xy_beams[ib]);
-      free(par->p_yy_beams[ib]);
-    }
-    if(par->do_isw) {
-      free(par->pdot_beams[ib]);
-    }
-    free(par->nsrc_beams[ib]);
-  }
-  free(par->dens_beams);
-  free(par->vrad_beams);
-  if(par->do_lensing) {
-    free(par->p_xx_beams);
-    free(par->p_xy_beams);
-    free(par->p_yy_beams);
-  }
-  if(par->do_isw) {
-    free(par->pdot_beams);
-  }
-  free(par->nsrc_beams);
-}
 */
 
 unsigned long long get_max_memory(ParamCoLoRe *par)
@@ -483,27 +338,6 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
   unsigned long long total_GB_lpt=0;
 
   total_GB_gau=(2*(par->nz_here+1)*((long)(par->n_grid*(par->n_grid/2+1))))*sizeof(dftw_complex);
-
-  /*
-  if(par->need_onions) {
-    int ib;
-    for(ib=0;ib<par->n_beams_here;ib++) {
-      int ii;
-      for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
-	total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-	total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-	if(par->do_lensing) {
-	  total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-	  total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-	  total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-	}
-	if(par->do_isw)
-	  total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(flouble);
-	total_GB_pix+=par->oi_beams[ib]->num_pix[ii]*sizeof(int);
-      }
-    }
-  }
-  */
 
   if(par->dens_type==DENS_TYPE_1LPT) {
     total_GB_lpt=(unsigned long long)(3*(1+par->lpt_buffer_fraction)*par->nz_here*
@@ -521,8 +355,6 @@ unsigned long long get_max_memory(ParamCoLoRe *par)
   printf("Node %d will allocate %.3lf GB (Gaussian)",NodeThis,(double)(total_GB_gau/pow(1024.,3)));
   if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
     printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
-  //  if(par->need_onions)
-  //    printf(", %.3lf GB (pixels)",(double)(total_GB_pix/pow(1024.,3)));
   printf("\n");
 #endif //_DEBUG
 
@@ -536,52 +368,6 @@ void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
   *nr=NSAMP_RAD*ngrid/2;
   *dr=rmax/(*nr);
 }
-
-/*
-void alloc_beams(ParamCoLoRe *par)
-{
-  int ib;
-
-  par->dens_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
-  par->vrad_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
-  if(par->do_lensing) {
-    par->p_xx_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
-    par->p_xy_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
-    par->p_yy_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
-  }
-  if(par->do_isw) {
-    par->pdot_beams=my_malloc(par->n_beams_here*sizeof(flouble **));
-  }
-  par->nsrc_beams=my_malloc(par->n_beams_here*sizeof(int **));
-  for(ib=0;ib<par->n_beams_here;ib++) {
-    int ii;
-    par->dens_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
-    par->vrad_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
-    if(par->do_lensing) {
-      par->p_xx_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
-      par->p_xy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
-      par->p_yy_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
-    }
-    if(par->do_isw) {
-      par->pdot_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(flouble *));
-    }
-    par->nsrc_beams[ib]=my_malloc(par->oi_beams[ib]->nr*sizeof(int *));
-    for(ii=0;ii<par->oi_beams[ib]->nr;ii++) {
-      par->dens_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-      par->vrad_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-      if(par->do_lensing) {
-	par->p_xx_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-	par->p_xy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-	par->p_yy_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-      }
-      if(par->do_isw) {
-	par->pdot_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(flouble));
-      }
-      par->nsrc_beams[ib][ii]=my_calloc(par->oi_beams[ib]->num_pix[ii],sizeof(int));
-    }
-  }
-}
-*/
 
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs)
 {

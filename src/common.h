@@ -372,12 +372,8 @@ void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2);
 void rng_gauss(gsl_rng *rng,double *r1,double *r2);
 void end_rng(gsl_rng *rng);
-//OnionInfo **alloc_onion_info_beams(ParamCoLoRe *par);
-//void free_onion_info(OnionInfo *oi);
 unsigned long long get_max_memory(ParamCoLoRe *par);
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
-//void alloc_beams(ParamCoLoRe *par);
-//void free_beams(ParamCoLoRe *par);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
 HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr);
 void hp_shell_free(HealpixShells *shell);
@@ -411,8 +407,8 @@ double get_bg(ParamCoLoRe *par,double r,int tag,int ipop);
 ParamCoLoRe *read_run_params(char *fname);
 void write_density_grid(ParamCoLoRe *par,char *prefix_dens);
 void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z);
-void write_catalog(ParamCoLoRe *par,int ipop);
-//void write_imap(ParamCoLoRe *par);
+void write_srcs(ParamCoLoRe *par);
+void write_imap(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
 void write_isw(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
@@ -456,6 +452,17 @@ void srcs_beams_preproc(ParamCoLoRe *par);
 void srcs_get_beam_properties(ParamCoLoRe *par);
 void srcs_beams_postproc(ParamCoLoRe *par);
 
+
+//////
+// Functions defined in imap.c
+void imap_set_cartesian(ParamCoLoRe *par);
+void imap_distribute(ParamCoLoRe *par);
+void imap_get_local_properties(ParamCoLoRe *par);
+void imap_beams_preproc(ParamCoLoRe *par);
+void imap_get_beam_properties(ParamCoLoRe *par);
+void imap_beams_postproc(ParamCoLoRe *par);
+
+
 //////
 // Functions defined in kappa.c
 void kappa_set_cartesian(ParamCoLoRe *par);
@@ -465,6 +472,7 @@ void kappa_beams_preproc(ParamCoLoRe *par);
 void kappa_get_beam_properties(ParamCoLoRe *par);
 void kappa_beams_postproc(ParamCoLoRe *par);
 
+
 //////
 // Functions defined in isw.c
 void isw_set_cartesian(ParamCoLoRe *par);
@@ -473,13 +481,6 @@ void isw_get_local_properties(ParamCoLoRe *par);
 void isw_beams_preproc(ParamCoLoRe *par);
 void isw_get_beam_properties(ParamCoLoRe *par);
 void isw_beams_postproc(ParamCoLoRe *par);
-
-
-//void integrate_lensing(ParamCoLoRe *par);
-//void integrate_isw(ParamCoLoRe *par);
-//void get_imap(ParamCoLoRe *par);
-//void get_kappa(ParamCoLoRe *par);
-//void get_isw(ParamCoLoRe *par);
 
 
 //////

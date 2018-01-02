@@ -56,12 +56,16 @@ void kappa_beams_preproc(ParamCoLoRe *par)
   free(i_sorted);
 
   //Zero all data and clear
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none)		\
   shared(par)
+#endif //_HAVE_OMP
   {
     long ipp;
 
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ipp=0;ipp<par->kmap->num_pix*par->kmap->nr;ipp++) {
       par->kmap->data[ipp]=0;
       par->kmap->nadd[ipp]=1;
@@ -75,8 +79,10 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
 {
   HealpixShells *kmap=par->kmap;
 
+#ifdef _HAVE_OMP
 #pragma omp parallel default(none)		\
   shared(par,kmap)
+#endif //_HAVE_OMP
   {
     double idx=par->n_grid/par->l_box;
 
@@ -110,7 +116,9 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
     }
 
     long ip;
+#ifdef _HAVE_OMP
 #pragma omp for
+#endif //_HAVE_OMP
     for(ip=0;ip<kmap->num_pix;ip++) {
       int ax,added;
       flouble t[6];
