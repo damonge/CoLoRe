@@ -130,7 +130,7 @@ void isw_get_beam_properties(ParamCoLoRe *par)
 	  double rm=(irr+0.5)*dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,NULL,NULL,&pd,RETURN_PDOT);
+	  added=interpolate_from_grid(par,xn,NULL,NULL,NULL,&pd,RETURN_PDOT,INTERP_TYPE_SHEAR);
 	  if(added)
 	    isw+=pd*fac_r[irr];
 	}

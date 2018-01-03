@@ -73,10 +73,12 @@
 #define RETURN_PDOT 8
 
 //Interpolation type
-#ifndef INTERP_TYPE
-#define INTERP_TYPE INTERP_CIC
-//#define INTERP_TYPE INTERP_NGP
-#endif //INTERP_TYPE
+#ifndef INTERP_TYPE_SKW
+#define INTERP_TYPE_SKW INTERP_CIC
+#endif //INTERP_TYPE_SKW
+#ifndef INTERP_TYPE_SHEAR
+#define INTERP_TYPE_SHEAR INTERP_NGP
+#endif //INTERP_TYPE_SHEAR
 
 //Resolution parameter for nearest onion shell
 #ifndef NSIDE_ONION_BASE
@@ -433,7 +435,7 @@ void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout);
 // Functions defined in beaming.c
 int interpolate_from_grid(ParamCoLoRe *par,double *x,
 			  flouble *d,flouble v[3],flouble t[6],flouble *pd,
-			  int flag_return);
+			  int flag_return,int interp_type);
 void get_beam_properties(ParamCoLoRe *par);
 
 

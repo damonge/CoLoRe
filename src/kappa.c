@@ -151,7 +151,7 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
 	  double rm=(irr+0.5)*dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,RETURN_TID);
+	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
 	  if(added) {
 	    double dotp=0;
 	    for(ax=0;ax<6;ax++)

@@ -105,7 +105,7 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 //WARNING!!!! !: x should go from 0 to ngrid-1!!!!! Remove this when taken care of
 int interpolate_from_grid(ParamCoLoRe *par,double *x,
 			  flouble *d,flouble v[3],flouble t[6],flouble *pd,
-			  int flag_return)
+			  int flag_return,int interp_type)
 {
   long ix0[3];
   double h0x[3];
@@ -128,116 +128,117 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
   if(flag_return & RETURN_PDOT)
     *pd=0;
 
-#if INTERP_TYPE==INTERP_NGP
-  for(ax=0;ax<3;ax++) {
-    ix0[ax]=(long)(x[ax]+0.5);
-    if(ix0[ax]>=par->n_grid)
-      ix0[ax]-=par->n_grid;
-    else if(ix0[ax]<0)
-      ix0[ax]+=par->n_grid;
-    h0x[ax]=1.;
-  }
-  ix0[2]-=par->iz0_here;
-
-  if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-    flouble d_000,v_000[3],t_000[6],pd_000;
-    flouble w_000=h0x[2]*h0x[1]*h0x[0];
-
-    added_anything=1;
-    get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,flag_return);
-    if(flag_return & RETURN_DENS)
-      *d+=d_000*w_000;
-    if(flag_return & RETURN_VEL) {
-      for(ax=0;ax<3;ax++)
-	v[ax]+=v_000[ax]*w_000;
+  if(interp_type==INTERP_NGP) {
+    for(ax=0;ax<3;ax++) {
+      ix0[ax]=(long)(x[ax]+0.5);
+      if(ix0[ax]>=par->n_grid)
+	ix0[ax]-=par->n_grid;
+      else if(ix0[ax]<0)
+	ix0[ax]+=par->n_grid;
+      h0x[ax]=1.;
     }
-    if(flag_return & RETURN_TID) {
-      for(ax=0;ax<6;ax++)
-	t[ax]+=t_000[ax]*w_000;
-    }
-    if(flag_return & RETURN_PDOT)
-      *pd+=pd_000*w_000;
-  }
-#elif INTERP_TYPE==INTERP_CIC
-  long ix1[3];
-  flouble h1x[3];
+    ix0[2]-=par->iz0_here;
 
-  //Trilinear interpolation
-  for(ax=0;ax<3;ax++) {
-    ix0[ax]=(long)(x[ax]);
-    h0x[ax]=x[ax]-ix0[ax];
-    h1x[ax]=1-h0x[ax];
-    ix1[ax]=ix0[ax]+1;
-    if(ix0[ax]>=par->n_grid)
-      ix0[ax]-=par->n_grid;
-    else if(ix0[ax]<0)
-      ix0[ax]+=par->n_grid;
-    if(ix1[ax]>=par->n_grid)
-      ix1[ax]-=par->n_grid;
-    else if(ix1[ax]<0)
-      ix1[ax]+=par->n_grid;
-  }
-  ix0[2]-=par->iz0_here;
-  ix1[2]-=par->iz0_here;
-
-  if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-    flouble d_000,v_000[3],t_000[6],pd_000;
-    flouble d_001,v_001[3],t_001[6],pd_001;
-    flouble d_010,v_010[3],t_010[6],pd_010;
-    flouble d_011,v_011[3],t_011[6],pd_011;
-    flouble w_000=h1x[2]*h1x[1]*h1x[0];
-    flouble w_001=h1x[2]*h1x[1]*h0x[0];
-    flouble w_010=h1x[2]*h0x[1]*h1x[0];
-    flouble w_011=h1x[2]*h0x[1]*h0x[0];
-
-    added_anything=1;
-    get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,flag_return);
-    get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001,&pd_001,flag_return);
-    get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010,&pd_010,flag_return);
-    get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011,&pd_011,flag_return);
-    if(flag_return & RETURN_DENS)
-      *d+=(d_000*w_000+d_001*w_001+d_010*w_010+d_011*w_011);
-    if(flag_return & RETURN_VEL) {
-      for(ax=0;ax<3;ax++)
-	v[ax]+=(v_000[ax]*w_000+v_001[ax]*w_001+v_010[ax]*w_010+v_011[ax]*w_011);
+    if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
+      flouble d_000,v_000[3],t_000[6],pd_000;
+      flouble w_000=h0x[2]*h0x[1]*h0x[0];
+      
+      added_anything=1;
+      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,flag_return);
+      if(flag_return & RETURN_DENS)
+	*d+=d_000*w_000;
+      if(flag_return & RETURN_VEL) {
+	for(ax=0;ax<3;ax++)
+	  v[ax]+=v_000[ax]*w_000;
+      }
+      if(flag_return & RETURN_TID) {
+	for(ax=0;ax<6;ax++)
+	  t[ax]+=t_000[ax]*w_000;
+      }
+      if(flag_return & RETURN_PDOT)
+	*pd+=pd_000*w_000;
     }
-    if(flag_return & RETURN_TID) {
-      for(ax=0;ax<6;ax++)
-	t[ax]+=(t_000[ax]*w_000+t_001[ax]*w_001+t_010[ax]*w_010+t_011[ax]*w_011);
-    }
-    if(flag_return & RETURN_PDOT)
-      *pd+=(pd_000*w_000+pd_001*w_001+pd_010*w_010+pd_011*w_011);
   }
-  if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
-    flouble d_100,v_100[3],t_100[6],pd_100;
-    flouble d_101,v_101[3],t_101[6],pd_101;
-    flouble d_110,v_110[3],t_110[6],pd_110;
-    flouble d_111,v_111[3],t_111[6],pd_111;
-    flouble w_100=h0x[2]*h1x[1]*h1x[0];
-    flouble w_101=h0x[2]*h1x[1]*h0x[0];
-    flouble w_110=h0x[2]*h0x[1]*h1x[0];
-    flouble w_111=h0x[2]*h0x[1]*h0x[0];
+  else {
+    long ix1[3];
+    flouble h1x[3];
     
-    added_anything=1;
-    get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100,&pd_100,flag_return);
-    get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101,&pd_101,flag_return);
-    get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110,&pd_110,flag_return);
-    get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111,&pd_111,flag_return);
-    if(flag_return & RETURN_DENS)
-      *d+=(d_100*w_100+d_101*w_101+d_110*w_110+d_111*w_111);
-    if(flag_return & RETURN_VEL) {
-      for(ax=0;ax<3;ax++)
-	v[ax]+=(v_100[ax]*w_100+v_101[ax]*w_101+v_110[ax]*w_110+v_111[ax]*w_111);
+    //Trilinear interpolation
+    for(ax=0;ax<3;ax++) {
+      ix0[ax]=(long)(x[ax]);
+      h0x[ax]=x[ax]-ix0[ax];
+      h1x[ax]=1-h0x[ax];
+      ix1[ax]=ix0[ax]+1;
+      if(ix0[ax]>=par->n_grid)
+	ix0[ax]-=par->n_grid;
+      else if(ix0[ax]<0)
+	ix0[ax]+=par->n_grid;
+      if(ix1[ax]>=par->n_grid)
+	ix1[ax]-=par->n_grid;
+      else if(ix1[ax]<0)
+	ix1[ax]+=par->n_grid;
     }
-    if(flag_return & RETURN_TID) {
-      for(ax=0;ax<6;ax++)
-	t[ax]+=(t_100[ax]*w_100+t_101[ax]*w_101+t_110[ax]*w_110+t_111[ax]*w_111);
+    ix0[2]-=par->iz0_here;
+    ix1[2]-=par->iz0_here;
+    
+    if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
+      flouble d_000,v_000[3],t_000[6],pd_000;
+      flouble d_001,v_001[3],t_001[6],pd_001;
+      flouble d_010,v_010[3],t_010[6],pd_010;
+      flouble d_011,v_011[3],t_011[6],pd_011;
+      flouble w_000=h1x[2]*h1x[1]*h1x[0];
+      flouble w_001=h1x[2]*h1x[1]*h0x[0];
+      flouble w_010=h1x[2]*h0x[1]*h1x[0];
+      flouble w_011=h1x[2]*h0x[1]*h0x[0];
+      
+      added_anything=1;
+      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,flag_return);
+      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001,&pd_001,flag_return);
+      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010,&pd_010,flag_return);
+      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011,&pd_011,flag_return);
+      if(flag_return & RETURN_DENS)
+	*d+=(d_000*w_000+d_001*w_001+d_010*w_010+d_011*w_011);
+      if(flag_return & RETURN_VEL) {
+	for(ax=0;ax<3;ax++)
+	  v[ax]+=(v_000[ax]*w_000+v_001[ax]*w_001+v_010[ax]*w_010+v_011[ax]*w_011);
+      }
+      if(flag_return & RETURN_TID) {
+	for(ax=0;ax<6;ax++)
+	  t[ax]+=(t_000[ax]*w_000+t_001[ax]*w_001+t_010[ax]*w_010+t_011[ax]*w_011);
+      }
+      if(flag_return & RETURN_PDOT)
+	*pd+=(pd_000*w_000+pd_001*w_001+pd_010*w_010+pd_011*w_011);
     }
-    if(flag_return & RETURN_PDOT)
-      *pd+=(pd_100*w_100+pd_101*w_101+pd_110*w_110+pd_111*w_111);
+    if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
+      flouble d_100,v_100[3],t_100[6],pd_100;
+      flouble d_101,v_101[3],t_101[6],pd_101;
+      flouble d_110,v_110[3],t_110[6],pd_110;
+      flouble d_111,v_111[3],t_111[6],pd_111;
+      flouble w_100=h0x[2]*h1x[1]*h1x[0];
+      flouble w_101=h0x[2]*h1x[1]*h0x[0];
+      flouble w_110=h0x[2]*h0x[1]*h1x[0];
+      flouble w_111=h0x[2]*h0x[1]*h0x[0];
+      
+      added_anything=1;
+      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100,&pd_100,flag_return);
+      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101,&pd_101,flag_return);
+      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110,&pd_110,flag_return);
+      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111,&pd_111,flag_return);
+      if(flag_return & RETURN_DENS)
+	*d+=(d_100*w_100+d_101*w_101+d_110*w_110+d_111*w_111);
+      if(flag_return & RETURN_VEL) {
+	for(ax=0;ax<3;ax++)
+	  v[ax]+=(v_100[ax]*w_100+v_101[ax]*w_101+v_110[ax]*w_110+v_111[ax]*w_111);
+      }
+      if(flag_return & RETURN_TID) {
+	for(ax=0;ax<6;ax++)
+	  t[ax]+=(t_100[ax]*w_100+t_101[ax]*w_101+t_110[ax]*w_110+t_111[ax]*w_111);
+      }
+      if(flag_return & RETURN_PDOT)
+	*pd+=(pd_100*w_100+pd_101*w_101+pd_110*w_110+pd_111*w_111);
+    }
   }
-#endif //INTERP_TYPE
-
+  
   return added_anything;
 }
 
