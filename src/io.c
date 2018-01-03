@@ -118,9 +118,11 @@ static ParamCoLoRe *param_colore_new(void)
     par->imap_tz_arr[ii]=NULL;
     par->imap_norm_arr[ii]=NULL;
     par->nside_imap[ii]=-1;
+    par->nu0_imap[ii]=-1;
+  }
+  for(ii=0;ii<NPLANES_MAX;ii++) {
     par->z_kappa_out[ii]=-1;
     par->z_isw_out[ii]=-1;
-    par->nu0_imap[ii]=-1;
   }
   par->cats_c=NULL;
   par->nsources_c_this=NULL;
@@ -202,7 +204,7 @@ static void conf_read_bool(config_t *conf,char *secname,char *varname,int *out)
     report_error(1,"Couldn't read variable %s\n",fullpath);
 }
 
-ParamCoLoRe *read_run_params(char *fname)
+ParamCoLoRe *read_run_params(char *fname,int test_memory)
 {
   int stat,ii,i_dum,found;
   char c_dum[256]="default";
@@ -327,14 +329,14 @@ ParamCoLoRe *read_run_params(char *fname)
   if(cset!=NULL) {
     par->do_kappa=1;
     par->do_lensing=1;
-    conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPOP_MAX);
+    conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPLANES_MAX);
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
 
   cset=config_lookup(conf,"isw");
   if(cset!=NULL) {
     par->do_isw=1;
-    conf_read_double_array(conf,"isw","z_out",par->z_isw_out,&(par->n_isw),NPOP_MAX);
+    conf_read_double_array(conf,"isw","z_out",par->z_isw_out,&(par->n_isw),NPLANES_MAX);
     conf_read_int(conf,"isw","nside",&(par->nside_isw));
   }
 
@@ -348,6 +350,19 @@ ParamCoLoRe *read_run_params(char *fname)
   }
 #endif //_DEBUG
 
+#ifdef _ADD_EXTRA_KAPPA
+  if(par->do_kappa) {
+    par->need_extra_kappa=my_calloc(par->n_kappa,sizeof(int));
+    par->fl_mean_extra_kappa=my_malloc(par->n_kappa*sizeof(flouble *));
+    par->cl_extra_kappa=my_malloc(par->n_kappa*sizeof(flouble *));
+  }
+  if(par->do_isw) {
+    par->need_extra_isw=my_calloc(par->n_isw,sizeof(int));
+    par->fl_mean_extra_isw=my_malloc(par->n_isw*sizeof(flouble *));
+    par->cl_extra_isw=my_malloc(par->n_isw*sizeof(flouble *));
+  }
+#endif //_ADD_EXTRA_KAPPA
+
   config_destroy(conf);
 
   if(par->r2_smooth>0) {
@@ -360,50 +375,10 @@ ParamCoLoRe *read_run_params(char *fname)
   par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
   init_fftw(par);
 
-  get_max_memory(par);
+  get_max_memory(par,test_memory);
 
-  allocate_fftw(par);
-
-  if(par->do_srcs) {
-    par->cats_c=my_malloc(par->n_srcs*sizeof(CatalogCartesian *));
-    par->cats=my_malloc(par->n_srcs*sizeof(CatalogCartesian *));
-    par->nsources_c_this=my_calloc(par->n_srcs,sizeof(long));
-    par->nsources_this=my_calloc(par->n_srcs,sizeof(long));
-    for(ii=0;ii<par->n_srcs;ii++) {
-      par->cats_c[ii]=NULL;
-      par->cats[ii]=NULL;
-    }
-  }
-
-  if(par->do_imap) {
-    par->imap=my_malloc(par->n_imap*sizeof(HealpixShells *));
-    for(ii=0;ii<par->n_imap;ii++) {
-      FILE *fnu=fopen(par->fnameNuImap[ii],"r");
-      if(fnu==NULL) error_open_file(par->fnameNuImap[ii]);
-      par->imap[ii]=hp_shell_alloc(par->nside_imap[ii],par->nside_base,linecount(fnu));
-      fclose(fnu);
-    }
-  }
-
-  if(par->do_kappa) {
-    par->kmap=hp_shell_alloc(par->nside_kappa,par->nside_base,par->n_kappa);
-#ifdef _ADD_EXTRA_KAPPA
-    par->need_extra_kappa=my_calloc(par->nside_kappa,sizeof(int));
-    par->fl_mean_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
-    par->cl_extra_kappa=my_malloc(par->nside_kappa*sizeof(flouble));
-#endif //_ADD_EXTRA_KAPPA
-  }
-
-  if(par->do_isw) {
-    par->pd_map=hp_shell_alloc(par->nside_isw,par->nside_base,par->n_isw);
-#ifdef _ADD_EXTRA_ISW
-    par->need_extra_isw=my_calloc(par->nside_isw,sizeof(int));
-    par->fl_mean_extra_isw=my_malloc(par->nside_isw*sizeof(flouble));
-    par->cl_extra_isw=my_malloc(par->nside_isw*sizeof(flouble));
-#endif //_ADD_EXTRA_ISW
-  }
-  
   cosmo_set(par);
+  print_info("\n");
 
   double dk=2*M_PI/par->l_box;
   print_info("Run parameters: \n");
@@ -432,6 +407,45 @@ ParamCoLoRe *read_run_params(char *fname)
   if(!par->need_beaming)
     print_info("  Will NOT need to all-to-all communicate fields\n");
   print_info("\n");
+
+  if(test_memory) {
+#ifdef _DEBUG
+    fclose(par->f_dbg);
+#endif //_DEBUG
+    free(par);
+    return NULL;
+  }
+
+  allocate_fftw(par);
+
+  if(par->do_srcs) {
+    par->cats_c=my_malloc(par->n_srcs*sizeof(CatalogCartesian *));
+    par->cats=my_malloc(par->n_srcs*sizeof(CatalogCartesian *));
+    par->nsources_c_this=my_calloc(par->n_srcs,sizeof(long));
+    par->nsources_this=my_calloc(par->n_srcs,sizeof(long));
+    for(ii=0;ii<par->n_srcs;ii++) {
+      par->cats_c[ii]=NULL;
+      par->cats[ii]=NULL;
+    }
+  }
+
+  if(par->do_imap) {
+    par->imap=my_malloc(par->n_imap*sizeof(HealpixShells *));
+    for(ii=0;ii<par->n_imap;ii++) {
+      FILE *fnu=fopen(par->fnameNuImap[ii],"r");
+      if(fnu==NULL) error_open_file(par->fnameNuImap[ii]);
+      par->imap[ii]=hp_shell_alloc(par->nside_imap[ii],par->nside_base,linecount(fnu));
+      fclose(fnu);
+    }
+  }
+
+  if(par->do_kappa)
+    par->kmap=hp_shell_alloc(par->nside_kappa,par->nside_base,par->n_kappa);
+
+  if(par->do_isw)
+    par->pd_map=hp_shell_alloc(par->nside_isw,par->nside_base,par->n_isw);
+  
+  compute_tracer_cosmo(par);
   
   return par;
 }
@@ -740,7 +754,7 @@ void write_isw(ParamCoLoRe *par)
 	map_write[ip]/=map_nadd[ip];
     }
     
-#ifdef _ADD_EXTRA_ISW
+#ifdef _ADD_EXTRA_KAPPA
     if(par->need_extra_isw[ir]) {
       if(NodeThis==0) {
 	int lmax=3*par->pd_map->nside;
@@ -759,7 +773,7 @@ void write_isw(ParamCoLoRe *par)
 	free(map_mean);
       }
     }
-#endif //_ADD_EXTRA_ISW
+#endif //_ADD_EXTRA_KAPPA
     
     //Write dummy map
     if(NodeThis==0)
@@ -1020,7 +1034,7 @@ void param_colore_free(ParamCoLoRe *par)
 
   if(par->do_isw) {
     hp_shell_free(par->pd_map);
-#ifdef _ADD_EXTRA_ISW
+#ifdef _ADD_EXTRA_KAPPA
     for(ii=0;ii<par->n_isw;ii++) {
       if(par->need_extra_isw[ii]) {
     	free(par->fl_mean_extra_isw[ii]);
@@ -1030,7 +1044,7 @@ void param_colore_free(ParamCoLoRe *par)
     free(par->need_extra_isw);
     free(par->fl_mean_extra_isw);
     free(par->cl_extra_isw);
-#endif //_ADD_EXTRA_ISW
+#endif //_ADD_EXTRA_KAPPA
   }
 
 #ifdef _DEBUG

@@ -23,13 +23,19 @@
 
 int main(int argc,char **argv)
 { 
+  int test_memory=0;
   char fnameIn[256];
   ParamCoLoRe *par;
-  if(argc!=2) {
+  if(argc<2) {
     fprintf(stderr,"Usage: ./CoLoRe file_name\n");
     exit(0);
   }
-  sprintf(fnameIn,"%s",argv[1]);
+  if(!strcmp(argv[1],"--test-memory")) {
+    test_memory=1;
+    sprintf(fnameIn,"%s",argv[2]);
+  }
+  else
+    sprintf(fnameIn,"%s",argv[1]);
 
   mpi_init(&argc,&argv);
 
@@ -41,7 +47,14 @@ int main(int argc,char **argv)
 
   if(NodeThis==0) timer(4);
 
-  par=read_run_params(fnameIn);
+  par=read_run_params(fnameIn,test_memory);
+  if(par==NULL) {
+    if(NodeThis==0) timer(5);
+#ifdef _HAVE_MPI
+    MPI_Finalize();
+#endif //_HAVE_MPI
+    return 0;
+  }
 
   print_info("Seed : %u\n",par->seed_rng);
 
