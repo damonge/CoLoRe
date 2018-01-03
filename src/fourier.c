@@ -24,7 +24,7 @@
 static void compute_sigma_dens(ParamCoLoRe *par)
 {
   double mean_gauss=0;
-  double s2_save=par->sigma2_gauss;
+  //  double s2_save=par->sigma2_gauss;
   par->sigma2_gauss=0;
 
   //Compute Gaussian variance
@@ -74,8 +74,8 @@ static void compute_sigma_dens(ParamCoLoRe *par)
 
   par->sigma2_gauss-=mean_gauss*mean_gauss;
   print_info(" <d>=%.3lE, <d^2>=%.3lE\n",mean_gauss,sqrt(par->sigma2_gauss));
-  if(par->need_onions)
-    par->sigma2_gauss=s2_save;
+  //  if(par->need_onions)
+  //    par->sigma2_gauss=s2_save;
 }
 
 void fftw_wrap_c2r(int ng,dftw_complex *pin,flouble *pout)
@@ -126,8 +126,7 @@ void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout)
 
 void init_fftw(ParamCoLoRe *par)
 {
-  ptrdiff_t dsize;
-
+  //Set FFTW domain decomposition
   par->nz_all =my_calloc(NNodes,sizeof(int));
   par->iz0_all=my_calloc(NNodes,sizeof(int));
 
@@ -170,9 +169,9 @@ void init_fftw(ParamCoLoRe *par)
 
   //Get MPI FFT bounds
 #ifdef _SPREC
-  dsize=fftwf_mpi_local_size_3d(par->n_grid,par->n_grid,par->n_grid/2+1,MPI_COMM_WORLD,&nz,&iz0);
+  fftwf_mpi_local_size_3d(par->n_grid,par->n_grid,par->n_grid/2+1,MPI_COMM_WORLD,&nz,&iz0);
 #else //_SPREC
-  dsize=fftw_mpi_local_size_3d(par->n_grid,par->n_grid,par->n_grid/2+1,MPI_COMM_WORLD,&nz,&iz0);
+  fftw_mpi_local_size_3d(par->n_grid,par->n_grid,par->n_grid/2+1,MPI_COMM_WORLD,&nz,&iz0);
 #endif //_SPREC
   par->nz_here=nz;
   par->iz0_here=iz0;
@@ -207,7 +206,12 @@ void init_fftw(ParamCoLoRe *par)
   par->nz_all[0]=par->nz_here;
   par->iz0_all[0]=par->iz0_here;
 #endif //_HAVE_MPI
-  dsize=par->nz_max*((long)(par->n_grid*(par->n_grid/2+1)));
+}
+
+void allocate_fftw(ParamCoLoRe *par)
+{
+  //Allocate all memory for grids
+  ptrdiff_t dsize=par->nz_max*((long)(par->n_grid*(par->n_grid/2+1)));
 
 #ifdef _SPREC
   par->grid_dens_f=fftwf_alloc_complex(dsize);
@@ -248,8 +252,6 @@ void end_fftw(ParamCoLoRe *par)
 #endif //_SPREC
 
 #ifdef _HAVE_MPI
-  //  free(par->slice_left);
-  //  free(par->slice_right);
 
 #ifdef _HAVE_OMP
   if(MPIThreadsOK) {

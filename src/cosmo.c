@@ -597,8 +597,6 @@ void cosmo_set(ParamCoLoRe *par)
     free(zarr); free(fzarr);
     fclose(fi);
 
-    compute_hp_shell_distances_imap(par->imap[ipop],par->nu0_imap[ipop],
-				    par->fnameNuImap[ipop],pars);
     par->imap_tz_arr[ipop]=my_malloc(NA*sizeof(double));
     par->imap_bz_arr[ipop]=my_malloc(NA*sizeof(double));
   }
@@ -664,7 +662,7 @@ void cosmo_set(ParamCoLoRe *par)
       double z=par->z_kappa_out[ii];
       if(z>par->z_max) {
 #ifdef _ADD_EXTRA_KAPPA
-	int l,nl=3*par->kmap->nside;
+	int l,nl=3*par->nside_kappa;
 	double chi_here=r_of_z(par,z);
 #ifdef _DEBUG
 	if(NodeThis==0)
@@ -696,8 +694,6 @@ void cosmo_set(ParamCoLoRe *par)
 	report_error(1,"Source plane %d outside redshift range\n",ii+1);
 #endif //_ADD_EXTRA_KAPPA
       }
-      par->kmap->r0[ii]  =csm_radial_comoving_distance(pars,1./(1+z));
-      par->kmap->rf[ii]  =csm_radial_comoving_distance(pars,1./(1+z));
     }
   }
 
@@ -705,8 +701,8 @@ void cosmo_set(ParamCoLoRe *par)
     for(ii=0;ii<par->n_isw;ii++) {
       double z=par->z_isw_out[ii];
       if(z>par->z_max) {
-#ifdef _ADD_EXTRA_ISW
-	int l,nl=3*par->pd_map->nside;
+#ifdef _ADD_EXTRA_KAPPA
+	int l,nl=3*par->nside_isw;
 	double chi_here=r_of_z(par,z);
 #ifdef _DEBUG
 	if(NodeThis==0)
@@ -734,17 +730,46 @@ void cosmo_set(ParamCoLoRe *par)
 	if(NodeThis==0)
 	  fprintf(par->f_dbg,"\n");
 #endif //_DEBUG
-#else //_ADD_EXTRA_ISW
+#else //_ADD_EXTRA_KAPPA
 	report_error(1,"Source plane %d outside redshift range\n",ii+1);
-#endif //_ADD_EXTRA_ISW
+#endif //_ADD_EXTRA_KAPPA
       }
+    }
+  }
+
+  csm_params_free(pars);
+  //FREEE SLPINES!
+}
+
+void compute_tracer_cosmo(ParamCoLoRe *par)
+{
+  Csm_params *pars=csm_params_new();
+  csm_unset_gsl_eh();
+  csm_set_verbosity(0);
+  csm_background_set(pars,par->OmegaM,par->OmegaL,par->OmegaB,par->weos,0,par->hhub,2.275);
+
+  if(par->do_imap) {
+    int ipop;
+    for(ipop=0;ipop<par->n_imap;ipop++) {
+      compute_hp_shell_distances_imap(par->imap[ipop],par->nu0_imap[ipop],par->fnameNuImap[ipop],pars);
+    }
+  }
+  if(par->do_kappa) {
+    int ii;
+    for(ii=0;ii<par->n_kappa;ii++) {
+      double z=par->z_kappa_out[ii];
+      par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+    }
+  }
+  if(par->do_isw) {
+    int ii;
+    for(ii=0;ii<par->n_isw;ii++) {
+      double z=par->z_isw_out[ii];
       par->pd_map->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
       par->pd_map->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
     }
   }
 
   csm_params_free(pars);
-
-
-  //FREEE SLPINES!
 }

@@ -187,6 +187,7 @@ static void pos_2_dens(ParamCoLoRe *par,unsigned long long np_here,
     report_error(1,"Wrong interpolation type\n");
 }
 
+#ifdef _HAVE_MPI
 static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,unsigned long long np_real,
 			    flouble *x,flouble *y,flouble *z,unsigned long long *np_here)
 {
@@ -318,16 +319,18 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
       nsend=n_inbuffer-i;
     }
 
+#ifdef _HAVE_MPI
     flouble *x_send=x_b+nstay;
     flouble *y_send=y_b+nstay;
     flouble *z_send=z_b+nstay;
+#endif //_HAVE_MPI
     int tag=500+5*inode;
 
 #ifdef _HAVE_MPI
     MPI_Status status;
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Sendrecv(&nsend,1,MPI_INT,node_to,tag,&nrecv,1,MPI_INT,node_from,tag,MPI_COMM_WORLD,&status);
-#endif
+#endif //_HAVE_MPI
     tag++;
     
 
@@ -349,7 +352,7 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
 		 y+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
     MPI_Sendrecv(z_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
 		 z+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
-#endif
+#endif //_HAVE_MPI
 
     n_inrange+=nrecv;
   }
@@ -368,6 +371,7 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
 
   return;
 }
+#endif //_HAVE_MPI
 
 static void lpt_1(ParamCoLoRe *par)
 {
@@ -496,7 +500,9 @@ static void lpt_1(ParamCoLoRe *par)
       }
     } //end omp for
 #ifdef _DEBUG
+#ifdef _HAVE_OMP
 #pragma omp critical
+#endif //_HAVE_OMP
     {
       d_mean_1[0]+=d_mean_1_thr[0];
       d_mean_1[1]+=d_mean_1_thr[1];
@@ -617,7 +623,9 @@ static void lpt_1(ParamCoLoRe *par)
       }
     } //end omp for
 #ifdef _DEBUG
+#ifdef _HAVE_OMP
 #pragma omp critical
+#endif //_HAVE_OMP
     {
       numtot+=numtot_thr;
     }
@@ -873,7 +881,9 @@ static void lpt_2(ParamCoLoRe *par)
       }
     } //end omp for
 #ifdef _DEBUG
+#ifdef _HAVE_OMP
 #pragma omp critical
+#endif //_HAVE_OMP
     {
       d_mean_1[0]+=d_mean_1_thr[0];
       d_mean_1[1]+=d_mean_1_thr[1];
@@ -1000,7 +1010,9 @@ static void lpt_2(ParamCoLoRe *par)
       }
     } //end omp for
 #ifdef _DEBUG
+#ifdef _HAVE_OMP
 #pragma omp critical
+#endif //_HAVE_OMP
     {
       numtot+=numtot_thr;
     }
@@ -1117,13 +1129,9 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 						    unsigned long long *narr,
 						    double **norm_srcs_arr,double **norm_imap_arr)
 {
-  int ipp;
-  int *n_zeroes_srcs=my_calloc(par->n_srcs,sizeof(int));
-  int *n_zeroes_imap=my_calloc(par->n_srcs,sizeof(int));
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none)				\
-  shared(par,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr)	\
-  shared(n_zeroes_srcs,n_zeroes_imap)
+  shared(par,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr)
 #endif //_HAVE_OMP
   {
     int iz,ipop;
@@ -1132,8 +1140,6 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
     unsigned long long *narr_thr=my_calloc(nz,sizeof(unsigned long long));
     double **norm_srcs_arr_thr=my_malloc(par->n_srcs*sizeof(double *));
     double **norm_imap_arr_thr=my_malloc(par->n_imap*sizeof(double *));
-    double *n_zeroes_srcs_thr=my_calloc(par->n_srcs,sizeof(int));
-    double *n_zeroes_imap_thr=my_calloc(par->n_srcs,sizeof(int));
     for(ipop=0;ipop<par->n_srcs;ipop++)
       norm_srcs_arr_thr[ipop]=my_calloc(nz,sizeof(double));
     for(ipop=0;ipop<par->n_imap;ipop++)
@@ -1160,18 +1166,10 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	    double d=par->grid_dens[index];
 	    narr_thr[ind_z]++;
 	    zarr_thr[ind_z]+=redshift;
-	    for(ipop=0;ipop<par->n_srcs;ipop++) {
-	      double dd=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop));
-	      norm_srcs_arr_thr[ipop][ind_z]+=dd;
-	      if(dd<=1E-200)
-		n_zeroes_srcs_thr[ipop]++;
-	    }
-	    for(ipop=0;ipop<par->n_imap;ipop++) {
-	      double dd=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop));
-	      norm_imap_arr_thr[ipop][ind_z]+=dd;
-	      if(dd<=1E-200)
-		n_zeroes_imap_thr[ipop]++;
-	    }
+	    for(ipop=0;ipop<par->n_srcs;ipop++)
+	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop));
+	    for(ipop=0;ipop<par->n_imap;ipop++)
+	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop));
 	  }
 	}
       }
@@ -1188,10 +1186,6 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	for(ipop=0;ipop<par->n_imap;ipop++)
 	  norm_imap_arr[ipop][iz]+=norm_imap_arr_thr[ipop][iz];
       }
-      for(ipop=0;ipop<par->n_srcs;ipop++)
-	n_zeroes_srcs[ipop]+=n_zeroes_srcs_thr[ipop];
-      for(ipop=0;ipop<par->n_imap;ipop++)
-	n_zeroes_imap[ipop]+=n_zeroes_imap_thr[ipop];
     } //end omp critical
 
     free(narr_thr);
@@ -1202,130 +1196,18 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
     for(ipop=0;ipop<par->n_imap;ipop++)
       free(norm_imap_arr_thr[ipop]);
     free(norm_imap_arr_thr);
-    free(n_zeroes_srcs_thr);
-    free(n_zeroes_imap_thr);
   } //end omp parallel
-
-  for(ipp=0;ipp<par->n_srcs;ipp++)
-    printf("%d-th sources population: %d empty cells in node %d\n",ipp,n_zeroes_srcs[ipp],NodeThis);
-  for(ipp=0;ipp<par->n_imap;ipp++)
-    printf("%d-th int. mapp. species: %d empty cells in node %d\n",ipp,n_zeroes_imap[ipp],NodeThis);
-
-  free(n_zeroes_srcs);
-  free(n_zeroes_imap);
-}
-
-static void collect_density_normalization_from_pixels(ParamCoLoRe *par,int nz,double idz,double *zarr,
-						      unsigned long long *narr,
-						      double **norm_srcs_arr,double **norm_imap_arr)
-{
-  int ipp,ib;
-  int *n_zeroes_srcs=my_calloc(par->n_srcs,sizeof(int));
-  int *n_zeroes_imap=my_calloc(par->n_srcs,sizeof(int));
-
-  for(ib=0;ib<par->n_beams_here;ib++) {
-    OnionInfo *oi=par->oi_beams[ib];
-#ifdef _HAVE_OMP
-#pragma omp parallel default(none)				 \
-  shared(par,oi,ib,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr) \
-  shared(n_zeroes_srcs,n_zeroes_imap)
-#endif //_HAVE_OMP
-    {
-      int ir,ipop;
-      double *barr_srcs=my_malloc(par->n_srcs*sizeof(double));
-      double *barr_imap=my_malloc(par->n_imap*sizeof(double));
-      double *zarr_thr=my_calloc(nz,sizeof(double));
-      unsigned long long *narr_thr=my_calloc(nz,sizeof(unsigned long long));
-      double **norm_srcs_arr_thr=my_malloc(par->n_srcs*sizeof(double *));
-      double **norm_imap_arr_thr=my_malloc(par->n_imap*sizeof(double *));
-      double *n_zeroes_srcs_thr=my_calloc(par->n_srcs,sizeof(int));
-      double *n_zeroes_imap_thr=my_calloc(par->n_srcs,sizeof(int));
-      for(ipop=0;ipop<par->n_srcs;ipop++)
-	norm_srcs_arr_thr[ipop]=my_calloc(nz,sizeof(double));
-      for(ipop=0;ipop<par->n_imap;ipop++)
-	norm_imap_arr_thr[ipop]=my_calloc(nz,sizeof(double));
-
-#ifdef _HAVE_OMP
-#pragma omp for nowait schedule(dynamic)
-#endif //_HAVE_OMP
-      for(ir=0;ir<oi->nr;ir++) {
-	int ipix;
-	double r=0.5*(oi->rf_arr[ir]+oi->r0_arr[ir]);
-	double redshift=get_bg(par,r,BG_Z,0);
-	int iz=(int)(redshift*idz)+1;
-	for(ipop=0;ipop<par->n_srcs;ipop++)
-	  barr_srcs[ipop]=get_bg(par,r,BG_BZ_SRCS,ipop);
-	for(ipop=0;ipop<par->n_imap;ipop++)
-	  barr_imap[ipop]=get_bg(par,r,BG_BZ_IMAP,ipop);
-
-	narr_thr[iz]+=oi->num_pix[ir];
-	zarr_thr[iz]+=redshift*oi->num_pix[ir];
-	for(ipix=0;ipix<oi->num_pix[ir];ipix++) {
-	  double d=par->dens_beams[ib][ir][ipix];
-	  for(ipop=0;ipop<par->n_srcs;ipop++) {
-	    double dd=bias_model(d,barr_srcs[ipop]);
-	    norm_srcs_arr_thr[ipop][iz]+=dd;
-	    if(dd<=1E-200)
-	      n_zeroes_srcs_thr[ipop]++;
-	  }
-	  for(ipop=0;ipop<par->n_imap;ipop++) {
-	    double dd=bias_model(d,barr_imap[ipop]);
-	    norm_imap_arr_thr[ipop][iz]+=dd;
-	    if(dd<=1E-200)
-	      n_zeroes_imap_thr[ipop]++;
-	  }
-	}
-      } //end omp for
-#ifdef _HAVE_OMP
-#pragma omp critical
-#endif //_HAVE_OMP
-      {
-	for(ir=0;ir<nz;ir++) {
-	  narr[ir]+=narr_thr[ir];
-	  zarr[ir]+=zarr_thr[ir];
-	  for(ipop=0;ipop<par->n_srcs;ipop++)
-	    norm_srcs_arr[ipop][ir]+=norm_srcs_arr_thr[ipop][ir];
-	  for(ipop=0;ipop<par->n_imap;ipop++)
-	    norm_imap_arr[ipop][ir]+=norm_imap_arr_thr[ipop][ir];
-	}
-	for(ipop=0;ipop<par->n_srcs;ipop++)
-	  n_zeroes_srcs[ipop]+=n_zeroes_srcs_thr[ipop];
-	for(ipop=0;ipop<par->n_imap;ipop++)
-	  n_zeroes_imap[ipop]+=n_zeroes_imap_thr[ipop];
-      } //end omp critical
-
-      free(narr_thr);
-      free(zarr_thr);
-      for(ipop=0;ipop<par->n_srcs;ipop++)
-	free(norm_srcs_arr_thr[ipop]);
-      free(norm_srcs_arr_thr);
-      free(barr_srcs);
-      for(ipop=0;ipop<par->n_imap;ipop++)
-	free(norm_imap_arr_thr[ipop]);
-      free(norm_imap_arr_thr);
-      free(barr_imap);
-      free(n_zeroes_srcs_thr);
-      free(n_zeroes_imap_thr);
-    } //end omp parallel
-  }
-
-  for(ipp=0;ipp<par->n_srcs;ipp++)
-    printf("%d-th sources population: %d empty cells in node %d\n",ipp,n_zeroes_srcs[ipp],NodeThis);
-  for(ipp=0;ipp<par->n_imap;ipp++)
-    printf("%d-th int. mapp. species: %d empty cells in node %d\n",ipp,n_zeroes_imap[ipp],NodeThis);
-
-  free(n_zeroes_srcs);
-  free(n_zeroes_imap);
 }
 
 static void collect_density_normalization(ParamCoLoRe *par,int nz,double idz,double *zarr,
 					  unsigned long long *narr,
 					  double **norm_srcs_arr,double **norm_imap_arr)
 {
-  if(par->need_onions)
-    collect_density_normalization_from_pixels(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
-  else 
-    collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
+  //  if(par->need_onions)
+  //    collect_density_normalization_from_pixels(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
+  //  else 
+  //    collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
+  collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
 }
 
 //Computes sigma2(z) for physical density field
@@ -1437,7 +1319,7 @@ void compute_density_normalization(ParamCoLoRe *par)
       print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_SRCS,ipop));
     for(ipop=0;ipop<par->n_imap;ipop++)
       print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_IMAP,ipop));
-    print_info("%llu\n",narr[iz]);
+    print_info("%011llu\n",narr[iz]);
   }
 #endif //_DEBUG
   if(NodeThis==0) timer(2);

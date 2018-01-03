@@ -25,9 +25,9 @@
 
 void write_predictions(ParamCoLoRe *par)
 {
-  if ((!par->do_sources) && (!par->do_imap)) return;
+  if ((!par->do_srcs) && (!par->do_imap)) return;
   if (NodeThis!=0) return;
-  print_info("*** Writing predictions (ASCII) \n");
+  print_info("*** Writing predictions\n");
   // first generate k array, sufficiently finely spaced
   // note that we need to sufficiently pad on both ends
   const int Nk=10000;
@@ -64,13 +64,17 @@ void write_predictions(ParamCoLoRe *par)
     for (int i=0; i<Nk; i++) pklin[i]=pk_linear0(par,log10(ka[i]))*g*g;
     pk2xi(Nk,ka,pklin,ra,xilin);
     // inner loop is over populations, ipop=-1 is the unbiased version
+#ifdef _DEBUG
     print_info ("Writing predictions of redshift %g:\n",z);
+#endif //_DEBUG
 
-    if(par->do_sources) {
+    if(par->do_srcs) {
       for (int ipop=0; ipop<par->n_srcs; ipop++) {
 	double bias=get_bg(par,r,BG_BZ_SRCS,ipop);
 	fprintf(fg,"%g ",bias);
+#ifdef _DEBUG
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
+#endif //_DEBUG
 	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2*ka[i]*ka[i]);
 	pk2xi(Nk,ka,pk,ra,xi);
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
@@ -96,7 +100,9 @@ void write_predictions(ParamCoLoRe *par)
       for (int ipop=0; ipop<par->n_imap; ipop++) {
 	double bias=get_bg(par,r,BG_BZ_IMAP,ipop);
 	fprintf(fg,"%g ",bias);
+#ifdef _DEBUG
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
+#endif //_DEBUG
 	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2*ka[i]*ka[i]);
 	pk2xi(Nk,ka,pk,ra,xi);
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;

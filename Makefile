@@ -20,8 +20,6 @@ USE_SINGLE_PRECISION = yes
 ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
 USE_HDF5 = no
-#Compile with FITS capability? Set to "yes" or "no"
-USE_FITS = yes
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
@@ -56,6 +54,7 @@ SHT_LIB =
 #
 ########## End of user-definable ##########
 
+USE_FITS = yes
 DEFINEFLAGS += -DHAVE_INLINE -DGSL_RANGE_CHECK_OFF 
 
 ifeq ($(strip $(USE_OMP)),yes)
@@ -119,14 +118,18 @@ COSMOMADO = src/cosmo_mad.o
 COSMOO = src/cosmo.o
 FOURIERO = src/fourier.o
 DENSO = src/density.o
-LCO = src/lightcone.o
+SRCSO = src/srcs.o
+IMAPO = src/imap.o
+KAPPAO = src/kappa.o
+ISWO = src/isw.o
 IOO = src/io.o
 HPIXO = src/healpix_extra.o
-PIXO = src/pixelization.o
+BEAMO = src/beaming.o
 PREDICTO = src/predictions.o
 FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(ISWO) $(FFTLOGO) $(PREDICTO)
+#OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe
 

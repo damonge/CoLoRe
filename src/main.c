@@ -23,13 +23,19 @@
 
 int main(int argc,char **argv)
 { 
+  int test_memory=0;
   char fnameIn[256];
   ParamCoLoRe *par;
-  if(argc!=2) {
+  if(argc<2) {
     fprintf(stderr,"Usage: ./CoLoRe file_name\n");
     exit(0);
   }
-  sprintf(fnameIn,"%s",argv[1]);
+  if(!strcmp(argv[1],"--test-memory")) {
+    test_memory=1;
+    sprintf(fnameIn,"%s",argv[2]);
+  }
+  else
+    sprintf(fnameIn,"%s",argv[1]);
 
   mpi_init(&argc,&argv);
 
@@ -41,7 +47,14 @@ int main(int argc,char **argv)
 
   if(NodeThis==0) timer(4);
 
-  par=read_run_params(fnameIn);
+  par=read_run_params(fnameIn,test_memory);
+  if(par==NULL) {
+    if(NodeThis==0) timer(5);
+#ifdef _HAVE_MPI
+    MPI_Finalize();
+#endif //_HAVE_MPI
+    return 0;
+  }
 
   print_info("Seed : %u\n",par->seed_rng);
 
@@ -51,43 +64,47 @@ int main(int argc,char **argv)
   //Lognormalize density field
   compute_physical_density_field(par);
 
-  if(par->need_onions) {
-    //Interpolate into beams
-    alloc_beams(par);
-    pixelize(par);
-    end_fftw(par);
-  }
-  
   //Compute normalization of density field for biasing
   compute_density_normalization(par);
 
-  //Precompute lensing if needed
-  if(par->do_lensing)
-    integrate_lensing(par);
-
-  //Precompute isw if needed
-  if(par->do_isw)
-    integrate_isw(par);
-
-  //Poisson-sample the galaxies
-  if(par->do_sources)
-    get_sources(par);
-
-  //Generate intensity maps
+  //Get information from slabs
+  if(par->do_srcs)
+    srcs_set_cartesian(par);
   if(par->do_imap)
-    get_imap(par);
-
-  //Generate kappa maps
+    imap_set_cartesian(par);
   if(par->do_kappa)
-    get_kappa(par);
-
-  //Generate isw maps
+    kappa_set_cartesian(par);
   if(par->do_isw)
-    get_isw(par);
+    isw_set_cartesian(par);
+
+  //Distribute information across
+  if(par->do_srcs)
+    srcs_distribute(par);
+  if(par->do_imap)
+    imap_distribute(par);
+  if(par->do_kappa)
+    kappa_distribute(par);
+  if(par->do_isw)
+    isw_distribute(par);
+
+  //Postprocess after 
+  if(par->do_srcs)
+    srcs_get_local_properties(par);
+  if(par->do_imap)
+    imap_get_local_properties(par);
+  if(par->do_kappa)
+    kappa_get_local_properties(par);
+  if(par->do_isw)
+    isw_get_local_properties(par);
+
+  //All-to-all communication of density field
+  //and computation of all required quantities
+  if(par->need_beaming)
+    get_beam_properties(par);
 
   //Write output
-  if(par->do_sources)
-    write_catalog(par);
+  if(par->do_srcs)
+    write_srcs(par);
   if(par->do_imap)
     write_imap(par);
   if(par->do_kappa)
@@ -99,9 +116,7 @@ int main(int argc,char **argv)
 
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");
-
-  if(!(par->need_onions))
-    end_fftw(par);
+  
   param_colore_free(par);
 
   if(NodeThis==0) timer(5);
