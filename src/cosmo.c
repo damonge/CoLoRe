@@ -751,7 +751,6 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
   if(par->do_imap) {
     int ipop;
     for(ipop=0;ipop<par->n_imap;ipop++) {
-      int ii;
       compute_hp_shell_distances_imap(par->imap[ipop],par->nu0_imap[ipop],par->fnameNuImap[ipop],pars);
     }
   }
