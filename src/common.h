@@ -372,9 +372,9 @@ static inline double bias_model(double d,double b)
     return 1+b*d;
   else
     return 0;
-#else //_BIAS_MODEL_2
+#else //_BIAS_MODEL
   return pow(1+d,b);
-#endif //_BIAS_MODEL_2
+#endif //_BIAS_MODEL
 }
 
 

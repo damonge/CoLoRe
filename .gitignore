@@ -1,4 +1,7 @@
 CoLoRe
+*.dat
+*.fits
+*.h5
 
 ## From https://github.com/github/gitignore/blob/master/C.gitignore
 

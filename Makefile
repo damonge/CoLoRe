@@ -10,6 +10,8 @@ OPTIONS = -Wall -O3 -std=c99
 DEFINEFLAGS += -D_LONGIDS
 #Use normalized bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_2
+#Use linear bias model
+DEFINEFLAGS += -D_BIAS_MODEL_3
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"

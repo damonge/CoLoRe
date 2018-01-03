@@ -605,7 +605,7 @@ void write_imap(ParamCoLoRe *par)
 	map_write[ip]=0;
 	map_nadd[ip]=0;
       }
-      sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,ipop,ir);
+      sprintf(fname,"!%s_imap_s%d_nu%03d.fits",par->prefixOut,ipop+1,ir);
       for(ip=0;ip<npx;ip++) {
 	map_write[ip]+=imap->data[ir_t+ip];
 	map_nadd[ip]+=imap->nadd[ir_t+ip];
@@ -805,14 +805,14 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     gal_types[5]=H5T_NATIVE_FLOAT;
     
     print_info(" %d-th population (HDF5)\n",ipop);
-    sprintf(fname,"%s_srcs_s%d_%d.h5",par->prefixOut,ipop,NodeThis);
+    sprintf(fname,"%s_srcs_s%d_%d.h5",par->prefixOut,ipop+1,NodeThis);
     
     //Create file
     file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
     //Write table for each galaxy type
     char table_title[256],table_name[256];
-    sprintf(table_title,"sources%d_data",ipop);
-    sprintf(table_name,"/sources%d",ipop);
+    sprintf(table_title,"sources%d_data",ipop+1);
+    sprintf(table_name,"/sources%d",ipop+1);
     H5TBmake_table(table_title,file_id,table_name,6,par->nsources_this[ipop],sizeof(Src),
 		   names,dst_offset,gal_types,chunk_size,NULL,0,par->cats[ipop]->srcs);
     H5LTset_attribute_string(file_id,table_name,"FIELD_0_UNITS",tunit[0]);
@@ -843,7 +843,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       nfields=7;
     
     print_info(" %d-th population (FITS)\n",ipop);
-    sprintf(fname,"!%s_srcs_s%d_%d.fits",par->prefixOut,ipop,NodeThis);
+    sprintf(fname,"!%s_srcs_s%d_%d.fits",par->prefixOut,ipop+1,NodeThis);
     
     fits_create_file(&fptr,fname,&status);
     fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
@@ -873,8 +873,8 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 	z0_arr[ii]=par->cats[ipop]->srcs[row_here+ii].z0;
 	rsd_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dz_rsd;
 	if(par->do_lensing) {
-	    e1_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e1;
-	    e2_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e2;
+	  e1_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e1;
+	  e2_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e2;
 	}
       }
       fits_write_col(fptr,TINT  ,1,row_here+1,1,nrw_here,type_arr,&status);
@@ -946,7 +946,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
   }
   else {
     print_info(" %d-th population (ASCII)\n",ipop);
-    sprintf(fname,"%s_srcs_s%d_%d.txt",par->prefixOut,ipop,NodeThis);
+    sprintf(fname,"%s_srcs_s%d_%d.txt",par->prefixOut,ipop+1,NodeThis);
     
     long jj;
     FILE *fil=fopen(fname,"w");

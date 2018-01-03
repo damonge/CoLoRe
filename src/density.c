@@ -1031,6 +1031,42 @@ static void lpt_2(ParamCoLoRe *par)
 }
 
 //Lognormalizes density grid and puts in lightcone
+static void densclip(ParamCoLoRe *par)
+{
+  print_info("Lognormalizin'\n");
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) shared(par)
+#endif //_HAVE_OMP
+  {
+    long iz;
+    int ngx=2*(par->n_grid/2+1);
+    flouble dx=par->l_box/par->n_grid;
+
+#ifdef _HAVE_OMP
+#pragma omp for schedule(static)
+#endif //_HAVE_OMP
+    for(iz=0;iz<par->nz_here;iz++) {
+      int iy;
+      long indexz=iz*((long)(ngx*par->n_grid));
+      flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      for(iy=0;iy<par->n_grid;iy++) {
+	int ix;
+	long indexy=iy*ngx;
+	flouble y0=(iy+0.5)*dx-par->pos_obs[1];
+	for(ix=0;ix<par->n_grid;ix++) {
+	  long index=ix+indexy+indexz;
+	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
+	  double r=sqrt(x0*x0+y0*y0+z0*z0);
+	  double dg=get_bg(par,r,BG_D1,0);
+	  double delta=par->grid_dens[index];
+	  par->grid_dens[index]=fmax(1+dg*delta,0)-1;
+	}
+      }
+    }//end omp for
+  }//end omp parallel
+}
+
+//Lognormalizes density grid and puts in lightcone
 static void lognormalize(ParamCoLoRe *par)
 {
   print_info("Lognormalizin'\n");
@@ -1077,6 +1113,8 @@ void compute_physical_density_field(ParamCoLoRe *par)
     lpt_1(par);
   else if(par->dens_type==DENS_TYPE_2LPT)
     lpt_2(par);
+  else if(par->dens_type==DENS_TYPE_CLIP)
+    densclip(par);
   else
     report_error(1,"Density type %d not supported\n",par->dens_type);
 
