@@ -80,35 +80,10 @@
 #define INTERP_TYPE_SHEAR INTERP_NGP
 #endif //INTERP_TYPE_SHEAR
 
-//Resolution parameter for nearest onion shell
-#ifndef NSIDE_ONION_BASE
-#define NSIDE_ONION_BASE 2
-#endif //NSIDE_ONION_BASE
-
-//dr_par = FAC_CART2SPH_PAR * dx
+//dr_par = dx/NSAMP_RAD
 #ifndef NSAMP_RAD
 #define NSAMP_RAD 1
 #endif //NSAMP_RAD
-
-//dr_perp = FAC_CART2SPH_PERP * dx
-#ifndef FAC_CART2SPH_PERP
-#define FAC_CART2SPH_PERP 1.
-#endif //FAC_CART2SPH_PERP
-
-//#sub-voxel divisions in r
-#ifndef NSUB_PAR
-#define NSUB_PAR 1
-#endif //NSUB_PAR
-
-//#sub-voxel divisions in r
-#ifndef NSUB_PERP
-#define NSUB_PERP 1
-#endif //NSUB_PERP
-
-//sqrt(#random points per pixel for IM)
-#ifndef NSUB_IMAP_PERP
-#define NSUB_IMAP_PERP 4
-#endif //NSUB_IMAP_PERP
 
 //Maximum allowed healpix resolution
 #define NSIDE_MAX_HPX 8192
@@ -132,6 +107,7 @@
 #define DENS_TYPE_LGNR 0
 #define DENS_TYPE_1LPT 1
 #define DENS_TYPE_2LPT 2
+#define DENS_TYPE_CLIP 3
 
 // End of interpolation parameters
 /////////
@@ -391,6 +367,11 @@ static inline double bias_model(double d,double b)
     return 0;
 #ifdef _BIAS_MODEL_2
   return pow(1+d,b)/pow(1+d*d,0.5*(b-1));
+#elif defined _BIAS_MODEL_3
+  if(1+b*d>0)
+    return 1+b*d;
+  else
+    return 0;
 #else //_BIAS_MODEL_2
   return pow(1+d,b);
 #endif //_BIAS_MODEL_2
