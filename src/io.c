@@ -909,6 +909,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->v_skw,&status);
       
       //Write slicing information
+      float sg=sqrt(par->sigma2_gauss);
       float *ra=my_malloc(par->cats[ipop]->nr*sizeof(float));
       float *za=my_malloc(par->cats[ipop]->nr*sizeof(float));
       float *gda=my_malloc(par->cats[ipop]->nr*sizeof(float));
@@ -925,6 +926,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       }
       fits_create_tbl(fptr,BINARY_TBL,0,4,tt,tf,tu,NULL,&status);
       fits_update_key(fptr,TSTRING,"CONTENTS","Background cosmology",NULL,&status);
+      fits_update_key(fptr,TFLOAT,"SIGMA_G",&sg,NULL, &status);
       fits_write_col(fptr,TFLOAT,1,1,1,par->cats[ipop]->nr,ra,&status);
       fits_write_col(fptr,TFLOAT,2,1,1,par->cats[ipop]->nr,za,&status);
       fits_write_col(fptr,TFLOAT,3,1,1,par->cats[ipop]->nr,gda,&status);
