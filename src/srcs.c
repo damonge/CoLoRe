@@ -167,7 +167,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
   np_tot_thr[0]=0;
   //np_tot_thr now contains the id of the first particle in the thread
 
-  par->cats_c[ipop]=catalog_cartesian_alloc(par->nsources_c_this[ipop]);
+  par->cats_c[ipop]=catalog_cartesian_alloc(par->nsources_c_this[ipop],par->nside_base);
   
   print_info("   Assigning coordinates\n");
 #ifdef _HAVE_OMP
@@ -208,7 +208,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	    double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
 	    double dz_rsd=rvel*get_bg(par,rr,BG_V1,0);
 	    for(ip=0;ip<npp;ip++) {
-	      long pix_id_ring,pix_id_nest;
+	      long pix_id_nest;
 	      double pos[3];
 	      long pid=np_tot_thr[ithr];
 
@@ -220,8 +220,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+2]=pos[2];
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+3]=dz_rsd;
 	      
-	      vec2pix_ring(par->nside_base,pos,&pix_id_ring);
-	      ring2nest(par->nside_base,pix_id_ring,&pix_id_nest);
+	      vec2pix_nest(par->nside_base,pos,&pix_id_nest);
 	      par->cats_c[ipop]->ipix[pid]=pix_id_nest;
 	      np_tot_thr[ithr]++;
 	    }
@@ -248,6 +247,66 @@ void srcs_set_cartesian(ParamCoLoRe *par)
   print_info("\n");
 }
 
+typedef struct {
+  int ipix;
+  float pos[NPOS_CC];
+} Src2Sort;
+
+static int compareSrc2Sort(const void *a,const void *b)
+{
+  Src2Sort *sa=(Src2Sort *)a;
+  Src2Sort *sb=(Src2Sort *)b;
+
+  if(sa->ipix<sb->ipix) return -1;
+  else if(sa->ipix==sb->ipix) return 0;
+  else return 1;
+}
+
+static void sort_by_ipix(CatalogCartesian *cat)
+{
+  Src2Sort *s=my_malloc(cat->nsrc*sizeof(Src2Sort));
+
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) \
+  shared(cat,s)
+#endif //_HAVE_OMP
+  {
+    long ii;
+    
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(ii=0;ii<cat->nsrc;ii++) {
+      int ax;
+      s[ii].ipix=cat->ipix[ii];
+      for(ax=0;ax<NPOS_CC;ax++)
+	s[ii].pos[ax]=cat->pos[NPOS_CC*ii+ax];
+    } //end omp for
+  } //end omp parallel
+  
+  qsort(s,cat->nsrc,sizeof(Src2Sort),compareSrc2Sort);
+  
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none) \
+  shared(cat,s)
+#endif //_HAVE_OMP
+  {
+    long ii;
+    
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(ii=0;ii<cat->nsrc;ii++) {
+      int ax;
+      cat->ipix[ii]=s[ii].ipix;
+      for(ax=0;ax<NPOS_CC;ax++)
+	cat->pos[NPOS_CC*ii+ax]=s[ii].pos[ax];
+    } //end omp for
+  } //end omp parallel
+  
+  free(s);
+}
+  
 static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
 {
   int ii;
@@ -282,12 +341,14 @@ static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
 
   //Reorganize positions so they are ordered by destination node
   float *pos_ordered=my_malloc(NPOS_CC*par->nsources_c_this[ipop]*sizeof(float));
+  int *ipix_ordered=my_malloc(par->nsources_c_this[ipop]*sizeof(int));
   for(ii=0;ii<par->nsources_c_this[ipop];ii++) {
     int ax;
     int i_node=cat->ipix[ii]%NNodes;
     long id_here=ns_to_nodes[i_node];
     for(ax=0;ax<NPOS_CC;ax++)
       pos_ordered[NPOS_CC*id_here+ax]=cat->pos[NPOS_CC*ii+ax];
+    ipix_ordered[id_here]=cat->ipix[ii];
     ns_to_nodes[i_node]++;
   }
 
@@ -299,7 +360,7 @@ static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
   //Loop through all nodes and receive particles
   //Free up old catalog and create new one
   catalog_cartesian_free(par->cats_c[ipop]);
-  par->cats_c[ipop]=catalog_cartesian_alloc(par->nsources_this[ipop]);
+  par->cats_c[ipop]=catalog_cartesian_alloc(par->nsources_this[ipop],par->nside_base);
   par->nsources_c_this[ipop]=par->nsources_this[ipop];
   long i_sofar=0;
   for(ii=0;ii<NNodes;ii++) {
@@ -310,22 +371,51 @@ static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
     //    print_info("Node %d: %d-th iteration. to->%d from->%d.",NodeThis,ii,node_to,node_from);
     //    print_info(" Should get %07ld objects, and will send %07ld.\n",npart_recv,npart_send);
 #ifdef _HAVE_MPI
-    MPI_Sendrecv(&(pos_ordered[NPOS_CC*i0_in_nodes[node_to]]),NPOS_CC*npart_send,MPI_FLOAT,node_to  ,ii,
-		 &(par->cats_c[ipop]->pos[NPOS_CC*i_sofar])  ,NPOS_CC*npart_recv,MPI_FLOAT,node_from,ii,
+    int t1=2*ii+0,t2=2*ii+1;
+    MPI_Sendrecv(&(pos_ordered[NPOS_CC*i0_in_nodes[node_to]]),NPOS_CC*npart_send,MPI_FLOAT,node_to  ,t1,
+		 &(par->cats_c[ipop]->pos[NPOS_CC*i_sofar])  ,NPOS_CC*npart_recv,MPI_FLOAT,node_from,t1,
+		 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    MPI_Sendrecv(&(ipix_ordered[i0_in_nodes[node_to]]),npart_send,MPI_INT,node_to  ,t2,
+		 &(par->cats_c[ipop]->ipix[i_sofar])  ,npart_recv,MPI_INT,node_from,t2,
 		 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
 #else //_HAVE_MPI
     memcpy(&(par->cats_c[ipop]->pos[NPOS_CC*i_sofar]),&(pos_ordered[NPOS_CC*i0_in_nodes[node_to]]),
+	   NPOS_CC*npart_send*sizeof(float));
+    memcpy(&(par->cats_c[ipop]->ipix[i_sofar]),&(ipix_ordered[i0_in_nodes[node_to]]),
 	   NPOS_CC*npart_send*sizeof(float));
 #endif //_HAVE_MPI
     i_sofar+=npart_recv;
     //    print_info(" %07ld sources gathered so far\n",i_sofar);
   }
-
+    
   free(pos_ordered);
+  free(ipix_ordered);
   free(i0_in_nodes);
   free(ns_to_nodes);
   free(ns_transfer_matrix);
-}
+
+  //Sort particles by pixel and count how many we have in each pixel
+  sort_by_ipix(par->cats_c[ipop]);
+#ifdef _HAVE_OMP
+#pragma omp parallel default(none)		\
+  shared(par,ipop,NNodes)
+#endif //_HAVE_OMP
+  {
+    long jj;
+    
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(jj=0;jj<par->cats_c[ipop]->nsrc;jj++) {
+      int ibeam=par->cats_c[ipop]->ipix[jj]/NNodes;
+      
+#ifdef _HAVE_OMP
+#pragma omp atomic
+#endif //_HAVE_OMP
+      par->cats_c[ipop]->nsrc_perbeam[ibeam]++;
+    } //end omp for
+  } //end omp parallel
+} 
 
 void srcs_distribute(ParamCoLoRe *par)
 {
@@ -341,7 +431,9 @@ void srcs_distribute(ParamCoLoRe *par)
 static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
 {
   par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],
-				par->r_max,par->n_grid);
+				par->r_max,par->n_grid,par->nside_base);
+  memcpy(par->cats[ipop]->nsrc_perbeam,par->cats_c[ipop]->nsrc_perbeam,
+	 par->cats_c[ipop]->nbeams_here*sizeof(int));
 
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none) \

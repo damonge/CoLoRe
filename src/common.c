@@ -469,7 +469,7 @@ void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
   *dr=rmax/(*nr);
 }
 
-CatalogCartesian *catalog_cartesian_alloc(int nsrcs)
+CatalogCartesian *catalog_cartesian_alloc(int nsrcs,int nside_beams)
 {
   CatalogCartesian *cat=my_malloc(sizeof(CatalogCartesian));
   
@@ -477,11 +477,26 @@ CatalogCartesian *catalog_cartesian_alloc(int nsrcs)
     cat->nsrc=nsrcs;
     cat->pos=my_malloc(NPOS_CC*nsrcs*sizeof(float));
     cat->ipix=my_malloc(nsrcs*sizeof(int));
+
+    int ib;
+    long nbeams_total=he_nside2npix(nside_beams);
+    cat->nbeams_here=0;
+    for(ib=NodeThis;ib<nbeams_total;ib+=NNodes)
+      cat->nbeams_here++;
+    cat->ipix_perbeam=my_malloc(cat->nbeams_here*sizeof(int));
+    cat->nsrc_perbeam=my_calloc(cat->nbeams_here,sizeof(int));
+    cat->nbeams_here=0;
+    for(ib=NodeThis;ib<nbeams_total;ib+=NNodes) {
+      cat->ipix_perbeam[cat->nbeams_here]=ib;
+      cat->nbeams_here++;
+    }
   }
   else {
     cat->nsrc=0;
     cat->pos=NULL;
     cat->ipix=NULL;
+    cat->ipix_perbeam=NULL;
+    cat->nsrc_perbeam=NULL;
   }
 
   return cat;
@@ -492,11 +507,13 @@ void catalog_cartesian_free(CatalogCartesian *cat)
   if(cat->nsrc>0) {
     free(cat->pos);
     free(cat->ipix);
+    free(cat->ipix_perbeam);
+    free(cat->nsrc_perbeam);
   }
   free(cat);
 }
 
-Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng)
+Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng,int nside_beams)
 {
   Catalog *cat=my_malloc(sizeof(Catalog));
   
@@ -511,11 +528,26 @@ Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng)
       cat->d_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
       cat->v_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
     }
+
+    int ib;
+    long nbeams_total=he_nside2npix(nside_beams);
+    cat->nbeams_here=0;
+    for(ib=NodeThis;ib<nbeams_total;ib+=NNodes)
+      cat->nbeams_here++;
+    cat->ipix_perbeam=my_malloc(cat->nbeams_here*sizeof(int));
+    cat->nsrc_perbeam=my_calloc(cat->nbeams_here,sizeof(int));
+    cat->nbeams_here=0;
+    for(ib=NodeThis;ib<nbeams_total;ib+=NNodes) {
+      cat->ipix_perbeam[cat->nbeams_here]=ib;
+      cat->nbeams_here++;
+    }
   }
   else {
     cat->nsrc=0;
     cat->srcs=NULL;
     cat->has_skw=0;
+    cat->ipix_perbeam=NULL;
+    cat->nsrc_perbeam=NULL;
   }
 
   return cat;
@@ -529,6 +561,8 @@ void catalog_free(Catalog *cat)
       free(cat->d_skw);
       free(cat->v_skw);
     }
+    free(cat->ipix_perbeam);
+    free(cat->nsrc_perbeam);
   }
   free(cat);
 }

@@ -62,7 +62,7 @@
 #include "cosmo_mad.h"
 
 /////////
-// Interpolation parameters
+// Option macros
 
 #define INTERP_NGP 0
 #define INTERP_CIC 1
@@ -109,8 +109,10 @@
 #define DENS_TYPE_2LPT 2
 #define DENS_TYPE_CLIP 3
 
-// End of interpolation parameters
-/////////
+//Output formats
+#define FMT_HDF5 2
+#define FMT_FITS 1
+#define FMT_ASCII 0
 
 #define DYNAMIC_SIZE 1
 #define RTOD 57.2957795
@@ -154,6 +156,9 @@ extern int MPIThreadsOK;
 #define NPOS_CC 4
 typedef struct {
   int nsrc;
+  int nbeams_here;
+  int *ipix_perbeam;
+  int *nsrc_perbeam;
   float *pos;
   int *ipix;
 } CatalogCartesian;
@@ -169,6 +174,9 @@ typedef struct {
 
 typedef struct {
   int nsrc;
+  int nbeams_here;
+  int *ipix_perbeam;
+  int *nsrc_perbeam;
   Src *srcs;
   int nr;
   double rmax;
@@ -356,9 +364,9 @@ void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
 HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr);
 void hp_shell_free(HealpixShells *shell);
-CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
+CatalogCartesian *catalog_cartesian_alloc(int nsrcs,int nside_beams);
 void catalog_cartesian_free(CatalogCartesian *cat);
-Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng);
+Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng,int nside_beams);
 void catalog_free(Catalog *cat);
 
 static inline double bias_model(double d,double b)

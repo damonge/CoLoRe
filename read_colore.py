@@ -9,11 +9,11 @@ import os
 def read_ascii(fname) :
     ifile=0
     
-    type_arr,ra_arr,dec_arr,z0_arr,rsd_arr,e1_arr,e2_arr=np.loadtxt(fname+"_%d.txt"%ifile,unpack=True)
+    type_arr,ra_arr,dec_arr,z0_arr,rsd_arr,e1_arr,e2_arr=np.loadtxt(fname+"_pix%d.txt"%ifile,unpack=True)
 
     ifile=1
-    while os.path.isfile(fname+"_%d.h5"%ifile) :
-        typ,ra,dec,z0,rsd,e1,e2=np.loadtxt(fname+"_%d.txt"%ifile,unpack=True)
+    while os.path.isfile(fname+"_pix%d.h5"%ifile) :
+        typ,ra,dec,z0,rsd,e1,e2=np.loadtxt(fname+"_pix%d.txt"%ifile,unpack=True)
         type_arr=np.concatenate((type_arr,typ_arr))
         ra_arr=np.concatenate((ra_arr,ra_arr))
         dec_arr=np.concatenate((dec_arr,dec_arr))
@@ -28,7 +28,7 @@ def read_ascii(fname) :
 def read_hdf5(fname,ipop) :
     ifile=0
     
-    ff=h5.File(fname+"_%d.h5"%ifile,"r")
+    ff=h5.File(fname+"_pix%d.h5"%ifile,"r")
     tabname='/sources%d'%ipop
 
     ra_arr=ff[tabname]['RA']
@@ -39,8 +39,8 @@ def read_hdf5(fname,ipop) :
     e2_arr=ff[tabname]['E2']
 
     ifile=1
-    while os.path.isfile(fname+"_%d.h5"%ifile) :
-        ff=h5.File(fname+"_%d.h5"%ifile,"r")
+    while os.path.isfile(fname+"_pix%d.h5"%ifile) :
+        ff=h5.File(fname+"_pix%d.h5"%ifile,"r")
         tabname='/sources%d'%ipop
         
         ra_arr=np.concatenate((ra_arr,ff[tabname]['RA']))
@@ -58,7 +58,7 @@ def read_hdf5(fname,ipop) :
 def read_fits(fname) :
     ifile=0
 
-    fi=fits.open(fname+"_%d.fits"%ifile)
+    fi=fits.open(fname+"_pix%d.fits"%ifile)
     data=(fi[1]).data
     if len(fi)>2 : with_skewers=True
     else : with_skewers=False
@@ -71,7 +71,7 @@ def read_fits(fname) :
         dens_skewers=None
         vrad_skewers=None
         data_skewers=None
-    
+        
     ra_arr=data['RA']
     dec_arr=data['DEC']
     z0_arr=data['Z_COSMO']
@@ -81,8 +81,8 @@ def read_fits(fname) :
     type_arr=data['TYPE']
 
     ifile=1
-    while os.path.isfile(fname+"_%d.fits"%ifile) :
-        fi=fits.open(fname+"_%d.fits"%ifile)
+    while os.path.isfile(fname+"_pix%d.fits"%ifile) :
+        fi=fits.open(fname+"_pix%d.fits"%ifile)
         data=(fi[1]).data
         if with_skewers :
             dens_skw=(fi[2]).data
