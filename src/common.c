@@ -451,7 +451,9 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
 	printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
       printf("]\n");
     }
+#ifdef _HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
+#endif //_HAVE_MPI
   }
 #endif //_DEBUG
       
