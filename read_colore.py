@@ -23,7 +23,7 @@ def read_ascii(fname) :
         e2_arr=np.concatenate((e2_arr,e2_arr))
         ifile+=1
 
-    return ra_arr,dec_arr,z0_arr,rsd_arr,type_arr,e1_arr,e2_arr
+    return ra_arr,dec_arr,z0_arr,rsd_arr,type_arr,e1_arr,e2_arr,None,None,None
 
 def read_hdf5(fname,ipop) :
     ifile=0
@@ -53,7 +53,7 @@ def read_hdf5(fname,ipop) :
 
     type_arr=ipop*np.ones(len(ra_arr))
 
-    return ra_arr,dec_arr,z0_arr,rsd_arr,type_arr,e1_arr,e2_arr
+    return ra_arr,dec_arr,z0_arr,rsd_arr,type_arr,e1_arr,e2_arr,None,None,None
 
 def read_fits(fname) :
     ifile=0
@@ -109,11 +109,11 @@ fname=sys.argv[1]
 fmt=sys.argv[2]
 
 if fmt=='ASCII' :
-    ra_arr,dec_arr,z_arr,rsd_arr,type_arr,e1_arr,e2_arr=read_ascii(fname)
+    ra_arr,dec_arr,z_arr,rsd_arr,type_arr,e1_arr,e2_arr,dskw_arr,vskw_arr,data_skw=read_ascii(fname)
 elif fmt=='FITS' :
     ra_arr,dec_arr,z_arr,rsd_arr,type_arr,e1_arr,e2_arr,dskw_arr,vskw_arr,data_skw=read_fits(fname)
 elif fmt=='HDF5' :
-    ra_arr,dec_arr,z_arr,rsd_arr,type_arr,e1_arr,e2_arr=read_hdf5(fname,0)
+    ra_arr,dec_arr,z_arr,rsd_arr,type_arr,e1_arr,e2_arr,dskw_arr,vskw_arr,data_skw=read_hdf5(fname,1)
 
 nside=64
 npix=hp.nside2npix(nside)

@@ -88,6 +88,7 @@ static ParamCoLoRe *param_colore_new(void)
   sprintf(par->prefixOut,"default");
   par->output_format=0;
   par->do_pred=0;
+  par->do_pred=1;
 
   //Tracers
   par->do_srcs=0;
@@ -233,9 +234,10 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   conf_read_bool(conf,"global","output_density",&(par->output_density));
   conf_read_int(conf,"global","seed",&i_dum);
   conf_read_bool(conf,"global","write_pred",&(par->do_pred));
-  if (par->do_pred) 
+  if (par->do_pred) {
+    conf_read_bool(conf,"global","just_write_pred",&(par->just_do_pred));
     conf_read_double(conf,"global","pred_dz",&(par->pred_dz));
-
+  }
   conf_read_double(conf,"field_par","r_smooth",&(par->r2_smooth));
   conf_read_bool(conf,"field_par","smooth_potential",&(par->smooth_potential));
   conf_read_int(conf,"field_par","n_grid",&(par->n_grid));
@@ -375,7 +377,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
   init_fftw(par);
 
-  get_max_memory(par,test_memory);
+  get_max_memory(par,test_memory+par->just_do_pred);
 
   cosmo_set(par);
   print_info("\n");
@@ -415,6 +417,9 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     free(par);
     return NULL;
   }
+
+  if(par->just_do_pred)
+    return par;
 
   allocate_fftw(par);
 
@@ -989,20 +994,24 @@ void param_colore_free(ParamCoLoRe *par)
   free(par->logkarr);
   free(par->pkarr);
   end_fftw(par);
-  
+
   if(par->do_srcs) {
     for(ii=0;ii<par->n_srcs;ii++) {
       free(par->srcs_bz_arr[ii]);
       free(par->srcs_nz_arr[ii]);
       free(par->srcs_norm_arr[ii]);
-      if(par->cats_c[ii]!=NULL)
-	catalog_cartesian_free(par->cats_c[ii]);
-      if(par->cats[ii]!=NULL)
-	catalog_free(par->cats[ii]);
+      if(par->cats_c!=NULL) {
+	if(par->cats_c[ii]!=NULL)
+	  catalog_cartesian_free(par->cats_c[ii]);
+      }
+      if(par->cats!=NULL) {
+	if(par->cats[ii]!=NULL)
+	  catalog_free(par->cats[ii]);
+      }
     }
     if(par->cats_c!=NULL)
       free(par->cats_c);
-    if(par->cats)
+    if(par->cats!=NULL)
       free(par->cats);
     free(par->nsources_c_this);
     free(par->nsources_this);
@@ -1013,18 +1022,20 @@ void param_colore_free(ParamCoLoRe *par)
       free(par->imap_bz_arr[ii]);
       free(par->imap_tz_arr[ii]);
       free(par->imap_norm_arr[ii]);
-      hp_shell_free(par->imap[ii]);
+      if(par->imap!=NULL)
+	hp_shell_free(par->imap[ii]);
     }
     if(par->imap!=NULL)
       free(par->imap);
   }
 
   if(par->do_kappa) {
-    hp_shell_free(par->kmap);
+    if(par->kmap!=NULL)
+      hp_shell_free(par->kmap);
 #ifdef _ADD_EXTRA_KAPPA
     for(ii=0;ii<par->n_kappa;ii++) {
       if(par->need_extra_kappa[ii]) {
-    	free(par->fl_mean_extra_kappa[ii]);
+	free(par->fl_mean_extra_kappa[ii]);
 	free(par->cl_extra_kappa[ii]);
       }
     }
@@ -1035,7 +1046,8 @@ void param_colore_free(ParamCoLoRe *par)
   }
 
   if(par->do_isw) {
-    hp_shell_free(par->pd_map);
+    if(par->pd_map!=NULL)
+      hp_shell_free(par->pd_map);
 #ifdef _ADD_EXTRA_KAPPA
     for(ii=0;ii<par->n_isw;ii++) {
       if(par->need_extra_isw[ii]) {
@@ -1048,6 +1060,7 @@ void param_colore_free(ParamCoLoRe *par)
     free(par->cl_extra_isw);
 #endif //_ADD_EXTRA_KAPPA
   }
+
 
 #ifdef _DEBUG
   fclose(par->f_dbg);

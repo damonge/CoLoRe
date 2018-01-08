@@ -58,61 +58,64 @@ int main(int argc,char **argv)
 
   print_info("Seed : %u\n",par->seed_rng);
 
-  //Create Gaussian density and radial velocity fields
-  create_cartesian_fields(par);
-
-  //Lognormalize density field
-  compute_physical_density_field(par);
-
-  //Compute normalization of density field for biasing
-  compute_density_normalization(par);
-
-  //Get information from slabs
-  if(par->do_srcs)
-    srcs_set_cartesian(par);
-  if(par->do_imap)
-    imap_set_cartesian(par);
-  if(par->do_kappa)
-    kappa_set_cartesian(par);
-  if(par->do_isw)
-    isw_set_cartesian(par);
-
-  //Distribute information across
-  if(par->do_srcs)
-    srcs_distribute(par);
-  if(par->do_imap)
-    imap_distribute(par);
-  if(par->do_kappa)
-    kappa_distribute(par);
-  if(par->do_isw)
-    isw_distribute(par);
-
-  //Postprocess after 
-  if(par->do_srcs)
-    srcs_get_local_properties(par);
-  if(par->do_imap)
-    imap_get_local_properties(par);
-  if(par->do_kappa)
-    kappa_get_local_properties(par);
-  if(par->do_isw)
-    isw_get_local_properties(par);
-
-  //All-to-all communication of density field
-  //and computation of all required quantities
-  if(par->need_beaming)
-    get_beam_properties(par);
-
-  //Write output
-  if(par->do_srcs)
-    write_srcs(par);
-  if(par->do_imap)
-    write_imap(par);
-  if(par->do_kappa)
-    write_kappa(par);
-  if(par->do_isw)
-    write_isw(par);
   if(par->do_pred)
     write_predictions(par);
+  if(!(par->just_do_pred)) {
+
+    //Create Gaussian density and radial velocity fields
+    create_cartesian_fields(par);
+    
+    //Lognormalize density field
+    compute_physical_density_field(par);
+    
+    //Compute normalization of density field for biasing
+    compute_density_normalization(par);
+    
+    //Get information from slabs
+    if(par->do_srcs)
+      srcs_set_cartesian(par);
+    if(par->do_imap)
+      imap_set_cartesian(par);
+    if(par->do_kappa)
+      kappa_set_cartesian(par);
+    if(par->do_isw)
+      isw_set_cartesian(par);
+    
+    //Distribute information across
+    if(par->do_srcs)
+      srcs_distribute(par);
+    if(par->do_imap)
+      imap_distribute(par);
+    if(par->do_kappa)
+      kappa_distribute(par);
+    if(par->do_isw)
+      isw_distribute(par);
+    
+    //Postprocess after 
+    if(par->do_srcs)
+      srcs_get_local_properties(par);
+    if(par->do_imap)
+      imap_get_local_properties(par);
+    if(par->do_kappa)
+      kappa_get_local_properties(par);
+    if(par->do_isw)
+      isw_get_local_properties(par);
+    
+    //All-to-all communication of density field
+    //and computation of all required quantities
+    if(par->need_beaming)
+      get_beam_properties(par);
+    
+    //Write output
+    if(par->do_srcs)
+      write_srcs(par);
+    if(par->do_imap)
+      write_imap(par);
+    if(par->do_kappa)
+      write_kappa(par);
+    if(par->do_isw)
+      write_isw(par);
+  }
 
   print_info("\n");
   print_info("|-------------------------------------------------|\n\n");

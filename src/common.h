@@ -325,6 +325,7 @@ typedef struct {
 
   //Lognormal predictions
   int do_pred;
+  int just_do_pred;
   double pred_dz;
 
   //Beam distribution
