@@ -80,8 +80,8 @@ void write_predictions(ParamCoLoRe *par)
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
 	xi2pk(Nk,ra,xi,ka,pk);
 	// now open the files
-	sprintf(fnamepk,"%s_pk_srcs_pop%i_z%g.txt",par->prefixOut,ipop,z);
-	sprintf(fnamexi,"%s_xi_srcs_pop%i_z%g.txt",par->prefixOut,ipop,z);
+	sprintf(fnamepk,"%s_pk_srcs_pop%i_z%.3lf.txt",par->prefixOut,ipop,z);
+	sprintf(fnamexi,"%s_xi_srcs_pop%i_z%.3lf.txt",par->prefixOut,ipop,z);
 	fpk=fopen(fnamepk,"w");
 	fprintf (fpk, "# k[h/Mpc] P_tt P_tl P_ll\n");
 	fxi=fopen(fnamexi,"w");
@@ -108,8 +108,8 @@ void write_predictions(ParamCoLoRe *par)
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
 	xi2pk(Nk,ra,xi,ka,pk);
 	// now open the files
-	sprintf(fnamepk,"%s_pk_imap_pop%i_z%g.txt",par->prefixOut,ipop,z);
-	sprintf(fnamexi,"%s_xi_imap_pop%i_z%g.txt",par->prefixOut,ipop,z);
+	sprintf(fnamepk,"%s_pk_imap_pop%i_z%.3lf.txt",par->prefixOut,ipop,z);
+	sprintf(fnamexi,"%s_xi_imap_pop%i_z%.3lf.txt",par->prefixOut,ipop,z);
 	fpk=fopen(fnamepk,"w");
 	fprintf (fpk, "# k[h/Mpc] P_tt P_tl P_ll\n");
 	fxi=fopen(fnamexi,"w");

@@ -23,7 +23,7 @@ USE_HDF5 = yes
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
-USE_MPI = no
+USE_MPI = yes
 #
 ###Path to libraries and headers
 ###If two or more of the dependencies reside in the same paths, only
