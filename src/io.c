@@ -205,6 +205,28 @@ static void conf_read_bool(config_t *conf,char *secname,char *varname,int *out)
     report_error(1,"Couldn't read variable %s\n",fullpath);
 }
 
+static int choose_nside_base(void)
+{
+  int nside_base=2;
+  int enough=0;
+
+  while(!enough) {
+    long npix=he_nside2npix(nside_base);
+    if(npix%NNodes==0)
+      enough=1;
+    else {
+      int pernode=npix/NNodes;
+      double load_diff=(pernode+1.)/pernode;
+      if(load_diff<1.2)
+	enough=1;
+      else
+	nside_base*=2;
+    }
+  }
+
+  return nside_base;
+}
+
 ParamCoLoRe *read_run_params(char *fname,int test_memory)
 {
   int stat,ii,i_dum,found;
@@ -213,12 +235,10 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   ParamCoLoRe *par=param_colore_new();
   config_t *conf=malloc(sizeof(config_t));
 
-  par->nside_base=2;
-  while(he_nside2npix(par->nside_base)<NNodes)
-    par->nside_base*=2;
-  par->npix_base=he_nside2npix(par->nside_base);
+  par->nside_base=choose_nside_base();
   if(par->nside_base>NSIDE_MAX_HPX)
     report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
+  par->npix_base=he_nside2npix(par->nside_base);
 
   config_init(conf);
 
