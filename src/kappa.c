@@ -91,7 +91,7 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
     double idr,dr;
     get_radial_params(par->r_max,par->n_grid,&nr,&dr);
     idr=1./dr;
-  
+
     //Compute index of each source plane
     int *i_r_max_arr=my_malloc(kmap->nr*sizeof(int));
     int *i_r_min_arr=my_malloc(kmap->nr*sizeof(int));
@@ -127,7 +127,7 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
       double *u=&(kmap->pos[3*ip]);
       double prefac=idx*idx;
       double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
-      
+
       cth_h=u[2];
       if(cth_h>=1) cth_h=1;
       if(cth_h<=-1) cth_h=-1;
@@ -136,7 +136,7 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
 	cph_h=u[0]/sth_h;
 	sph_h=u[1]/sth_h;
       }
-      
+
       rot[0]=(cth_h*cth_h*cph_h*cph_h+sph_h*sph_h)*prefac;
       rot[1]=(2*cph_h*sph_h*(cth_h*cth_h-1))*prefac;
       rot[2]=(-2*cth_h*sth_h*cph_h)*prefac;
@@ -151,7 +151,7 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
 	  double rm=(irr+0.5)*dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
+	  added=interpolate_from_grid(par,xn,NULL,NULL,NULL,t,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
 	  if(added) {
 	    double dotp=0;
 	    for(ax=0;ax<6;ax++)
@@ -161,7 +161,7 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
 	  }
 	}
 	kmap->data[i_r*kmap->num_pix+ip]+=(kappa_1-inv_r_max[i_r]*kappa_2);
-      }	
+      }
     } //end omp for
 
     free(fac_r_1);
