@@ -1,8 +1,8 @@
 ########## User-definable stuff ##########
 #
 ###Compiler and compilation options
-COMP_SER = gcc
-COMP_MPI = mpicc
+COMP_SER = cc
+COMP_MPI = cc
 OPTIONS = -Wall -O3 -std=c99
 #
 ### Behavioural flags
@@ -11,7 +11,7 @@ DEFINEFLAGS += -D_LONGIDS
 #Use normalized bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_2
 #Use linear bias model
-DEFINEFLAGS += -D_BIAS_MODEL_3
+#DEFINEFLAGS += -D_BIAS_MODEL_3
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
@@ -19,41 +19,43 @@ USE_SINGLE_PRECISION = yes
 #Add random perturbations to kappa from redshifts outside the box
 ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
-USE_HDF5 = no
+USE_HDF5 = yes
 #Use OMP parallelization? Set to "yes" or "no"
-USE_OMP = no
+USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
-USE_MPI = no
+USE_MPI = yes
 #
 ###Path to libraries and headers
 ###If two or more of the dependencies reside in the same paths, only
 ###one instance is necessary.
 #GSL
-GSL_INC = -I/usr/local/include
-GSL_LIB = -L/usr/local/lib
+#GSL_INC = -I/add/path
+#GSL_LIB = -L/add/path
+GSL_INC = -I/usr/common/software/gsl/2.1/intel/include
+GSL_LIB = -L/usr/common/software/gsl/2.1/intel/lib
 #FFTW
-FFTW_INC = -I/usr/local/include
-FFTW_LIB = -L/usr/local/lib
+FFTW_INC = -I/opt/cray/pe/fftw/3.3.6.2/haswell/include
+FFTW_LIB = -L/opt/cray/pe/fftw/3.3.6.2/haswell/lib
 #cfitsio
-FITS_INC = -I/usr/local/include
-FITS_LIB = -L/usr/local/lib
+FITS_INC = -I/usr/common/software/cfitsio/3.370-reentrant/hsw/intel/include
+FITS_LIB = -L/usr/common/software/cfitsio/3.370-reentrant/hsw/intel/lib
 #cfitsio
 HDF5_INC =
 HDF5_LIB =
 #libconfig
-CONF_INC = -I/usr/local/include
-CONF_LIB = -L/usr/local/lib
+CONF_INC = -I/global/homes/d/damonge/include
+CONF_LIB = -L/global/homes/d/damonge/lib
 #healpix
-HPIX_INC = -I/Users/jfarr/Programs/Healpix_3.31/include
-HPIX_LIB = -L/Users/jfarr/Programs/Healpix_3.31/lib
+HPIX_INC =
+HPIX_LIB =
 #libsharp
-SHT_INC = -I/Users/jfarr/Programs/libsharp/auto/include/
-SHT_LIB = -L/Users/jfarr/Programs/libsharp/auto/lib/
+SHT_INC =
+SHT_LIB =
 #
 ########## End of user-definable ##########
 
 USE_FITS = yes
-DEFINEFLAGS += -DHAVE_INLINE -DGSL_RANGE_CHECK_OFF
+DEFINEFLAGS += -DHAVE_INLINE -DGSL_RANGE_CHECK_OFF 
 
 ifeq ($(strip $(USE_OMP)),yes)
 OPTIONS += -fopenmp
@@ -84,7 +86,7 @@ ifeq ($(strip $(USE_OMP)),yes)
 LIB_FFTW += -lfftw3_omp
 endif #OMP
 ifeq ($(strip $(USE_MPI)),yes)
-LIB_FFTW += -lfftw3_mpi
+LIB_FFTW += -lfftw3_mpi 
 endif #MPI
 
 endif #SINGLE_PRECISION
