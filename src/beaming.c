@@ -54,7 +54,15 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 	//Get gaussian
   if(flag_return & RETURN_GAUSS) {
     //Get D and r
-    double r=sqrt(ix*ix+iy*iy+iz*iz);
+		//try to replicate what goes on in function 'lognormalize' in density.c
+		//I think the variables 'indexz' and 'indexy' there are the same as iz_0 and iy_0 here?
+		//long indexz=iz*((long)(ngx*par->n_grid));																		
+		//long indexy=iy*ngx;
+		//long index=ix+indexy+indexz;
+		flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+		flouble y0=(iy+0.5)*dx-par->pos_obs[1];
+		flouble x0=(ix+0.5)*dx-par->pos_obs[0];
+    double r=sqrt(x0*x0+y0*y0+z0*z0);
     double dg=get_bg(par,r,BG_D1,0);
     *g=(log(1+par->grid_dens[ix_0+iy_0+iz_0]))/(dg)+(dg)*(par->sigma2_gauss)/2;
   }
