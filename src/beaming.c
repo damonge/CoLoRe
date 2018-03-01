@@ -56,9 +56,10 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
     //Get D and r
 		//try to replicate what goes on in function 'lognormalize' in density.c
 		//I think the variables 'indexz' and 'indexy' there are the same as iz_0 and iy_0 here?
-		//long indexz=iz*((long)(ngx*par->n_grid));																		
+		//long indexz=iz*((long)(ngx*par->n_grid));
 		//long indexy=iy*ngx;
 		//long index=ix+indexy+indexz;
+		flouble dx=par->l_box/par->n_grid;
 		flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
 		flouble y0=(iy+0.5)*dx-par->pos_obs[1];
 		flouble x0=(ix+0.5)*dx-par->pos_obs[0];
