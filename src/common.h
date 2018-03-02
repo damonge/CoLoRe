@@ -68,10 +68,10 @@
 #define INTERP_CIC 1
 #define INTERP_TSC 2
 #define RETURN_DENS 1
-#define RETURN_GAUSS 16
 #define RETURN_VEL  2
 #define RETURN_TID  4
 #define RETURN_PDOT 8
+#define RETURN_GAUSS 16
 
 //Interpolation type
 #ifndef INTERP_TYPE_SKW
@@ -421,7 +421,7 @@ void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout);
 //////
 // Functions defined in beaming.c
 int interpolate_from_grid(ParamCoLoRe *par,double *x,
-			  flouble *d,flouble *g,flouble v[3],flouble t[6],flouble *pd,
+			  flouble *d,flouble v[3],flouble t[6],flouble *pd,flouble *g,
 			  int flag_return,int interp_type);
 void get_beam_properties(ParamCoLoRe *par);
 
