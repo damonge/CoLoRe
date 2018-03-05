@@ -928,7 +928,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
         naxes[1]=par->cats[ipop]->nsrc;
         nelements=naxes[0]*naxes[1];
         fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
-        fits_update_key(fptr, TSTRING, "CONTENTS", "density skewers",NULL, &status);
+        fits_update_key(fptr, TSTRING, "CONTENTS", "gaussian skewers",NULL, &status);
         fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->g_skw,&status);
       }
       else {
