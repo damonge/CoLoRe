@@ -82,34 +82,34 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
   //Get tidal tensor
   if(flag_return & RETURN_TID) {
     t[IND_XX]=(par->grid_npot[ix_hi+iy_0+iz_0]+par->grid_npot[ix_lo+iy_0+iz_0]-
-         2*par->grid_npot[ix_0+iy_0+iz_0]);
+              2*par->grid_npot[ix_0+iy_0+iz_0]);
     t[IND_YY]=(par->grid_npot[ix_0+iy_hi+iz_0]+par->grid_npot[ix_0+iy_lo+iz_0]-
-         2*par->grid_npot[ix_0+iy_0+iz_0]);
+              2*par->grid_npot[ix_0+iy_0+iz_0]);
     t[IND_XY]=0.25*(par->grid_npot[ix_hi+iy_hi+iz_0]+par->grid_npot[ix_lo+iy_lo+iz_0]-
-        par->grid_npot[ix_hi+iy_lo+iz_0]-par->grid_npot[ix_lo+iy_hi+iz_0]);
+                   par->grid_npot[ix_hi+iy_lo+iz_0]-par->grid_npot[ix_lo+iy_hi+iz_0]);
     if(iz==0) {
       t[IND_ZZ]=(par->grid_npot[ix_0+iy_0+iz_hi]+par->slice_left[ix_0+iy_0]-
-          2*par->grid_npot[ix_0+iy_0+iz_0]);
+                2*par->grid_npot[ix_0+iy_0+iz_0]);
       t[IND_XZ]=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->slice_left[ix_lo+iy_0]-
-          par->slice_left[ix_hi+iy_0]-par->grid_npot[ix_lo+iy_0+iz_hi]);
+                     par->slice_left[ix_hi+iy_0]-par->grid_npot[ix_lo+iy_0+iz_hi]);
       t[IND_YZ]=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->slice_left[ix_0+iy_lo]-
-          par->slice_left[ix_0+iy_hi]-par->grid_npot[ix_0+iy_lo+iz_hi]);
+                     par->slice_left[ix_0+iy_hi]-par->grid_npot[ix_0+iy_lo+iz_hi]);
     }
     else if(iz==par->nz_here-1) {
       t[IND_ZZ]=(par->slice_right[ix_0+iy_0]+par->grid_npot[ix_0+iy_0+iz_lo]-
-          2*par->grid_npot[ix_0+iy_0+iz_0]);
+                2*par->grid_npot[ix_0+iy_0+iz_0]);
       t[IND_XZ]=0.25*(par->slice_right[ix_hi+iy_0]+par->grid_npot[ix_lo+iy_0+iz_lo]-
-          par->grid_npot[ix_hi+iy_0+iz_lo]-par->slice_right[ix_lo+iy_0]);
+                     par->grid_npot[ix_hi+iy_0+iz_lo]-par->slice_right[ix_lo+iy_0]);
       t[IND_YZ]=0.25*(par->slice_right[ix_0+iy_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
-          par->grid_npot[ix_0+iy_hi+iz_lo]-par->slice_right[ix_0+iy_lo]);
+                     par->grid_npot[ix_0+iy_hi+iz_lo]-par->slice_right[ix_0+iy_lo]);
     }
     else {
       t[IND_ZZ]=(par->grid_npot[ix_0+iy_0+iz_hi]+par->grid_npot[ix_0+iy_0+iz_lo]-
-          2*par->grid_npot[ix_0+iy_0+iz_0]);
+                2*par->grid_npot[ix_0+iy_0+iz_0]);
       t[IND_XZ]=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->grid_npot[ix_lo+iy_0+iz_lo]-
-          par->grid_npot[ix_hi+iy_0+iz_lo]-par->grid_npot[ix_lo+iy_0+iz_hi]);
+                     par->grid_npot[ix_hi+iy_0+iz_lo]-par->grid_npot[ix_lo+iy_0+iz_hi]);
       t[IND_YZ]=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
-          par->grid_npot[ix_0+iy_hi+iz_lo]-par->grid_npot[ix_0+iy_lo+iz_hi]);
+                     par->grid_npot[ix_0+iy_hi+iz_lo]-par->grid_npot[ix_0+iy_lo+iz_hi]);
     }
   }
 }
@@ -274,15 +274,15 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
   long i_sofar=0;
   while(i_sofar+SENDRECV_BATCH<count) {
     MPI_Sendrecv(&(data[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeRight,tag,
-        &(buff[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeLeft ,tag,
-        MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                &(buff[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeLeft ,tag,
+                MPI_COMM_WORLD,MPI_STATUS_IGNORE);
     i_sofar+=SENDRECV_BATCH;
   }
   remainder=(int)(count-i_sofar);
   if(remainder>0) {
     MPI_Sendrecv(&(data[i_sofar]),remainder,FLOUBLE_MPI,NodeRight,tag,
-        &(buff[i_sofar]),remainder,FLOUBLE_MPI,NodeLeft ,tag,
-        MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+                &(buff[i_sofar]),remainder,FLOUBLE_MPI,NodeLeft ,tag,
+                MPI_COMM_WORLD,MPI_STATUS_IGNORE);
   }
   memcpy(data,buff,count*sizeof(flouble));
 }
