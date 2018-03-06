@@ -89,7 +89,7 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
         par->grid_npot[ix_hi+iy_lo+iz_0]-par->grid_npot[ix_lo+iy_hi+iz_0]);
     if(iz==0) {
       t[IND_ZZ]=(par->grid_npot[ix_0+iy_0+iz_hi]+par->slice_left[ix_0+iy_0]-
-     2*par->grid_npot[ix_0+iy_0+iz_0]);
+          2*par->grid_npot[ix_0+iy_0+iz_0]);
       t[IND_XZ]=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->slice_left[ix_lo+iy_0]-
           par->slice_left[ix_hi+iy_0]-par->grid_npot[ix_lo+iy_0+iz_hi]);
       t[IND_YZ]=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->slice_left[ix_0+iy_lo]-
@@ -97,7 +97,7 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
     }
     else if(iz==par->nz_here-1) {
       t[IND_ZZ]=(par->slice_right[ix_0+iy_0]+par->grid_npot[ix_0+iy_0+iz_lo]-
-     2*par->grid_npot[ix_0+iy_0+iz_0]);
+          2*par->grid_npot[ix_0+iy_0+iz_0]);
       t[IND_XZ]=0.25*(par->slice_right[ix_hi+iy_0]+par->grid_npot[ix_lo+iy_0+iz_lo]-
           par->grid_npot[ix_hi+iy_0+iz_lo]-par->slice_right[ix_lo+iy_0]);
       t[IND_YZ]=0.25*(par->slice_right[ix_0+iy_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
@@ -105,7 +105,7 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
     }
     else {
       t[IND_ZZ]=(par->grid_npot[ix_0+iy_0+iz_hi]+par->grid_npot[ix_0+iy_0+iz_lo]-
-     2*par->grid_npot[ix_0+iy_0+iz_0]);
+          2*par->grid_npot[ix_0+iy_0+iz_0]);
       t[IND_XZ]=0.25*(par->grid_npot[ix_hi+iy_0+iz_hi]+par->grid_npot[ix_lo+iy_0+iz_lo]-
           par->grid_npot[ix_hi+iy_0+iz_lo]-par->grid_npot[ix_lo+iy_0+iz_hi]);
       t[IND_YZ]=0.25*(par->grid_npot[ix_0+iy_hi+iz_hi]+par->grid_npot[ix_0+iy_lo+iz_lo]-
@@ -147,9 +147,9 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
     for(ax=0;ax<3;ax++) {
       ix0[ax]=(long)(x[ax]+0.5);
       if(ix0[ax]>=par->n_grid)
-  ix0[ax]-=par->n_grid;
+        ix0[ax]-=par->n_grid;
       else if(ix0[ax]<0)
-  ix0[ax]+=par->n_grid;
+        ix0[ax]+=par->n_grid;
       h0x[ax]=1.;
     }
     ix0[2]-=par->iz0_here;
@@ -161,21 +161,21 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       added_anything=1;
       get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,&g_000,flag_return);
       if(flag_return & RETURN_DENS)
-  *d+=d_000*w_000;
+        *d+=d_000*w_000;
 
       if(flag_return & RETURN_GAUSS)
-  *g+=g_000*w_000;
+        *g+=g_000*w_000;
 
       if(flag_return & RETURN_VEL) {
-  for(ax=0;ax<3;ax++)
-    v[ax]+=v_000[ax]*w_000;
+        for(ax=0;ax<3;ax++)
+          v[ax]+=v_000[ax]*w_000;
       }
       if(flag_return & RETURN_TID) {
-  for(ax=0;ax<6;ax++)
-    t[ax]+=t_000[ax]*w_000;
+        for(ax=0;ax<6;ax++)
+          t[ax]+=t_000[ax]*w_000;
       }
       if(flag_return & RETURN_PDOT)
-  *pd+=pd_000*w_000;
+        *pd+=pd_000*w_000;
     }
   }
   else {
@@ -189,13 +189,13 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       h1x[ax]=1-h0x[ax];
       ix1[ax]=ix0[ax]+1;
       if(ix0[ax]>=par->n_grid)
-  ix0[ax]-=par->n_grid;
+        ix0[ax]-=par->n_grid;
       else if(ix0[ax]<0)
-  ix0[ax]+=par->n_grid;
+        ix0[ax]+=par->n_grid;
       if(ix1[ax]>=par->n_grid)
-  ix1[ax]-=par->n_grid;
+        ix1[ax]-=par->n_grid;
       else if(ix1[ax]<0)
-  ix1[ax]+=par->n_grid;
+        ix1[ax]+=par->n_grid;
     }
     ix0[2]-=par->iz0_here;
     ix1[2]-=par->iz0_here;
@@ -274,15 +274,15 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
   long i_sofar=0;
   while(i_sofar+SENDRECV_BATCH<count) {
     MPI_Sendrecv(&(data[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeRight,tag,
-     &(buff[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeLeft ,tag,
-     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+        &(buff[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeLeft ,tag,
+        MPI_COMM_WORLD,MPI_STATUS_IGNORE);
     i_sofar+=SENDRECV_BATCH;
   }
   remainder=(int)(count-i_sofar);
   if(remainder>0) {
     MPI_Sendrecv(&(data[i_sofar]),remainder,FLOUBLE_MPI,NodeRight,tag,
-     &(buff[i_sofar]),remainder,FLOUBLE_MPI,NodeLeft ,tag,
-     MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+        &(buff[i_sofar]),remainder,FLOUBLE_MPI,NodeLeft ,tag,
+        MPI_COMM_WORLD,MPI_STATUS_IGNORE);
   }
   memcpy(data,buff,count*sizeof(flouble));
 }

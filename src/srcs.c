@@ -453,29 +453,29 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 
       //Fill up skewers
       if(cat->has_skw) {
-	int i_r,i_r_max=MIN((int)(r*cat->idr+0.5),cat->nr-1);
-	long offp=ip*cat->nr;
-	for(i_r=0;i_r<=i_r_max;i_r++) {
-	  double rm=(i_r+0.5)*cat->dr;
-    for(ax=0;ax<3;ax++)
-	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-          if(cat->skw_gauss) {
-            added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
-          }
-          else {
-	          added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
-          }
-	  if(added) {
-	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+      	int i_r,i_r_max=MIN((int)(r*cat->idr+0.5),cat->nr-1);
+      	long offp=ip*cat->nr;
+      	for(i_r=0;i_r<=i_r_max;i_r++) {
+      	  double rm=(i_r+0.5)*cat->dr;
+          for(ax=0;ax<3;ax++)
+      	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
             if(cat->skw_gauss) {
-  	      cat->g_skw[offp+i_r]+=gauss;
+              added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
             }
             else {
-              cat->d_skw[offp+i_r]+=dens;
+              added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
             }
-	    cat->v_skw[offp+i_r]+=vr;
-	  }
-	}
+      	  if(added) {
+      	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+                  if(cat->skw_gauss) {
+        	      cat->g_skw[offp+i_r]+=gauss;
+                  }
+                  else {
+                    cat->d_skw[offp+i_r]+=dens;
+                  }
+      	    cat->v_skw[offp+i_r]+=vr;
+      	  }
+      	}
       }
 
       //Compute lensing shear
