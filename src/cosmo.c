@@ -497,10 +497,8 @@ void cosmo_set(ParamCoLoRe *par)
   FILE *fi;
   gsl_spline *spline_srcs_bz[NPOP_MAX];
   gsl_spline *spline_srcs_nz[NPOP_MAX];
-  gsl_interp_accel *intacc_srcs=gsl_interp_accel_alloc();
   gsl_spline *spline_imap_bz[NPOP_MAX];
   gsl_spline *spline_imap_tz[NPOP_MAX];
-  gsl_interp_accel *intacc_imap=gsl_interp_accel_alloc();
 
   Csm_params *pars=csm_params_new();
   csm_unset_gsl_eh();
@@ -631,25 +629,23 @@ void cosmo_set(ParamCoLoRe *par)
 	par->srcs_nz_arr[ipop][ii]=0;
 	par->srcs_bz_arr[ipop][ii]=1.;
       }
-      par->srcs_nz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_nz[ipop],z,intacc_srcs);
-      par->srcs_bz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_bz[ipop],z,intacc_srcs);
+      par->srcs_nz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_nz[ipop],z,NULL);
+      par->srcs_bz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_bz[ipop],z,NULL);
     }
     for(ipop=0;ipop<par->n_imap;ipop++) {
       if((z<par->z_min) || (z>par->z_max)) {
 	par->imap_tz_arr[ipop][ii]=0;
 	par->imap_bz_arr[ipop][ii]=1.;
       }
-      par->imap_tz_arr[ipop][ii]=gsl_spline_eval(spline_imap_tz[ipop],z,intacc_imap);
-      par->imap_bz_arr[ipop][ii]=gsl_spline_eval(spline_imap_bz[ipop],z,intacc_imap);
+      par->imap_tz_arr[ipop][ii]=gsl_spline_eval(spline_imap_tz[ipop],z,NULL);
+      par->imap_bz_arr[ipop][ii]=gsl_spline_eval(spline_imap_bz[ipop],z,NULL);
     }
   }
 
-  gsl_interp_accel_free(intacc_srcs);
   for(ipop=0;ipop<par->n_imap;ipop++) {
     gsl_spline_free(spline_imap_tz[ipop]);
     gsl_spline_free(spline_imap_bz[ipop]);
   }
-  gsl_interp_accel_free(intacc_imap);
   for(ipop=0;ipop<par->n_srcs;ipop++) {
     gsl_spline_free(spline_srcs_nz[ipop]);
     gsl_spline_free(spline_srcs_bz[ipop]);
