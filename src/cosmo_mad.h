@@ -32,7 +32,7 @@
 #define CSM_RTOD 57.29577951308232 //180/pi
 #define CSM_DTOR 0.017453292519943295 //pi/180
 #define CSM_HGYR 9.777751486751187 //H0^-1 in Gyrs/h
-#define CSM_HMPC 2997.92458 //H0^-1 in Mpc/h
+#define CSM_HMPC 2997.92458 //c*H0^-1 in Mpc/h
 
 #define CSM_MIN(a, b)  (((a) < (b)) ? (a) : (b))
 
