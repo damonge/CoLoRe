@@ -1,6 +1,6 @@
 # How to install CoLoRe in Cori (at NERSC)
 
-These instructions worked in November 2nd 2017. 
+These instructions worked in November 1st 2019. 
 
 ## Load relevant modules
 
