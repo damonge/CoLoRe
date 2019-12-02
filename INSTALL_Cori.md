@@ -19,7 +19,7 @@ module load openmpi
 
 ## Compile libconfig
 
-Clone the github repository for libconfig, and type:
+Clone the github repository for libconfig: https://github.com/hyperrealm/libconfig, and type:
 ```
 mkdir $HOME/Install.cori
 cd libconfig
@@ -31,7 +31,7 @@ make install
 
 ## Compile libsharp
 
-Clone the github repository for libsharp, and type:
+Clone the github repository for libsharp: https://github.com/Libsharp/libsharp, and type:
 ```
 cd libsharp
 autoreconf
@@ -79,4 +79,4 @@ SHT_LIB = -L/PATH/TO/LIBSHARP/auto/lib
 ```
 
 Make sure that the libraries used to compile `CoLoRe` are in `LD_LIBRARY_PATH` so they can be found at runtime:
-`export LD_LIBRARY_PATH:$LD_LIBRARY_PATH:${GSL_DIR}/lib:${FFTW_DIR}/lib:${CFITSIO_DIR}/lib:/PATH/TO/LIBCONFIG/lib:/PATH/TO/LIBSHARP/auto/lib`, etc.
+`export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${GSL_DIR}/lib:${FFTW_DIR}/lib:${CFITSIO_DIR}/lib:/PATH/TO/LIBCONFIG/lib:/PATH/TO/LIBSHARP/auto/lib`, etc.
