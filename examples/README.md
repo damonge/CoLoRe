@@ -63,7 +63,6 @@ functionality of these parameters.
 ## 4 Output.
 
 ### 4.1 Catalogs
-
 The main output of CoLoRe is a catalogue of sources written either
 as ASCII or FITS files. Each source is characterized by 5 quantities:
  - Z0 -> cosmological redshift (without RSDs)
@@ -79,16 +78,14 @@ script (read_colore.py) to illustrate how to read in CoLoRe's catalog
 output.
 
 ### 4.2 Maps
-
 CoLoRe can also generate maps of the lensing convergence and of the ISW
 effect at specific redshifts. These are output as HEALPix maps in FITS
 files.
 
 
 ## 5 Examples
-
 We provide a set of example runs that illustrate different aspects of
-CoLoRe. See the [README](./examples/README.md) file in the `examples` folder.
+CoLoRe. See the README file in the examples folder.
 
 
 ## 6 License:
