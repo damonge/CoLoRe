@@ -74,8 +74,8 @@ as ASCII or FITS files. Each source is characterized by 5 quantities:
  - E1/E2 -> ellipticity components.
  - TYPE -> Population type (integer)
 Additionally, information about the density and velocity fields along the
-line of sight of each source can also be provided. We provide a python
-script (read_colore.py) to illustrate how to read in CoLoRe's catalog
+line of sight of each source can also be provided. We provide a [python
+script](./examples/read_colore.py) to illustrate how to read in CoLoRe's catalog
 output.
 
 ### 4.2 Maps
@@ -83,6 +83,15 @@ output.
 CoLoRe can also generate maps of the lensing convergence and of the ISW
 effect at specific redshifts. These are output as HEALPix maps in FITS
 files.
+
+### 4.3 Boxes
+
+CoLoRe can also save the 3D Cartesian boxes on which the matter density and
+velocity fields are generated. These are the seeds of the different
+observable quantities the code can generate.
+
+We provide a [script](./examples/read_grid.py) showcasing how to read
+these boxes.
 
 
 ## 5 Examples
