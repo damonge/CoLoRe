@@ -90,7 +90,6 @@ LIB_FFTW += -lfftw3_mpi
 endif #MPI
 
 endif #SINGLE_PRECISION
-LIB_FFTW += -lfftw3
 
 # for fftlog
 LIB_FFTW += -lfftw3
