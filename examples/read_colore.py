@@ -103,7 +103,7 @@ def read_fits(fname) :
     return ra_arr,dec_arr,z0_arr,rsd_arr,type_arr,e1_arr,e2_arr,dens_skewers,vrad_skewers,data_skewers
 
 if len(sys.argv)!= 3 :
-    print "Usage: read_colore.py file_name file_format ('ASCII', 'FITS' or 'HDF5')"
+    print("Usage: read_colore.py file_name file_format ('ASCII', 'FITS' or 'HDF5')")
     exit(1)
 fname=sys.argv[1]
 fmt=sys.argv[2]

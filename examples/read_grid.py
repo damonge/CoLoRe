@@ -28,18 +28,18 @@ def read_grid(prefix) :
     return ngrid,lbox,np.array(grid_out)
 
 if len(sys.argv)!= 2 :
-    print "Usage: read_grid.py prefix"
+    print("Usage: read_grid.py prefix")
     exit(1)
 prefix=sys.argv[1]
 
 ng,lb,dens=read_grid(prefix)
-print "Ngrid=%d"%ng
-print "Lbox=%.3lf Mpc/h"%lb
+print("Ngrid=%d"%ng)
+print("Lbox=%.3lf Mpc/h"%lb)
 def plot_slice(slic) :
     plt.figure()
     plt.imshow(slic,origin='lower',interpolation='nearest');
     plt.colorbar()
-plot_slice(dens[ng/2,:,:])
-plot_slice(dens[:,ng/2,:])
-plot_slice(dens[:,:,ng/2])
+plot_slice(dens[ng//2,:,:])
+plot_slice(dens[:,ng//2,:])
+plot_slice(dens[:,:,ng//2])
 plt.show()
