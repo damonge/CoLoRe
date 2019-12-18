@@ -53,6 +53,8 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 
   //Get gaussian
   if(flag_return & RETURN_GAUSS) {
+    if (par->dens_type!=DENS_TYPE_LGNR)
+      report_error(1,"Cannot write Gaussian skewers with density type %d\n",par->dens_type);	    
     //Get D and r
     flouble dx=par->l_box/par->n_grid;
     flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
