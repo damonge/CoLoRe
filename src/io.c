@@ -231,7 +231,7 @@ static int choose_nside_base(void)
 ParamCoLoRe *read_run_params(char *fname,int test_memory)
 {
   int stat,ii,i_dum,found;
-  char c_dum[256]="default";
+  char c_dum[256]="default", c_dum2[256]="default";
   config_setting_t *cset;
   ParamCoLoRe *par=param_colore_new();
   config_t *conf=malloc(sizeof(config_t));
@@ -317,9 +317,11 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     if(par->shear_srcs[ii])
       par->do_lensing=1;
     conf_read_bool(conf,c_dum,"store_skewers",&(par->skw_srcs[ii]));
-    if(par->skw_srcs[ii])
+    if(par->skw_srcs[ii]) {
       par->do_skewers=1;
-    conf_read_bool(conf,c_dum,"gaussian_skewers",&(par->skw_gauss[ii]));
+      sprintf(c_dum2,"%s.gaussian_skewers",c_dum);
+      config_lookup_bool(conf,c_dum2,&(par->skw_gauss[ii]));
+    }
   }
   if(par->n_srcs>0)
     par->do_srcs=1;
