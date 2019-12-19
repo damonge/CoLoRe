@@ -60,16 +60,16 @@ USE_OMP = yes
 USE_MPI = yes
 
 GSL_INC = -I${GSL_DIR}/include
-GSL_LIB = -L${GSL_DIR}/lib -lgsl -lgslcblas
+GSL_LIB = -L${GSL_DIR}/lib
 
 FFTW_INC = -I${FFTW_DIR}/include
 FFTW_LIB = -L${FFTW_DIR}/lib
 
 FITS_INC = -I${CFITSIO_DIR}/include
-FITS_LIB = -L${CFITSIO_DIR}/lib -lcfitsio
+FITS_LIB = -L${CFITSIO_DIR}/lib
 
 HPIX_INC = -I/global/common/cori/contrib/hpcosmo/hpcports_gnu-4.0/healpix-3.30.1_62c0405b-4.0/include
-HPIX_LIB = -L//global/common/cori/contrib/hpcosmo/hpcports_gnu-4.0/healpix-3.30.1_62c0405b-4.0/lib
+HPIX_LIB = -L/global/common/cori/contrib/hpcosmo/hpcports_gnu-4.0/healpix-3.30.1_62c0405b-4.0/lib
 
 CONF_INC = -I/PATH/TO/LIBCONFIG/include
 CONF_LIB = -L/PATH/TO/LIBCONFIG/lib
@@ -80,3 +80,8 @@ SHT_LIB = -L/PATH/TO/LIBSHARP/auto/lib
 
 Make sure that the libraries used to compile `CoLoRe` are in `LD_LIBRARY_PATH` so they can be found at runtime:
 `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${GSL_DIR}/lib:${FFTW_DIR}/lib:${CFITSIO_DIR}/lib:/PATH/TO/LIBCONFIG/lib:/PATH/TO/LIBSHARP/auto/lib`, etc.
+
+
+## Possible issue on compute nodes
+
+Although `CoLoRe` should run well on the login nodes after following these instructions, it can sometimes crash on the compute nodes. All instances of these have been solved by calling `module unload craype-hugepages2M` before running the code.
