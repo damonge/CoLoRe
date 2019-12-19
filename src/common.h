@@ -71,6 +71,7 @@
 #define RETURN_VEL  2
 #define RETURN_TID  4
 #define RETURN_PDOT 8
+#define RETURN_GAUSS 16
 
 //Interpolation type
 #ifndef INTERP_TYPE_SKW
@@ -175,7 +176,9 @@ typedef struct {
   double dr;
   double idr;
   int has_skw;
+  int skw_gauss;
   float *d_skw;
+  float *g_skw;
   float *v_skw;
 } Catalog;
 
@@ -196,7 +199,7 @@ typedef struct {
 #ifdef _DEBUG
   FILE *f_dbg; //File into which all debug info is written
 #endif //_DEBUG
-  
+
   //Cosmological parameters
   // Background
   double OmegaM; //Cosmological parameters
@@ -279,9 +282,10 @@ typedef struct {
   double *srcs_bz_arr[NPOP_MAX];
   double *srcs_norm_arr[NPOP_MAX];
   double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
-  double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization  
+  double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
   int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
   int skw_srcs[NPOP_MAX]; //Do we want to store skewers for each source of this type?
+  int skw_gauss[NPOP_MAX]; //Do we want the skewers to be gaussian? (as opposed to physical density)
   long *nsources_c_this; //Number of sources initially found in this node
   CatalogCartesian **cats_c; //Galaxy positions initially stored in this node
   long *nsources_this; //Number of sources finally found in this node
@@ -359,7 +363,7 @@ HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr);
 void hp_shell_free(HealpixShells *shell);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
-Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng);
+Catalog *catalog_alloc(int nsrcs,int has_skw,int skw_gauss,double rmax,int ng);
 void catalog_free(Catalog *cat);
 
 static inline double bias_model(double d,double b)
@@ -417,7 +421,7 @@ void fftw_wrap_r2c(int ng,flouble *pin,dftw_complex *pout);
 //////
 // Functions defined in beaming.c
 int interpolate_from_grid(ParamCoLoRe *par,double *x,
-			  flouble *d,flouble v[3],flouble t[6],flouble *pd,
+			  flouble *d,flouble v[3],flouble t[6],flouble *pd,flouble *g,
 			  int flag_return,int interp_type);
 void get_beam_properties(ParamCoLoRe *par);
 
