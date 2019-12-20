@@ -93,7 +93,7 @@ static ParamCoLoRe *param_colore_new(void)
   //Tracers
   par->do_srcs=0;
   par->do_skewers=0;
-  par->do_lensing=0;
+  par->do_shear=0;
   par->do_isw=0;
   par->do_imap=0;
   par->do_kappa=0;
@@ -320,7 +320,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
     conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
     if(par->shear_srcs[ii]) {
-      par->do_lensing=1;
+      par->do_shear=1;
 #ifdef _USE_NEW_LENSING
       double dr_shear_here;
       sprintf(c_dum2,"%s.dr_shear",c_dum);
@@ -368,7 +368,6 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   cset=config_lookup(conf,"kappa");
   if(cset!=NULL) {
     par->do_kappa=1;
-    par->do_lensing=1;
     conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPLANES_MAX);
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
@@ -412,7 +411,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   else
     par->do_smoothing=0;
 
-  par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
+  par->need_beaming=par->do_shear+par->do_kappa+par->do_isw+par->do_skewers;
   init_fftw(par);
 
   get_max_memory(par,test_memory+par->just_do_pred);
@@ -442,7 +441,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     print_info("  %d lensing source planes\n",par->n_kappa);
   if(par->do_isw)
     print_info("  %d ISW source planes\n",par->n_isw);
-  if(par->do_lensing)
+  if(par->do_shear)
     print_info("  Will include lensing shear\n");
   if(!par->need_beaming)
     print_info("  Will NOT need to all-to-all communicate fields\n");
@@ -471,7 +470,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
       par->cats[ii]=NULL;
     }
 #ifdef _USE_NEW_LENSING
-    if(par->do_lensing) {
+    if(par->do_shear) {
       //Figure out appropriate radial sampling
       flouble *rarr;
       int ir,nr=(int)(par->r_max/par->dr_shear+1.);
@@ -898,7 +897,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
     char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    ,"1E","1E"};
     char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
-    if(par->do_lensing)
+    if(par->cats[ipop]->has_shear)
       nfields=7;
 
     print_info(" %d-th population (FITS)\n",ipop);
@@ -931,7 +930,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 	dec_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dec;
 	z0_arr[ii]=par->cats[ipop]->srcs[row_here+ii].z0;
 	rsd_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dz_rsd;
-	if(par->do_lensing) {
+	if(par->cats[ipop]->has_shear) {
 	  e1_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e1;
 	  e2_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e2;
 	}
@@ -941,7 +940,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,dec_arr,&status);
       fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,z0_arr,&status);
       fits_write_col(fptr,TFLOAT,5,row_here+1,1,nrw_here,rsd_arr,&status);
-      if(par->do_lensing) {
+      if(par->cats[ipop]->has_shear) {
 	fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
 	fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
       }
@@ -1024,7 +1023,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     FILE *fil=fopen(fname,"w");
     if(fil==NULL) error_open_file(fname);
     fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");
-    if(par->do_lensing)
+    if(par->cats[ipop]->has_shear)
       fprintf(fil,"#[6]e1, [7]e2\n");
     else
       fprintf(fil,"\n");
@@ -1032,7 +1031,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fprintf(fil,"%d %E %E %E %E ",
 	      ipop,par->cats[ipop]->srcs[jj].ra,par->cats[ipop]->srcs[jj].dec,
 	      par->cats[ipop]->srcs[jj].z0,par->cats[ipop]->srcs[jj].dz_rsd);
-      if(par->do_lensing)
+      if(par->cats[ipop]->has_shear)
 	fprintf(fil,"%E %E \n",par->cats[ipop]->srcs[jj].e1,par->cats[ipop]->srcs[jj].e2);
       else
 	fprintf(fil,"\n");

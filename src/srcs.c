@@ -340,7 +340,10 @@ void srcs_distribute(ParamCoLoRe *par)
 
 static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
 {
-  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],par->skw_gauss[ipop],
+  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,
+				par->shear_srcs[ipop],
+				par->skw_srcs[ipop],
+				par->skw_gauss[ipop],
 				par->r_max,par->n_grid);
 
 #ifdef _HAVE_OMP
@@ -507,7 +510,8 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
     double *fac_r_1=NULL,*fac_r_2=NULL;
 
     //Kernels for the LOS integrals
-    if(par->do_lensing) {
+#ifndef _USE_NEW_LENSING
+    if(cat->has_shear) {
       fac_r_1=my_malloc(cat->nr*sizeof(double));
       fac_r_2=my_malloc(cat->nr*sizeof(double));
 
@@ -518,6 +522,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	fac_r_2[ip]=rm*rm*pg*cat->dr;
       }
     }
+#endif //_USE_NEW_LENSING
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -569,8 +574,9 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       	}
       }
 
+#ifndef _USE_NEW_LENSING
       //Compute lensing shear
-      if(par->do_lensing) {
+      if(cat->has_shear) {
 	//Compute linear transformations needed for shear
 	double r1[6],r2[6];
 	double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
@@ -622,11 +628,14 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	cat->srcs[ip].e1+=e1;
 	cat->srcs[ip].e2+=e2;
       }
+#endif //_USE_NEW_LENSING
     }//end omp for
-    if(par->do_lensing) {
+#ifndef _USE_NEW_LENSING
+    if(cat->has_shear) {
       free(fac_r_1);
       free(fac_r_2);
     }
+#endif //_USE_NEW_LENSING
   }//end omp parallel
 }
 
@@ -635,7 +644,7 @@ void srcs_get_beam_properties(ParamCoLoRe *par)
   int ipop;
 
 #ifdef _USE_NEW_LENSING
-  if(par->do_lensing)
+  if(par->do_shear)
     srcs_get_beam_shear(par);
 #endif //_USE_NEW_LENSING
   
@@ -657,7 +666,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
     double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
 #ifdef _USE_NEW_LENSING
     int irmax_shear=0;
-    if(par->do_lensing)
+    if(cat->has_shear)
       irmax_shear=par->gamma->nr;
 #endif //_USE_NEW_LENSING
   
@@ -674,7 +683,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       cat->srcs[ii].dz_rsd*=vg*factor_vel;
 
       //Shear
-      if(par->do_lensing) {
+      if(cat->has_shear) {
 #ifdef _USE_NEW_LENSING
 	//Find interval this source falls in
 	int ir0,irf;

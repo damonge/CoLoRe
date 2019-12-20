@@ -175,6 +175,7 @@ typedef struct {
   double rmax;
   double dr;
   double idr;
+  int has_shear;
   int has_skw;
   int skw_gauss;
   float *d_skw;
@@ -286,7 +287,7 @@ typedef struct {
   // Sources
   int do_srcs; //Do we include sources?
   int do_skewers; //Do we include skewer information?
-  int do_lensing; //Do we need to compute the lensing potential?
+  int do_shear; //Do we need to compute the lensing shear?
   int n_srcs; //Number of source types
   char fnameBzSrcs[NPOP_MAX][256]; //Files containing b(z) for each source type
   char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega (in deg^-2)
@@ -384,7 +385,7 @@ void hp_shell_gamma_free(HealpixShellsGamma *shell);
 #endif //_USE_NEW_LENSING
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
-Catalog *catalog_alloc(int nsrcs,int has_skw,int skw_gauss,double rmax,int ng);
+Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,int skw_gauss,double rmax,int ng);
 void catalog_free(Catalog *cat);
 
 static inline double bias_model(double d,double b)

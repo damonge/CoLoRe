@@ -13,7 +13,7 @@ DEFINEFLAGS += -D_LONGIDS
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
 #Use new shear method
-DEFINEFLAGS += -D_USE_NEW_LENSING
+#DEFINEFLAGS += -D_USE_NEW_LENSING
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
