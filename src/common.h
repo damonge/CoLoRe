@@ -180,7 +180,7 @@ typedef struct {
 } Catalog;
 
 typedef struct {
-  int nside; //Resolution parameter
+  int nside;
   long num_pix;
   long *listpix;
   double *pos;
@@ -190,6 +190,18 @@ typedef struct {
   flouble *data;
   int *nadd;
 } HealpixShells;
+
+#ifdef _USE_NEW_LENSING
+typedef struct {
+  int nr;
+  flouble *r;
+  int *nside_arr;
+  long *num_pix;
+  double **pos;
+  flouble **gamma1;
+  flouble **gamma2;
+} HealpixShellsGamma;
+#endif //_USE_NEW_LENSING
 
 typedef struct {
 
@@ -286,6 +298,11 @@ typedef struct {
   CatalogCartesian **cats_c; //Galaxy positions initially stored in this node
   long *nsources_this; //Number of sources finally found in this node
   Catalog **cats; //Final galaxy properties
+  double dr_shear; //Comoving separation between lensing maps used to compute source shears
+  double idr_shear; //1/dr_shear
+#ifdef _USE_NEW_LENSING
+  HealpixShellsGamma *gamma; //g1 and g2 shear maps
+#endif //_USE_NEW_LENSING
   // Intensity mapping
   int do_imap; //Do we include intensity mapping
   int n_imap; //Number of IM species
@@ -357,6 +374,10 @@ void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
 HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr);
 void hp_shell_free(HealpixShells *shell);
+#ifdef _USE_NEW_LENSING
+HealpixShellsGamma *hp_shell_gamma_alloc(flouble dx,int nr,flouble *rarr,int nside_base);
+void hp_shell_gamma_free(HealpixShellsGamma *shell);
+#endif //_USE_NEW_LENSING
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
 Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng);

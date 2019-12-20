@@ -1,8 +1,8 @@
 ########## User-definable stuff ##########
 #
 ###Compiler and compilation options
-COMP_SER = cc
-COMP_MPI = cc
+COMP_SER = gcc
+COMP_MPI = mpicc.openmpi
 OPTIONS = -Wall -O3 -std=c99
 #
 ### Behavioural flags
@@ -12,6 +12,8 @@ DEFINEFLAGS += -D_LONGIDS
 #DEFINEFLAGS += -D_BIAS_MODEL_2
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
+#Use new shear method
+DEFINEFLAGS += -D_USE_NEW_LENSING
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
@@ -31,20 +33,20 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/usr/common/software/gsl/2.1/intel/include
-GSL_LIB = -L/usr/common/software/gsl/2.1/intel/lib
+GSL_INC = -I/home/alonso/include
+GSL_LIB = -L/home/alonso/lib
 #FFTW
-FFTW_INC = -I/opt/cray/pe/fftw/3.3.6.2/haswell/include
-FFTW_LIB = -L/opt/cray/pe/fftw/3.3.6.2/haswell/lib
+FFTW_INC =
+FFTW_LIB =
 #cfitsio
-FITS_INC = -I/usr/common/software/cfitsio/3.370-reentrant/hsw/intel/include
-FITS_LIB = -L/usr/common/software/cfitsio/3.370-reentrant/hsw/intel/lib
+FITS_INC =
+FITS_LIB =
 #cfitsio
 HDF5_INC =
 HDF5_LIB =
 #libconfig
-CONF_INC = -I/global/homes/d/damonge/include
-CONF_LIB = -L/global/homes/d/damonge/lib
+CONF_INC =
+CONF_LIB =
 #healpix
 HPIX_INC =
 HPIX_LIB =

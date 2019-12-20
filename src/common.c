@@ -535,6 +535,94 @@ void catalog_free(Catalog *cat)
   free(cat);
 }
 
+#ifdef _USE_NEW_LENSING
+HealpixShellsGamma *hp_shell_gamma_alloc(flouble dx,int nr,flouble *rarr,int nside_base)
+{
+  HealpixShellsGamma *shell=my_malloc(sizeof(HealpixShellsGamma));
+  shell->nr=nr;
+  shell->r        =my_malloc(nr*sizeof(flouble));
+  shell->nside_arr=my_malloc(nr*sizeof(int));
+  shell->num_pix  =my_malloc(nr*sizeof(long));
+  shell->pos      =my_malloc(nr*sizeof(double *));
+  shell->gamma1   =my_malloc(nr*sizeof(flouble *));
+  shell->gamma2   =my_malloc(nr*sizeof(flouble *));
+
+  int ib;
+  int nbases=he_nside2npix(nside_base);
+  int nbeams_here=0;
+  for(ib=NodeThis;ib<nbases;ib+=NNodes)
+    nbeams_here++;
+  
+  int ir;
+  for(ir=0;ir<nr;ir++) {
+    int nside_ratio;
+    long npix_perbeam;
+    double nside_proposal=sqrt(M_PI/3)*rarr[ir]/dx;
+    if(nside_proposal<=nside_base)
+      shell->nside_arr[ir]=nside_base;
+    else if(nside_proposal>=NSIDE_MAX_HPX)
+      shell->nside_arr[ir]=NSIDE_MAX_HPX;
+    else {
+      shell->nside_arr[ir]=nside_base;
+      while(shell->nside_arr[ir]<nside_proposal)
+	shell->nside_arr[ir]*=2;
+    }
+    shell->r[ir]=rarr[ir];
+    nside_ratio=shell->nside_arr[ir]/nside_base;
+    npix_perbeam=nside_ratio*nside_ratio;
+    shell->num_pix[ir]=npix_perbeam*nbeams_here;
+    shell->pos[ir] =my_malloc(3*shell->num_pix[ir]*sizeof(double));
+    shell->gamma1[ir]=my_calloc(shell->num_pix[ir],sizeof(flouble));
+    shell->gamma2[ir]=my_calloc(shell->num_pix[ir],sizeof(flouble));
+
+    double *u=shell->pos[ir];
+    for(ib=NodeThis;ib<nbases;ib+=NNodes) {
+      long ip;
+      for(ip=0;ip<npix_perbeam;ip++) {
+	long id_nest=ib*npix_perbeam+ip;
+	pix2vec_nest(shell->nside_arr[ir],id_nest,u);
+	u+=3;
+      }
+    }
+  }
+
+  return shell;
+}
+
+void hp_shell_gamma_free(HealpixShellsGamma *shell)
+{
+  int ir;
+  if(shell->pos!=NULL) {
+    for(ir=0;ir<shell->nr;ir++) {
+      if(shell->pos[ir]!=NULL)
+	free(shell->pos[ir]);
+    }
+    free(shell->pos);
+  }
+  if(shell->gamma1!=NULL) {
+    for(ir=0;ir<shell->nr;ir++) {
+      if(shell->gamma1[ir]!=NULL)
+	free(shell->gamma1[ir]);
+    }
+    free(shell->gamma1);
+  }
+  if(shell->gamma2!=NULL) {
+    for(ir=0;ir<shell->nr;ir++) {
+      if(shell->gamma2[ir]!=NULL)
+	free(shell->gamma2[ir]);
+    }
+    free(shell->gamma2);
+  }
+  if(shell->r!=NULL)
+    free(shell->r);
+  if(shell->nside_arr!=NULL)
+    free(shell->nside_arr);
+  if(shell->num_pix!=NULL)
+    free(shell->num_pix);
+  free(shell);
+}
+#endif //_USE_NEW_LENSING
+    
 HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
 {
   if(nside>NSIDE_MAX_HPX)
@@ -548,7 +636,7 @@ HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
 
   //Figure out pixel angular positions
   int nbases=he_nside2npix(nside_base);
-  int nside_ratio=nside/nside_base;
+  int nside_ratio=nside/nside_base; 
   long npix_perbeam=nside_ratio*nside_ratio;
   int nbeams_here=0;
   

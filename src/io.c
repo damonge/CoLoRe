@@ -121,6 +121,11 @@ static ParamCoLoRe *param_colore_new(void)
     par->nside_imap[ii]=-1;
     par->nu0_imap[ii]=-1;
   }
+  par->dr_shear=1E10;
+  par->idr_shear=1E-10;
+#ifdef _USE_NEW_LENSING
+  par->gamma=NULL;
+#endif //_USE_NEW_LENSING
   for(ii=0;ii<NPLANES_MAX;ii++) {
     par->z_kappa_out[ii]=-1;
     par->z_isw_out[ii]=-1;
@@ -313,8 +318,16 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     conf_read_string(conf,c_dum,"nz_filename",par->fnameNzSrcs[ii]);
     conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
     conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
-    if(par->shear_srcs[ii])
+    if(par->shear_srcs[ii]) {
       par->do_lensing=1;
+      double dr_shear_here;
+      char fullpath[256];
+      sprintf(fullpath,"%s.dr_shear",c_dum);
+      if(config_lookup_float(conf,fullpath,&dr_shear_here)) {
+	if(dr_shear_here<=par->dr_shear)
+	  par->dr_shear=dr_shear_here;
+      }
+    }
     conf_read_bool(conf,c_dum,"store_skewers",&(par->skw_srcs[ii]));
     if(par->skw_srcs[ii])
       par->do_skewers=1;
@@ -452,6 +465,22 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
       par->cats_c[ii]=NULL;
       par->cats[ii]=NULL;
     }
+#ifdef _USE_NEW_LENSING
+    if(par->do_lensing) {
+      //Figure out appropriate radial sampling
+      flouble *rarr;
+      int ir,nr=(int)(par->r_max/par->dr_shear+1.);
+      par->dr_shear=par->r_max/nr;
+      par->idr_shear=1./par->dr_shear;
+      rarr=my_malloc(nr*sizeof(flouble));
+      for(ir=0;ir<nr;ir++)
+	rarr[ir]=(ir+1)*par->dr_shear;
+
+      //Allocate memory for shear maps
+      par->gamma=hp_shell_gamma_alloc(par->l_box/par->n_grid,nr,rarr,par->nside_base);
+      free(rarr);
+    }
+#endif //_USE_NEW_LENSING
   }
 
   if(par->do_imap) {
@@ -1016,6 +1045,10 @@ void param_colore_free(ParamCoLoRe *par)
   end_fftw(par);
 
   if(par->do_srcs) {
+#ifdef _USE_NEW_LENSING
+    if(par->gamma!=NULL)
+      hp_shell_gamma_free(par->gamma);
+#endif //_USE_NEW_LENSING
     for(ii=0;ii<par->n_srcs;ii++) {
       free(par->srcs_bz_arr[ii]);
       free(par->srcs_nz_arr[ii]);
