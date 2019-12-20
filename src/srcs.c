@@ -469,7 +469,7 @@ static void srcs_get_beam_shear(ParamCoLoRe *par)
 	  double rm=(i_r+0.5)*dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(u[ax]*rm+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
+	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
 	  if(added) {
 	    double fr=fac_r_1[i_r]*r-fac_r_2[i_r];
 	    double dotp1=0,dotp2=0;

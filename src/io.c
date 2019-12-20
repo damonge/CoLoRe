@@ -122,9 +122,9 @@ static ParamCoLoRe *param_colore_new(void)
     par->nside_imap[ii]=-1;
     par->nu0_imap[ii]=-1;
   }
+#ifdef _USE_NEW_LENSING
   par->dr_shear=1E10;
   par->idr_shear=1E-10;
-#ifdef _USE_NEW_LENSING
   par->gamma=NULL;
 #endif //_USE_NEW_LENSING
   for(ii=0;ii<NPLANES_MAX;ii++) {
@@ -321,13 +321,14 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
     if(par->shear_srcs[ii]) {
       par->do_lensing=1;
+#ifdef _USE_NEW_LENSING
       double dr_shear_here;
-      char fullpath[256];
-      sprintf(fullpath,"%s.dr_shear",c_dum);
-      if(config_lookup_float(conf,fullpath,&dr_shear_here)) {
+      sprintf(c_dum2,"%s.dr_shear",c_dum);
+      if(config_lookup_float(conf,c_dum2,&dr_shear_here)) {
 	if(dr_shear_here<=par->dr_shear)
 	  par->dr_shear=dr_shear_here;
       }
+#endif //_USE_NEW_LENSING
     }
     conf_read_bool(conf,c_dum,"store_skewers",&(par->skw_srcs[ii]));
     if(par->skw_srcs[ii]) {
