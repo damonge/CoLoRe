@@ -55,7 +55,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->idlogk=100;
   par->logkarr=NULL;
   par->pkarr=NULL;
-  
+
   //Density parameters
   // Density methods
   par->output_density=0;
@@ -112,6 +112,7 @@ static ParamCoLoRe *param_colore_new(void)
     par->srcs_norm_arr[ii]=NULL;
     par->shear_srcs[ii]=0;
     par->skw_srcs[ii]=0;
+    par->skw_gauss[ii]=0;
     sprintf(par->fnameBzImap[ii],"default");
     sprintf(par->fnameTzImap[ii],"default");
     sprintf(par->fnameNuImap[ii],"default");
@@ -235,7 +236,7 @@ static int choose_nside_base(void)
 ParamCoLoRe *read_run_params(char *fname,int test_memory)
 {
   int stat,ii,i_dum,found;
-  char c_dum[256]="default";
+  char c_dum[256]="default", c_dum2[256]="default";
   config_setting_t *cset;
   ParamCoLoRe *par=param_colore_new();
   config_t *conf=malloc(sizeof(config_t));
@@ -329,8 +330,11 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
       }
     }
     conf_read_bool(conf,c_dum,"store_skewers",&(par->skw_srcs[ii]));
-    if(par->skw_srcs[ii])
+    if(par->skw_srcs[ii]) {
       par->do_skewers=1;
+      sprintf(c_dum2,"%s.gaussian_skewers",c_dum);
+      config_lookup_bool(conf,c_dum2,&(par->skw_gauss[ii]));
+    }
   }
   if(par->n_srcs>0)
     par->do_srcs=1;
@@ -498,9 +502,9 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
 
   if(par->do_isw)
     par->pd_map=hp_shell_alloc(par->nside_isw,par->nside_base,par->n_isw);
-  
+
   compute_tracer_cosmo(par);
-  
+
   return par;
 }
 
@@ -629,7 +633,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   long long id0=(long long)(par->iz0_here*((long)(par->n_grid*par->n_grid)));
   for(ipart=0;ipart<npart;ipart++) {
     unsigned long long id_out=id0+ipart;
-    my_fwrite(&id_out,sizeof(unsigned long long),1,fo); 
+    my_fwrite(&id_out,sizeof(unsigned long long),1,fo);
   }
   my_fwrite(&blklen,sizeof(blklen),1,fo);
 
@@ -653,7 +657,7 @@ void write_imap(ParamCoLoRe *par)
     for(ir=0;ir<imap->nr;ir++) {
       long ip;
       long ir_t=ir*imap->num_pix;
-      
+
       //Write local pixels to dummy map
       for(ip=0;ip<npx;ip++) {
 	map_write[ip]=0;
@@ -664,7 +668,7 @@ void write_imap(ParamCoLoRe *par)
 	map_write[ip]+=imap->data[ir_t+ip];
 	map_nadd[ip]+=imap->nadd[ir_t+ip];
       }
-      
+
       //Collect all dummy maps
 #ifdef _HAVE_MPI
       if(NodeThis==0)
@@ -676,12 +680,12 @@ void write_imap(ParamCoLoRe *par)
       else
 	MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
-      
+
       for(ip=0;ip<npx;ip++) {
 	if(map_nadd[ip]>0)
 	  map_write[ip]/=map_nadd[ip];
       }
-      
+
       //Write dummy map
       if(NodeThis==0)
 	he_write_healpix_map(&map_write,1,imap->nside,fname,0);
@@ -705,7 +709,7 @@ void write_kappa(ParamCoLoRe *par)
   for(ir=0;ir<par->kmap->nr;ir++) {
     long ip;
     long ir_t=ir*par->kmap->num_pix;
-    
+
     //Write local pixels to dummy map
     for(ip=0;ip<npx;ip++) {
       map_write[ip]=0;
@@ -717,7 +721,7 @@ void write_kappa(ParamCoLoRe *par)
       map_write[id_pix]+=par->kmap->data[ir_t+ip];
       map_nadd[ id_pix]+=par->kmap->nadd[ir_t+ip];
     }
-    
+
     //Collect all dummy maps
 #ifdef _HAVE_MPI
     if(NodeThis==0)
@@ -729,12 +733,12 @@ void write_kappa(ParamCoLoRe *par)
     else
       MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
-    
+
     for(ip=0;ip<npx;ip++) {
       if(map_nadd[ip]>0)
 	map_write[ip]/=map_nadd[ip];
     }
-    
+
 #ifdef _ADD_EXTRA_KAPPA
     if(par->need_extra_kappa[ir]) {
       if(NodeThis==0) {
@@ -755,7 +759,7 @@ void write_kappa(ParamCoLoRe *par)
       }
     }
 #endif //_ADD_EXTRA_KAPPA
-    
+
     //Write dummy map
     if(NodeThis==0)
       he_write_healpix_map(&map_write,1,par->nside_kappa,fname,1);
@@ -778,7 +782,7 @@ void write_isw(ParamCoLoRe *par)
   for(ir=0;ir<par->pd_map->nr;ir++) {
     long ip;
     long ir_t=ir*par->pd_map->num_pix;
-    
+
     //Write local pixels to dummy map
     for(ip=0;ip<npx;ip++) {
       map_write[ip]=0;
@@ -790,7 +794,7 @@ void write_isw(ParamCoLoRe *par)
       map_write[id_pix]+=par->pd_map->data[ir_t+ip];
       map_nadd[ id_pix]+=par->pd_map->nadd[ir_t+ip];
     }
-    
+
     //Collect all dummy maps
 #ifdef _HAVE_MPI
     if(NodeThis==0)
@@ -802,12 +806,12 @@ void write_isw(ParamCoLoRe *par)
     else
       MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
-    
+
     for(ip=0;ip<npx;ip++) {
       if(map_nadd[ip]>0)
 	map_write[ip]/=map_nadd[ip];
     }
-    
+
 #ifdef _ADD_EXTRA_KAPPA
     if(par->need_extra_isw[ir]) {
       if(NodeThis==0) {
@@ -828,7 +832,7 @@ void write_isw(ParamCoLoRe *par)
       }
     }
 #endif //_ADD_EXTRA_KAPPA
-    
+
     //Write dummy map
     if(NodeThis==0)
       he_write_healpix_map(&map_write,1,par->nside_isw,fname,1);
@@ -857,10 +861,10 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     gal_types[3]=H5T_NATIVE_FLOAT;
     gal_types[4]=H5T_NATIVE_FLOAT;
     gal_types[5]=H5T_NATIVE_FLOAT;
-    
+
     print_info(" %d-th population (HDF5)\n",ipop);
     sprintf(fname,"%s_srcs_s%d_%d.h5",par->prefixOut,ipop+1,NodeThis);
-    
+
     //Create file
     file_id=H5Fcreate(fname,H5F_ACC_TRUNC,H5P_DEFAULT,H5P_DEFAULT);
     //Write table for each galaxy type
@@ -875,7 +879,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     H5LTset_attribute_string(file_id,table_name,"FIELD_3_UNITS",tunit[3]);
     H5LTset_attribute_string(file_id,table_name,"FIELD_4_UNITS",tunit[4]);
     H5LTset_attribute_string(file_id,table_name,"FIELD_5_UNITS",tunit[5]);
-    
+
     //End file
     H5Fclose(file_id);
 #else //_HAVE_HDF5
@@ -895,14 +899,14 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
     if(par->do_lensing)
       nfields=7;
-    
+
     print_info(" %d-th population (FITS)\n",ipop);
     sprintf(fname,"!%s_srcs_s%d_%d.fits",par->prefixOut,ipop+1,NodeThis);
-    
+
     fits_create_file(&fptr,fname,&status);
     fits_create_tbl(fptr,BINARY_TBL,0,nfields,ttype,tform,tunit,NULL,&status);
     fits_update_key(fptr,TSTRING,"CONTENTS","Source catalog",NULL,&status);
-    
+
     fits_get_rowsize(fptr,&nrw,&status);
     type_arr=my_malloc(nrw*sizeof(int));
     ra_arr=my_malloc(nrw*sizeof(float));
@@ -911,7 +915,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     rsd_arr=my_malloc(nrw*sizeof(float));
     e1_arr=my_malloc(nrw*sizeof(float));
     e2_arr=my_malloc(nrw*sizeof(float));
-    
+
     long row_here=0;
     while(row_here<par->nsources_this[ipop]) {
       long nrw_here;
@@ -919,7 +923,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 	nrw_here=par->nsources_this[ipop]-row_here;
       else
 	nrw_here=nrw;
-      
+
       for(ii=0;ii<nrw_here;ii++) {
 	type_arr[ii]=ipop;
 	ra_arr[ii]=par->cats[ipop]->srcs[row_here+ii].ra;
@@ -940,28 +944,39 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 	fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
 	fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
       }
-      
+
       row_here+=nrw_here;
     }
-    
+
     if(par->cats[ipop]->has_skw) {
       int ir;
       long nelements,naxis=2;
       long naxes[2];
-      
-      //Write density skewers
-      naxes[0]=par->cats[ipop]->nr;
-      naxes[1]=par->cats[ipop]->nsrc;
-      nelements=naxes[0]*naxes[1];
-      fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
-      fits_update_key(fptr, TSTRING, "CONTENTS", "density skewers",NULL, &status);
-      fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->d_skw,&status);
-      
+
+      if(par->cats[ipop]->skw_gauss) {
+        //Write gaussian skewers
+        naxes[0]=par->cats[ipop]->nr;
+        naxes[1]=par->cats[ipop]->nsrc;
+        nelements=naxes[0]*naxes[1];
+        fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
+        fits_update_key(fptr, TSTRING, "CONTENTS", "gaussian skewers",NULL, &status);
+        fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->g_skw,&status);
+      }
+      else {
+        //Write density skewers
+        naxes[0]=par->cats[ipop]->nr;
+        naxes[1]=par->cats[ipop]->nsrc;
+        nelements=naxes[0]*naxes[1];
+        fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
+        fits_update_key(fptr, TSTRING, "CONTENTS", "density skewers",NULL, &status);
+        fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->d_skw,&status);
+      }
+
       //Write velocity skewers
       fits_create_img(fptr,FLOAT_IMG,naxis,naxes,&status);
       fits_update_key(fptr, TSTRING, "CONTENTS", "velocity skewers",NULL, &status);
       fits_write_img(fptr,TFLOAT,1,nelements,par->cats[ipop]->v_skw,&status);
-      
+
       //Write slicing information
       float sg=sqrt(par->sigma2_gauss);
       float *ra=my_malloc(par->cats[ipop]->nr*sizeof(float));
@@ -987,7 +1002,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fits_write_col(fptr,TFLOAT,4,1,1,par->cats[ipop]->nr,gva,&status);
       free(ra); free(za); free(gda); free(gva);
     }
-    
+
     fits_close_file(fptr,&status);
     free(ra_arr);
     free(dec_arr);
@@ -1003,7 +1018,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
   else {
     print_info(" %d-th population (ASCII)\n",ipop);
     sprintf(fname,"%s_srcs_s%d_%d.txt",par->prefixOut,ipop+1,NodeThis);
-    
+
     long jj;
     FILE *fil=fopen(fname,"w");
     if(fil==NULL) error_open_file(fname);
@@ -1058,7 +1073,8 @@ void param_colore_free(ParamCoLoRe *par)
 	  catalog_cartesian_free(par->cats_c[ii]);
       }
       if(par->cats!=NULL) {
-	if(par->cats[ii]!=NULL)
+
+  if(par->cats[ii]!=NULL)
 	  catalog_free(par->cats[ii]);
       }
     }
@@ -1069,6 +1085,7 @@ void param_colore_free(ParamCoLoRe *par)
     free(par->nsources_c_this);
     free(par->nsources_this);
   }
+
 
   if(par->do_imap) {
     for(ii=0;ii<par->n_imap;ii++) {

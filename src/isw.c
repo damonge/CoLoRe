@@ -91,7 +91,7 @@ void isw_get_beam_properties(ParamCoLoRe *par)
     double idr,dr;
     get_radial_params(par->r_max,par->n_grid,&nr,&dr);
     idr=1./dr;
-  
+
     //Compute index of each source plane
     int *i_r_max_arr=my_malloc(pd_map->nr*sizeof(int));
     int *i_r_min_arr=my_malloc(pd_map->nr*sizeof(int));
@@ -130,12 +130,12 @@ void isw_get_beam_properties(ParamCoLoRe *par)
 	  double rm=(irr+0.5)*dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,NULL,NULL,&pd,RETURN_PDOT,INTERP_TYPE_SHEAR);
+	  added=interpolate_from_grid(par,xn,NULL,NULL,NULL,&pd,NULL,RETURN_PDOT,INTERP_TYPE_SHEAR);
 	  if(added)
 	    isw+=pd*fac_r[irr];
 	}
 	pd_map->data[i_r*pd_map->num_pix+ip]+=isw;
-      }	
+      }
     } //end omp for
 
     free(fac_r);

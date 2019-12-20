@@ -168,7 +168,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
   //np_tot_thr now contains the id of the first particle in the thread
 
   par->cats_c[ipop]=catalog_cartesian_alloc(par->nsources_c_this[ipop]);
-  
+
   print_info("   Assigning coordinates\n");
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none)			\
@@ -219,7 +219,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+1]=pos[1];
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+2]=pos[2];
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+3]=dz_rsd;
-	      
+
 	      vec2pix_ring(par->nside_base,pos,&pix_id_ring);
 	      ring2nest(par->nside_base,pix_id_ring,&pix_id_nest);
 	      par->cats_c[ipop]->ipix[pid]=pix_id_nest;
@@ -235,7 +235,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 
   free(np_tot_thr);
   free(nsources);
-}  
+}
 
 void srcs_set_cartesian(ParamCoLoRe *par)
 {
@@ -340,7 +340,7 @@ void srcs_distribute(ParamCoLoRe *par)
 
 static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
 {
-  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],
+  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],par->skw_gauss[ipop],
 				par->r_max,par->n_grid);
 
 #ifdef _HAVE_OMP
@@ -518,25 +518,25 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	fac_r_2[ip]=rm*rm*pg*cat->dr;
       }
     }
-    
+
 #ifdef _HAVE_OMP
 #pragma omp for
 #endif //_HAVE_OMP
     for(ip=0;ip<catc->nsrc;ip++) {
       int ax,added;
       double xn[3],u[3];
-      flouble v[3],vr,dens;
+      flouble v[3],vr,dens,gauss;
       float *pos=&(catc->pos[NPOS_CC*ip]);
       double r=sqrt(pos[0]*pos[0]+pos[1]*pos[1]+pos[2]*pos[2]);
       double ir=1./(MAX(r,0.001));
-      
+
       for(ax=0;ax<3;ax++) {//TODO these could be precomputed in the cartesian catalog
 	xn[ax]=(pos[ax]+par->pos_obs[ax])*idx;
 	u[ax]=pos[ax]*ir;
       }
 
       //Compute RSD
-      added=interpolate_from_grid(par,xn,NULL,v,NULL,NULL,RETURN_VEL,INTERP_TYPE_SKW);
+      added=interpolate_from_grid(par,xn,NULL,v,NULL,NULL,NULL,RETURN_VEL,INTERP_TYPE_SKW);
       if(added) {
 	vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
 	cat->srcs[ip].dz_rsd+=vr;
@@ -544,19 +544,29 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 
       //Fill up skewers
       if(cat->has_skw) {
-	int i_r,i_r_max=MIN((int)(r*cat->idr+0.5),cat->nr-1);
-	long offp=ip*cat->nr;
-	for(i_r=0;i_r<=i_r_max;i_r++) {
-	  double rm=(i_r+0.5)*cat->dr;
-	  for(ax=0;ax<3;ax++)
-	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
-	  if(added) {
-	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
-	    cat->d_skw[offp+i_r]+=dens;
-	    cat->v_skw[offp+i_r]+=vr;
-	  }
-	}
+      	int i_r,i_r_max=MIN((int)(r*cat->idr+0.5),cat->nr-1);
+      	long offp=ip*cat->nr;
+      	for(i_r=0;i_r<=i_r_max;i_r++) {
+      	  double rm=(i_r+0.5)*cat->dr;
+          for(ax=0;ax<3;ax++)
+      	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
+            if(cat->skw_gauss) {
+              added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
+            }
+            else {
+              added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
+            }
+      	  if(added) {
+      	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+                  if(cat->skw_gauss) {
+        	      cat->g_skw[offp+i_r]+=gauss;
+                  }
+                  else {
+                    cat->d_skw[offp+i_r]+=dens;
+                  }
+      	    cat->v_skw[offp+i_r]+=vr;
+      	  }
+      	}
       }
 
       //Compute lensing shear
@@ -574,14 +584,14 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  cph_h=u[0]/sth_h;
 	  sph_h=u[1]/sth_h;
 	}
-	
+
 	r1[0]=(cth_h*cth_h*cph_h*cph_h-sph_h*sph_h)*prefac;
 	r1[1]=(2*cph_h*sph_h*(cth_h*cth_h+1))*prefac;
 	r1[2]=(-2*cth_h*sth_h*cph_h)*prefac;
 	r1[3]=(cth_h*cth_h*sph_h*sph_h-cph_h*cph_h)*prefac;
 	r1[4]=(-2*cth_h*sth_h*sph_h)*prefac;
 	r1[5]=(sth_h*sth_h)*prefac;
-	
+
 	r2[0]=(-2*cth_h*cph_h*sph_h)*prefac;
 	r2[1]=(2*cth_h*(cph_h*cph_h-sph_h*sph_h))*prefac;
 	r2[2]=(2*sth_h*sph_h)*prefac;
@@ -597,7 +607,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  double rm=(i_r+0.5)*cat->dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
+	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
 	  if(added) {
 	    double fr=fac_r_1[i_r]*r-fac_r_2[i_r];
 	    double dotp1=0,dotp2=0;
@@ -721,7 +731,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
 	  vg=get_bg(par,(i_r+0.5)*cat->dr,BG_V1,0);
 	  cat->v_skw[offp+i_r]*=vg*factor_vel;
 	}
-      }	
+      }
     }//end omp for
   }//end omp parallel
 }

@@ -40,7 +40,7 @@ void *my_malloc(size_t size)
     fprintf(stderr,"out of memory\n");
     exit(1);
   }
-  
+
   return ptrout;
 }
 
@@ -102,7 +102,7 @@ int *ind_sort(int n,flouble *arr)
   }
 
   qsort(st,n,sizeof(IsortStruct),compareIsort);
-  
+
   int *iarr=my_malloc(n*sizeof(int));
   for(i=0;i<n;i++)
     iarr[i]=st[i].i;
@@ -140,7 +140,7 @@ void timer(int i)
   }
 #else //_NO_OMP
   int diff;
-  
+
   if(i==0)
     relbeg=time(NULL);
   else if(i==1) {
@@ -192,8 +192,8 @@ void rng_delta_gauss(double *module,double *phase,
 		     gsl_rng *rng,double sigma2)
 {
   //////
-  // Returns module and phase of two random 
-  // gaussian numbers. I.e.: 
+  // Returns module and phase of two random
+  // gaussian numbers. I.e.:
   double u;
   *phase=2*M_PI*rng_01(rng);
   u=rng_01(rng);
@@ -278,11 +278,11 @@ void print_info(char *fmt,...)
   if(NodeThis==0) {
     va_list args;
     char msg[256];
-    
+
     va_start(args,fmt);
     vsprintf(msg,fmt,args);
     va_end(args);
-    
+
     printf("%s",msg);
   }
 }
@@ -295,7 +295,7 @@ void report_error(int level,char *fmt,...)
   va_start(args,fmt);
   vsprintf(msg,fmt,args);
   va_end(args);
-  
+
   if(level) {
     fprintf(stderr,"Node %d, Fatal: %s",NodeThis,msg);
     exit(level);
@@ -321,7 +321,7 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th
   while(n_extra*nside>NSIDE_MAX_HPX)
     n_extra/=2;
   if(n_extra<=0) n_extra=1; //This should never happen
-  
+
   int i_extra=(int)(n_extra*n_extra*rng_01(rng));
   pix2ang_nest(nside*n_extra,
 	       (ipix0+ipix_nest)*n_extra*n_extra+i_extra,th,phi);
@@ -391,7 +391,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
       total_GB_srcs+=size_source*nsrc;
     }
   }
-  
+
   unsigned long long total_GB_imap=0;
   if(par->do_imap) {
     int ipop;
@@ -456,7 +456,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
 #endif //_HAVE_MPI
   }
 #endif //_DEBUG
-      
+
   if(just_test==0) {
     void *ptest=my_malloc(total_GB);
     free(ptest);
@@ -474,7 +474,7 @@ void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs)
 {
   CatalogCartesian *cat=my_malloc(sizeof(CatalogCartesian));
-  
+
   if(nsrcs>0) {
     cat->nsrc=nsrcs;
     cat->pos=my_malloc(NPOS_CC*nsrcs*sizeof(float));
@@ -498,19 +498,25 @@ void catalog_cartesian_free(CatalogCartesian *cat)
   free(cat);
 }
 
-Catalog *catalog_alloc(int nsrcs,int has_skw,double rmax,int ng)
+Catalog *catalog_alloc(int nsrcs,int has_skw,int skw_gauss,double rmax,int ng)
 {
   Catalog *cat=my_malloc(sizeof(Catalog));
-  
+
   if(nsrcs>0) {
     cat->nsrc=nsrcs;
     cat->srcs=my_malloc(nsrcs*sizeof(Src));
     cat->has_skw=has_skw;
+    cat->skw_gauss=skw_gauss;
     get_radial_params(rmax,ng,&(cat->nr),&(cat->dr));
     cat->rmax=rmax;
     cat->idr=1./cat->dr;
     if(has_skw) {
-      cat->d_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+      if(skw_gauss) {
+        cat->g_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+      }
+      else {
+        cat->d_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+      }
       cat->v_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
     }
   }
@@ -528,7 +534,12 @@ void catalog_free(Catalog *cat)
   if(cat->nsrc>0) {
     free(cat->srcs);
     if(cat->has_skw) {
-      free(cat->d_skw);
+      if(cat->skw_gauss) {
+        free(cat->g_skw);
+      }
+      else {
+        free(cat->d_skw);
+      }
       free(cat->v_skw);
     }
   }
@@ -639,7 +650,7 @@ HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
   int nside_ratio=nside/nside_base; 
   long npix_perbeam=nside_ratio*nside_ratio;
   int nbeams_here=0;
-  
+
   for(ib=NodeThis;ib<nbases;ib+=NNodes)
     nbeams_here++;
   shell->nside=nside;
@@ -667,7 +678,7 @@ HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
   //Zero all data and clear
   shell->data=my_calloc(shell->nr*shell->num_pix,sizeof(flouble));
   shell->nadd=my_calloc(shell->nr*shell->num_pix,sizeof(int));
-  
+
   return shell;
 }
 

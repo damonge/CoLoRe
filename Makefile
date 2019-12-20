@@ -2,7 +2,7 @@
 #
 ###Compiler and compilation options
 COMP_SER = gcc
-COMP_MPI = mpicc.openmpi
+COMP_MPI = mpicc
 OPTIONS = -Wall -O3 -std=c99
 #
 ### Behavioural flags
@@ -92,7 +92,6 @@ LIB_FFTW += -lfftw3_mpi
 endif #MPI
 
 endif #SINGLE_PRECISION
-LIB_FFTW += -lfftw3
 
 # for fftlog
 LIB_FFTW += -lfftw3

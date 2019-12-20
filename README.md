@@ -54,13 +54,15 @@ section 3.
 
 The behaviour of CoLoRe is mainly controlled by the input param file. The
 param file is basically a set of name-value pairs. Any blank lines, and
-anything beyond a #-symbol will be ignored. We provide a sample param
-file (param.cfg) that includes all the input parameters needed by
+anything beyond a #-symbol will be ignored. We provide a [sample param
+file](./examples/simple/param.cfg) that includes all the input parameters needed by
 CoLoRe. The comments included in this file explain the meaning and
 functionality of these parameters.
 
 
 ## 4 Output.
+
+### 4.1 Catalogs
 
 The main output of CoLoRe is a catalogue of sources written either
 as ASCII or FITS files. Each source is characterized by 5 quantities:
@@ -69,20 +71,44 @@ as ASCII or FITS files. Each source is characterized by 5 quantities:
  - DEC -> declination
  - RSD -> RSD contribution to the redshift
           (i.e. true redshift = Z0 + RSD).
+ - E1/E2 -> ellipticity components.
  - TYPE -> Population type (integer)
-A python script (read_colore.py) is also provided to illustrate how
-to read in CoLoRe's output.
+Additionally, information about the density and velocity fields along the
+line of sight of each source can also be provided. We provide a [python
+script](./examples/read_colore.py) to illustrate how to read in CoLoRe's catalog
+output.
+
+### 4.2 Maps
+
+CoLoRe can also generate maps of the lensing convergence and of the ISW
+effect at specific redshifts. These are output as HEALPix maps in FITS
+files.
+
+### 4.3 Boxes
+
+CoLoRe can also save the 3D Cartesian boxes on which the matter density and
+velocity fields are generated. These are the seeds of the different
+observable quantities the code can generate.
+
+We provide a [script](./examples/read_grid.py) showcasing how to read
+these boxes.
 
 
-## 5 License:
+## 5 Examples
+
+We provide a set of example runs that illustrate different aspects of
+CoLoRe. See the [README](./examples/README.md) file in the `examples` folder.
+
+
+## 6 License:
 
 CoLoRe is distributed under the GPL license (see COPYING in the root
 directory). We kindly ask you to report the program's website
 "https://github.com/damonge/CoLoRe" when using it.
 
 
-## 6 Contact:
+## 7 Contact:
 
 Regarding bugs, suggestions, questions or petitions, feel free to contact
 the author:
-    David Alonso: david.alonso@astro.ox.ac.uk
+    David Alonso: david.alonso@physics.ox.ac.uk
