@@ -419,6 +419,19 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
     total_GB_kappa+=size_map*nr*(sizeof(flouble)+sizeof(int));
   }
 
+  unsigned long long total_GB_shear=0;
+  if(par->do_shear) {
+    int ib;
+    int nr=par->n_shear;
+    int nbases=he_nside2npix(par->nside_base);
+    int nside_ratio=par->nside_shear/par->nside_base;
+    int npix_perbeam=nside_ratio*nside_ratio;
+    unsigned long long size_map=0;
+    for(ib=NodeThis;ib<nbases;ib+=NNodes)
+      size_map+=npix_perbeam;
+    total_GB_shear+=size_map*nr*(2*sizeof(flouble)+sizeof(int));
+  }
+
   unsigned long long total_GB_isw=0;
   if(par->do_isw) {
     int ib;
@@ -431,7 +444,13 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
       size_map+=npix_perbeam;
     total_GB_isw+=size_map*nr*(sizeof(flouble)+sizeof(int));
   }
-  total_GB=total_GB_gau+total_GB_lpt+total_GB_srcs+total_GB_imap+total_GB_kappa+total_GB_isw;
+  total_GB=total_GB_gau+
+    total_GB_lpt+
+    total_GB_srcs+
+    total_GB_imap+
+    total_GB_kappa+
+    total_GB_shear+
+    total_GB_isw;
 
 #ifdef _DEBUG
   int jj;
@@ -447,6 +466,8 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
 	printf(", %.3lf GB (imap)",(double)(total_GB_imap/pow(1024.,3)));
       if(par->do_kappa)
 	printf(", %.3lf MB (kappa)",(double)(total_GB_kappa/pow(1024.,2)));
+      if(par->do_shear)
+	printf(", %.3lf MB (shear)",(double)(total_GB_shear/pow(1024.,2)));
       if(par->do_isw)
 	printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
       printf("]\n");

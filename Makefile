@@ -120,6 +120,7 @@ DENSO = src/density.o
 SRCSO = src/srcs.o
 IMAPO = src/imap.o
 KAPPAO = src/kappa.o
+SHEARO = src/shear.o
 ISWO = src/isw.o
 IOO = src/io.o
 HPIXO = src/healpix_extra.o
@@ -127,7 +128,7 @@ BEAMO = src/beaming.o
 PREDICTO = src/predictions.o
 FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(ISWO) $(FFTLOGO) $(PREDICTO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(SHEARO) $(ISWO) $(FFTLOGO) $(PREDICTO)
 #OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe

@@ -97,12 +97,15 @@ static ParamCoLoRe *param_colore_new(void)
   par->do_isw=0;
   par->do_imap=0;
   par->do_kappa=0;
+  par->do_shear=0;
   par->do_isw=0;
   par->n_srcs=-1;
   par->n_imap=-1;
   par->n_kappa=-1;
+  par->n_shear=-1;
   par->n_isw=-1;
   par->nside_kappa=-1;
+  par->nside_shear=-1;
   par->nside_isw=-1;
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzSrcs[ii],"default");
@@ -124,6 +127,7 @@ static ParamCoLoRe *param_colore_new(void)
   }
   for(ii=0;ii<NPLANES_MAX;ii++) {
     par->z_kappa_out[ii]=-1;
+    par->z_shear_out[ii]=-1;
     par->z_isw_out[ii]=-1;
   }
   par->cats_c=NULL;
@@ -132,6 +136,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->nsources_this=NULL;
   par->imap=NULL;
   par->kmap=NULL;
+  par->smap=NULL;
   par->pd_map=NULL;
 
   //Beam distribution
@@ -359,6 +364,15 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
 
+  //Shear maps
+  cset=config_lookup(conf,"shear");
+  if(cset!=NULL) {
+    par->do_shear=1;
+    par->do_lensing=1;
+    conf_read_double_array(conf,"shear","z_out",par->z_shear_out,&(par->n_shear),NPLANES_MAX);
+    conf_read_int(conf,"shear","nside",&(par->nside_shear));
+  }
+
   cset=config_lookup(conf,"isw");
   if(cset!=NULL) {
     par->do_isw=1;
@@ -398,7 +412,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   else
     par->do_smoothing=0;
 
-  par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
+  par->need_beaming=par->do_lensing+par->do_kappa+par->do_shear+par->do_isw+par->do_skewers;
   init_fftw(par);
 
   get_max_memory(par,test_memory+par->just_do_pred);
@@ -426,6 +440,8 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     print_info("  %d intensity mapping species\n",par->n_imap);
   if(par->do_kappa)
     print_info("  %d lensing source planes\n",par->n_kappa);
+  if(par->do_shear)
+    print_info("  %d lensing source planes\n",par->n_shear);
   if(par->do_isw)
     print_info("  %d ISW source planes\n",par->n_isw);
   if(par->do_lensing)
@@ -470,6 +486,9 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
 
   if(par->do_kappa)
     par->kmap=hp_shell_alloc(1,par->nside_kappa,par->nside_base,par->n_kappa);
+
+  if(par->do_shear)
+    par->smap=hp_shell_alloc(2,par->nside_shear,par->nside_base,par->n_shear);
 
   if(par->do_isw)
     par->pd_map=hp_shell_alloc(1,par->nside_isw,par->nside_base,par->n_isw);
@@ -735,6 +754,70 @@ void write_kappa(ParamCoLoRe *par)
     if(NodeThis==0)
       he_write_healpix_map(&map_write,1,par->nside_kappa,fname,1);
   }
+  free(map_write);
+  free(map_nadd);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+void write_shear(ParamCoLoRe *par)
+{
+  int ir;
+  char fname[256];
+  long npx=he_nside2npix(par->nside_shear);
+  flouble **map_write=my_malloc(2*sizeof(flouble *));
+  int *map_nadd=my_malloc(npx*sizeof(int));
+  map_write[0]=my_malloc(npx*sizeof(flouble));
+  map_write[1]=my_malloc(npx*sizeof(flouble));
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing shear source maps\n");
+  for(ir=0;ir<par->smap->nr;ir++) {
+    long ip;
+    long ir_t=ir*par->smap->num_pix;
+
+    //Write local pixels to dummy map
+    for(ip=0;ip<npx;ip++) {
+      map_write[0][ip]=0;
+      map_write[1][ip]=0;
+      map_nadd[ip]=0;
+    }
+    sprintf(fname,"!%s_shear_z%03d.fits",par->prefixOut,ir);
+    for(ip=0;ip<par->smap->num_pix;ip++) {
+      int id_pix=par->smap->listpix[ip];
+      map_write[0][id_pix]+=par->smap->data[0 + 2*(ip + ir_t)];
+      map_write[1][id_pix]+=par->smap->data[1 + 2*(ip + ir_t)];
+      map_nadd[id_pix]+=par->smap->nadd[ir_t+ip];
+    }
+
+    //Collect all dummy maps
+#ifdef _HAVE_MPI
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_write[0],npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_write[0],NULL        ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_write[1],npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_write[1],NULL        ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+
+    for(ip=0;ip<npx;ip++) {
+      if(map_nadd[ip]>0) {
+	map_write[0][ip]/=map_nadd[ip];
+	map_write[1][ip]/=map_nadd[ip];
+      }
+    }
+
+    //Write dummy map
+    if(NodeThis==0)
+      he_write_healpix_map(map_write,2,par->nside_shear,fname,1);
+  }
+  free(map_write[0]);
+  free(map_write[1]);
   free(map_write);
   free(map_nadd);
   if(NodeThis==0) timer(2);
@@ -1080,6 +1163,11 @@ void param_colore_free(ParamCoLoRe *par)
     free(par->fl_mean_extra_kappa);
     free(par->cl_extra_kappa);
 #endif //_ADD_EXTRA_KAPPA
+  }
+
+  if(par->do_shear) {
+    if(par->smap!=NULL)
+      hp_shell_free(par->smap);
   }
 
   if(par->do_isw) {

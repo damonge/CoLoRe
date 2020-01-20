@@ -316,6 +316,12 @@ typedef struct {
   flouble **fl_mean_extra_kappa;
   flouble **cl_extra_kappa;
 #endif //_ADD_EXTRA_KAPPA
+  // Shear
+  int do_shear; //Do you want to output shear maps?
+  int n_shear; //How many maps?
+  double z_shear_out[NPLANES_MAX]; //Array of source plane redshifts
+  int nside_shear;
+  HealpixShells *smap; //Shear maps at each redshift
   // ISW
   int do_isw; //Do you want to output isw maps?
   int n_isw; //How many maps?
@@ -400,6 +406,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
 void write_srcs(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
+void write_shear(ParamCoLoRe *par);
 void write_isw(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
@@ -461,6 +468,16 @@ void kappa_get_local_properties(ParamCoLoRe *par);
 void kappa_beams_preproc(ParamCoLoRe *par);
 void kappa_get_beam_properties(ParamCoLoRe *par);
 void kappa_beams_postproc(ParamCoLoRe *par);
+
+
+//////
+// Functions defined in shear.c
+void shear_set_cartesian(ParamCoLoRe *par);
+void shear_distribute(ParamCoLoRe *par);
+void shear_get_local_properties(ParamCoLoRe *par);
+void shear_beams_preproc(ParamCoLoRe *par);
+void shear_get_beam_properties(ParamCoLoRe *par);
+void shear_beams_postproc(ParamCoLoRe *par);
 
 
 //////

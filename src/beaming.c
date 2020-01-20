@@ -298,14 +298,16 @@ void get_beam_properties(ParamCoLoRe *par)
     return;
   }
 
+  if(par->do_kappa)
+    kappa_beams_preproc(par);
+  if(par->do_shear)
+    shear_beams_preproc(par);
+  if(par->do_isw)
+    isw_beams_preproc(par);
   if(par->do_srcs)
     srcs_beams_preproc(par);
   if(par->do_imap)
     imap_beams_preproc(par);
-  if(par->do_kappa)
-    kappa_beams_preproc(par);
-  if(par->do_isw)
-    isw_beams_preproc(par);
 
   if(NodeThis==0) timer(0);
 
@@ -329,27 +331,31 @@ void get_beam_properties(ParamCoLoRe *par)
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
 
+    if(par->do_kappa)
+      kappa_get_beam_properties(par);
+    if(par->do_shear)
+      shear_get_beam_properties(par);
+    if(par->do_isw)
+      isw_get_beam_properties(par);
     if(par->do_srcs)
       srcs_get_beam_properties(par);
     if(par->do_imap)
       imap_get_beam_properties(par);
-    if(par->do_kappa)
-      kappa_get_beam_properties(par);
-    if(par->do_isw)
-      isw_get_beam_properties(par);
   }
 #ifdef _HAVE_MPI
   free(buffer_sr);
 #endif //_HAVE_MPI
 
+  if(par->do_kappa)
+    kappa_beams_postproc(par);
+  if(par->do_shear)
+    shear_beams_postproc(par);
+  if(par->do_isw)
+    isw_beams_postproc(par);
   if(par->do_srcs)
     srcs_beams_postproc(par);
   if(par->do_imap)
     imap_beams_postproc(par);
-  if(par->do_kappa)
-    kappa_beams_postproc(par);
-  if(par->do_isw)
-    isw_beams_postproc(par);
 
   if(NodeThis==0) timer(2);
   print_info("\n");

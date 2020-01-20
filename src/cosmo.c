@@ -24,7 +24,8 @@
 #include <gsl/gsl_errno.h>
 
 #define CL_TYPE_KAPPA 0
-#define CL_TYPE_ISW 1
+#define CL_TYPE_SHEAR 1
+#define CL_TYPE_ISW 2
 
 static double f_of_r_linear(ParamCoLoRe *par,double r,double *f,double f0,double ff)
 {
@@ -127,6 +128,20 @@ static double window_kappa_limber(ParamCoLoRe *par,int l,double k,double chi_0,d
   }
 }
 
+static double window_shear_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
+{
+  double chi_l=(l+0.5)/k;
+
+  if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
+    return 0;
+  else {
+    double gf=get_bg(par,chi_l,BG_D1,0);
+    double aa=1/(1+get_bg(par,chi_l,BG_Z,0));
+  
+    return par->prefac_lensing*sqrt((l-1)*l*(l+1.)*(l+2.))*gf*(chi_s-chi_l)/(k*k*chi_s*chi_l*aa);
+  }
+}
+
 static double window_isw_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
 {
   double chi_l=(l+0.5)/k;
@@ -146,6 +161,10 @@ static double cl_integrand(double lk,void *params)
   if(p->cl_type==CL_TYPE_KAPPA) {
     wa=window_kappa_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
     wb=window_kappa_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
+  }
+  else if(p->cl_type==CL_TYPE_SHEAR) {
+    wa=window_shear_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
+    wb=window_shear_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
   }
   else if(p->cl_type==CL_TYPE_ISW) {
     wa=window_isw_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
@@ -693,6 +712,15 @@ void cosmo_set(ParamCoLoRe *par)
     }
   }
 
+  if(par->do_shear) {
+    for(ii=0;ii<par->n_shear;ii++) {
+      double z=par->z_shear_out[ii];
+      if(z>par->z_max) {
+	report_error(1,"Source plane %d outside redshift range\n",ii+1);
+      }
+    }
+  }
+
   if(par->do_isw) {
     for(ii=0;ii<par->n_isw;ii++) {
       double z=par->z_isw_out[ii];
@@ -754,6 +782,14 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
     int ii;
     for(ii=0;ii<par->n_kappa;ii++) {
       double z=par->z_kappa_out[ii];
+      par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+    }
+  }
+  if(par->do_shear) {
+    int ii;
+    for(ii=0;ii<par->n_shear;ii++) {
+      double z=par->z_shear_out[ii];
       par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
       par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
     }
