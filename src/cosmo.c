@@ -790,8 +790,8 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
     int ii;
     for(ii=0;ii<par->n_shear;ii++) {
       double z=par->z_shear_out[ii];
-      par->kmap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
-      par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->smap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
+      par->smap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
     }
   }
   if(par->do_isw) {
