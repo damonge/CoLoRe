@@ -463,16 +463,16 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     for(ii=0;ii<par->n_imap;ii++) {
       FILE *fnu=fopen(par->fnameNuImap[ii],"r");
       if(fnu==NULL) error_open_file(par->fnameNuImap[ii]);
-      par->imap[ii]=hp_shell_alloc(par->nside_imap[ii],par->nside_base,linecount(fnu));
+      par->imap[ii]=hp_shell_alloc(1,par->nside_imap[ii],par->nside_base,linecount(fnu));
       fclose(fnu);
     }
   }
 
   if(par->do_kappa)
-    par->kmap=hp_shell_alloc(par->nside_kappa,par->nside_base,par->n_kappa);
+    par->kmap=hp_shell_alloc(1,par->nside_kappa,par->nside_base,par->n_kappa);
 
   if(par->do_isw)
-    par->pd_map=hp_shell_alloc(par->nside_isw,par->nside_base,par->n_isw);
+    par->pd_map=hp_shell_alloc(1,par->nside_isw,par->nside_base,par->n_isw);
 
   compute_tracer_cosmo(par);
 

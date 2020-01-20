@@ -546,7 +546,7 @@ void catalog_free(Catalog *cat)
   free(cat);
 }
 
-HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
+HealpixShells *hp_shell_alloc(int nq, int nside,int nside_base,int nr)
 {
   if(nside>NSIDE_MAX_HPX)
     report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
@@ -565,6 +565,7 @@ HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
 
   for(ib=NodeThis;ib<nbases;ib+=NNodes)
     nbeams_here++;
+  shell->nq=nq;
   shell->nside=nside;
   shell->num_pix=nside_ratio*nside_ratio*nbeams_here;
   shell->listpix=my_malloc(shell->num_pix*sizeof(long));
@@ -588,7 +589,7 @@ HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
   shell->rf=my_malloc(shell->nr*sizeof(flouble));
 
   //Zero all data and clear
-  shell->data=my_calloc(shell->nr*shell->num_pix,sizeof(flouble));
+  shell->data=my_calloc(shell->nq*shell->nr*shell->num_pix,sizeof(flouble));
   shell->nadd=my_calloc(shell->nr*shell->num_pix,sizeof(int));
 
   return shell;

@@ -183,6 +183,7 @@ typedef struct {
 } Catalog;
 
 typedef struct {
+  int nq; //Number of quantities to map
   int nside; //Resolution parameter
   long num_pix;
   long *listpix;
@@ -359,7 +360,7 @@ void end_rng(gsl_rng *rng);
 unsigned long long get_max_memory(ParamCoLoRe *par,int just_test);
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
-HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr);
+HealpixShells *hp_shell_alloc(int nq,int nside,int nside_base,int nr);
 void hp_shell_free(HealpixShells *shell);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
