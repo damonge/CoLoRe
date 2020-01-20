@@ -275,7 +275,7 @@ typedef struct {
   // Sources
   int do_srcs; //Do we include sources?
   int do_skewers; //Do we include skewer information?
-  int do_lensing; //Do we need to compute the lensing potential?
+  int do_srcs_shear; //Do we need to compute the lensing potential?
   int n_srcs; //Number of source types
   char fnameBzSrcs[NPOP_MAX][256]; //Files containing b(z) for each source type
   char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega (in deg^-2)
@@ -318,8 +318,9 @@ typedef struct {
 #endif //_ADD_EXTRA_KAPPA
   // Shear
   int do_shear; //Do you want to output shear maps?
+  double dr_shear; //Separation between shear maps.
+  double idr_shear; //1/dr_shear
   int n_shear; //How many maps?
-  double z_shear_out[NPLANES_MAX]; //Array of source plane redshifts
   int nside_shear;
   HealpixShells *smap; //Shear maps at each redshift
   // ISW
@@ -397,6 +398,7 @@ void cosmo_set(ParamCoLoRe *par);
 double r_of_z(ParamCoLoRe *par,double z);
 double get_bg(ParamCoLoRe *par,double r,int tag,int ipop);
 void compute_tracer_cosmo(ParamCoLoRe *par);
+flouble *compute_shear_spacing(ParamCoLoRe *par);
 
 //////
 // Functions defined in io.c

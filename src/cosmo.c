@@ -712,15 +712,6 @@ void cosmo_set(ParamCoLoRe *par)
     }
   }
 
-  if(par->do_shear) {
-    for(ii=0;ii<par->n_shear;ii++) {
-      double z=par->z_shear_out[ii];
-      if(z>par->z_max) {
-	report_error(1,"Source plane %d outside redshift range\n",ii+1);
-      }
-    }
-  }
-
   if(par->do_isw) {
     for(ii=0;ii<par->n_isw;ii++) {
       double z=par->z_isw_out[ii];
@@ -786,14 +777,6 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
       par->kmap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
     }
   }
-  if(par->do_shear) {
-    int ii;
-    for(ii=0;ii<par->n_shear;ii++) {
-      double z=par->z_shear_out[ii];
-      par->smap->r0[ii]=csm_radial_comoving_distance(pars,1./(1+z));
-      par->smap->rf[ii]=csm_radial_comoving_distance(pars,1./(1+z));
-    }
-  }
   if(par->do_isw) {
     int ii;
     for(ii=0;ii<par->n_isw;ii++) {
@@ -804,4 +787,19 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
   }
 
   csm_params_free(pars);
+}
+
+flouble *compute_shear_spacing(ParamCoLoRe *par)
+{
+  //Figure out appropriate radial sampling
+  flouble *rarr;
+  int ir,nr=(int)(par->r_max/par->dr_shear+1.);
+  par->dr_shear=par->r_max/nr;
+  par->idr_shear=1./par->dr_shear;
+  rarr=my_malloc(nr*sizeof(flouble));
+  for(ir=0;ir<nr;ir++)
+    rarr[ir]=(ir+1)*par->dr_shear;
+
+  par->n_shear=nr;
+  return rarr;
 }

@@ -93,11 +93,13 @@ static ParamCoLoRe *param_colore_new(void)
   //Tracers
   par->do_srcs=0;
   par->do_skewers=0;
-  par->do_lensing=0;
+  par->do_srcs_shear=0;
   par->do_isw=0;
   par->do_imap=0;
   par->do_kappa=0;
   par->do_shear=0;
+  par->dr_shear=100000.;
+  par->idr_shear=1E-5;
   par->do_isw=0;
   par->n_srcs=-1;
   par->n_imap=-1;
@@ -127,7 +129,6 @@ static ParamCoLoRe *param_colore_new(void)
   }
   for(ii=0;ii<NPLANES_MAX;ii++) {
     par->z_kappa_out[ii]=-1;
-    par->z_shear_out[ii]=-1;
     par->z_isw_out[ii]=-1;
   }
   par->cats_c=NULL;
@@ -320,7 +321,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
     conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
     if(par->shear_srcs[ii])
-      par->do_lensing=1;
+      par->do_srcs_shear=1;
     conf_read_bool(conf,c_dum,"store_skewers",&(par->skw_srcs[ii]));
     if(par->skw_srcs[ii]) {
       par->do_skewers=1;
@@ -359,7 +360,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   cset=config_lookup(conf,"kappa");
   if(cset!=NULL) {
     par->do_kappa=1;
-    par->do_lensing=1;
+    par->do_srcs_shear=1;
     conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPLANES_MAX);
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
@@ -368,10 +369,15 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   cset=config_lookup(conf,"shear");
   if(cset!=NULL) {
     par->do_shear=1;
-    par->do_lensing=1;
-    conf_read_double_array(conf,"shear","z_out",par->z_shear_out,&(par->n_shear),NPLANES_MAX);
+    par->do_srcs_shear=1;
+    conf_read_double(conf,"shear","dr_shear",&(par->dr_shear));
     conf_read_int(conf,"shear","nside",&(par->nside_shear));
+    if(par->dr_shear<=par->l_box/par->n_grid)
+      report_error(1,"Spacing between shear source planes is smaller than box resolution\n");
   }
+  // Check shear exists if requested with catalog
+  if(par->do_srcs_shear && !(par->do_shear))
+    report_error(1,"Include a \"shear\" section if you want shear with your galaxies\n");
 
   cset=config_lookup(conf,"isw");
   if(cset!=NULL) {
@@ -412,7 +418,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   else
     par->do_smoothing=0;
 
-  par->need_beaming=par->do_lensing+par->do_kappa+par->do_shear+par->do_isw+par->do_skewers;
+  par->need_beaming=par->do_srcs_shear+par->do_kappa+par->do_shear+par->do_isw+par->do_skewers;
   init_fftw(par);
 
   get_max_memory(par,test_memory+par->just_do_pred);
@@ -444,8 +450,8 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     print_info("  %d lensing source planes\n",par->n_shear);
   if(par->do_isw)
     print_info("  %d ISW source planes\n",par->n_isw);
-  if(par->do_lensing)
-    print_info("  Will include lensing shear\n");
+  if(par->do_srcs_shear)
+    print_info("  Will include lensing shear in source catalog\n");
   if(!par->need_beaming)
     print_info("  Will NOT need to all-to-all communicate fields\n");
   print_info("\n");
@@ -487,8 +493,18 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   if(par->do_kappa)
     par->kmap=hp_shell_alloc(1,par->nside_kappa,par->nside_base,par->n_kappa);
 
-  if(par->do_shear)
+  if(par->do_shear) {
+    flouble *r_arr=compute_shear_spacing(par);
     par->smap=hp_shell_alloc(2,par->nside_shear,par->nside_base,par->n_shear);
+    int i_r;
+    for(i_r=0;i_r<par->n_shear;i_r++) {
+      par->smap->r0[i_r]=r_arr[i_r];
+      par->smap->rf[i_r]=r_arr[i_r];
+      printf("%d %lE %lE\n",i_r,r_arr[i_r],
+             get_bg(par,r_arr[i_r],BG_Z,-1));
+    }
+    free(r_arr);
+  }
 
   if(par->do_isw)
     par->pd_map=hp_shell_alloc(1,par->nside_isw,par->nside_base,par->n_isw);
@@ -951,7 +967,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
     char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    ,"1E","1E"};
     char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
-    if(par->do_lensing)
+    if(par->do_srcs_shear)
       nfields=7;
 
     print_info(" %d-th population (FITS)\n",ipop);
@@ -984,7 +1000,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 	dec_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dec;
 	z0_arr[ii]=par->cats[ipop]->srcs[row_here+ii].z0;
 	rsd_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dz_rsd;
-	if(par->do_lensing) {
+	if(par->do_srcs_shear) {
 	  e1_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e1;
 	  e2_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e2;
 	}
@@ -994,7 +1010,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,dec_arr,&status);
       fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,z0_arr,&status);
       fits_write_col(fptr,TFLOAT,5,row_here+1,1,nrw_here,rsd_arr,&status);
-      if(par->do_lensing) {
+      if(par->do_srcs_shear) {
 	fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
 	fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
       }
@@ -1077,7 +1093,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     FILE *fil=fopen(fname,"w");
     if(fil==NULL) error_open_file(fname);
     fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");
-    if(par->do_lensing)
+    if(par->do_srcs_shear)
       fprintf(fil,"#[6]e1, [7]e2\n");
     else
       fprintf(fil,"\n");
@@ -1085,7 +1101,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fprintf(fil,"%d %E %E %E %E ",
 	      ipop,par->cats[ipop]->srcs[jj].ra,par->cats[ipop]->srcs[jj].dec,
 	      par->cats[ipop]->srcs[jj].z0,par->cats[ipop]->srcs[jj].dz_rsd);
-      if(par->do_lensing)
+      if(par->do_srcs_shear)
 	fprintf(fil,"%E %E \n",par->cats[ipop]->srcs[jj].e1,par->cats[ipop]->srcs[jj].e2);
       else
 	fprintf(fil,"\n");
