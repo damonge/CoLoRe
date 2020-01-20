@@ -795,7 +795,6 @@ flouble *compute_shear_spacing(ParamCoLoRe *par)
   flouble *rarr;
   int ir,nr=(int)(par->r_max/par->dr_shear+1.);
   par->dr_shear=par->r_max/nr;
-  par->idr_shear=1./par->dr_shear;
   rarr=my_malloc(nr*sizeof(flouble));
   for(ir=0;ir<nr;ir++)
     rarr[ir]=(ir+1)*par->dr_shear;

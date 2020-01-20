@@ -101,6 +101,7 @@ void shear_get_beam_properties(ParamCoLoRe *par)
       inv_r_max[i_r]=1./(i_r_here*dr);
       i_r_max_arr[i_r]=MIN(i_r_here,nr-1);
     }
+
     i_r_min_arr[0]=0;
     for(i_r=1;i_r<smap->nr;i_r++)
       i_r_min_arr[i_r]=i_r_max_arr[i_r-1]+1;
@@ -176,6 +177,14 @@ void shear_get_beam_properties(ParamCoLoRe *par)
 	smap->data[2*(i_r*smap->num_pix+ip)+1]+=(shear2_1-inv_r_max[i_r]*shear2_2);
       }
     } //end omp for
+
+#pragma omp single
+    {
+      for(i_r=0;i_r<smap->nr;i_r++) {
+        smap->r0[i_r]=1./inv_r_max[i_r];
+        smap->rf[i_r]=1./inv_r_max[i_r];
+      }
+    }
 
     free(fac_r_1);
     free(fac_r_2);

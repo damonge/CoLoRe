@@ -319,7 +319,6 @@ typedef struct {
   // Shear
   int do_shear; //Do you want to output shear maps?
   double dr_shear; //Separation between shear maps.
-  double idr_shear; //1/dr_shear
   int n_shear; //How many maps?
   int nside_shear;
   HealpixShells *smap; //Shear maps at each redshift

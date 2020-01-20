@@ -99,7 +99,6 @@ static ParamCoLoRe *param_colore_new(void)
   par->do_kappa=0;
   par->do_shear=0;
   par->dr_shear=100000.;
-  par->idr_shear=1E-5;
   par->do_isw=0;
   par->n_srcs=-1;
   par->n_imap=-1;
