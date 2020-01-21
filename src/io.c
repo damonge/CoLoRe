@@ -499,8 +499,6 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     for(i_r=0;i_r<par->n_shear;i_r++) {
       par->smap->r0[i_r]=r_arr[i_r];
       par->smap->rf[i_r]=r_arr[i_r];
-      printf("%d %lE %lE\n",i_r,r_arr[i_r],
-             get_bg(par,r_arr[i_r],BG_Z,-1));
     }
     free(r_arr);
   }

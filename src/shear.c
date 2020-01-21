@@ -66,7 +66,7 @@ void shear_beams_preproc(ParamCoLoRe *par)
 #ifdef _HAVE_OMP
 #pragma omp for
 #endif //_HAVE_OMP
-    for(ipp=0;ipp<par->smap->num_pix*par->smap->nr;ipp++) {
+    for(ipp=0;ipp<2*par->smap->num_pix*par->smap->nr;ipp++) {
       par->smap->data[ipp]=0;
       par->smap->nadd[ipp]=1;
     } //end omp for
