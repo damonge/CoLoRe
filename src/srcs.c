@@ -340,7 +340,10 @@ void srcs_distribute(ParamCoLoRe *par)
 
 static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
 {
-  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],par->skw_gauss[ipop],
+  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,
+                                par->shear_srcs[ipop],
+                                par->skw_srcs[ipop],
+                                par->skw_gauss[ipop],
 				par->r_max,par->n_grid);
 
 #ifdef _HAVE_OMP
@@ -416,7 +419,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
     double *fac_r_1=NULL,*fac_r_2=NULL;
 
     //Kernels for the LOS integrals
-    if(par->do_srcs_shear) {
+    if(cat->has_shear) {
       fac_r_1=my_malloc(cat->nr*sizeof(double));
       fac_r_2=my_malloc(cat->nr*sizeof(double));
 
@@ -479,7 +482,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       }
 
       //Compute lensing shear
-      if(par->do_srcs_shear) {
+      if(cat->has_shear) {
 	//Compute linear transformations needed for shear
 	double r1[6],r2[6];
 	double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
@@ -532,7 +535,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	cat->srcs[ip].e2+=e2;
       }
     }//end omp for
-    if(par->do_srcs_shear) {
+    if(cat->has_shear) {
       free(fac_r_1);
       free(fac_r_2);
     }

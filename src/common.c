@@ -519,13 +519,15 @@ void catalog_cartesian_free(CatalogCartesian *cat)
   free(cat);
 }
 
-Catalog *catalog_alloc(int nsrcs,int has_skw,int skw_gauss,double rmax,int ng)
+Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,
+                       int skw_gauss,double rmax,int ng)
 {
   Catalog *cat=my_malloc(sizeof(Catalog));
 
   if(nsrcs>0) {
     cat->nsrc=nsrcs;
     cat->srcs=my_malloc(nsrcs*sizeof(Src));
+    cat->has_shear=has_shear;
     cat->has_skw=has_skw;
     cat->skw_gauss=skw_gauss;
     get_radial_params(rmax,ng,&(cat->nr),&(cat->dr));

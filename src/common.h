@@ -175,6 +175,7 @@ typedef struct {
   double rmax;
   double dr;
   double idr;
+  int has_shear;
   int has_skw;
   int skw_gauss;
   float *d_skw;
@@ -370,7 +371,7 @@ HealpixShells *hp_shell_alloc(int nq,int nside,int nside_base,int nr);
 void hp_shell_free(HealpixShells *shell);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
-Catalog *catalog_alloc(int nsrcs,int has_skw,int skw_gauss,double rmax,int ng);
+Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,int skw_gauss,double rmax,int ng);
 void catalog_free(Catalog *cat);
 
 static inline double bias_model(double d,double b)

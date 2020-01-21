@@ -966,7 +966,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
     char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    ,"1E","1E"};
     char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
-    if(par->do_srcs_shear)
+    if(par->cats[ipop]->has_shear)
       nfields=7;
 
     print_info(" %d-th population (FITS)\n",ipop);
@@ -999,7 +999,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 	dec_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dec;
 	z0_arr[ii]=par->cats[ipop]->srcs[row_here+ii].z0;
 	rsd_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dz_rsd;
-	if(par->do_srcs_shear) {
+        if(par->cats[ipop]->has_shear) {
 	  e1_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e1;
 	  e2_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e2;
 	}
@@ -1009,7 +1009,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,dec_arr,&status);
       fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,z0_arr,&status);
       fits_write_col(fptr,TFLOAT,5,row_here+1,1,nrw_here,rsd_arr,&status);
-      if(par->do_srcs_shear) {
+      if(par->cats[ipop]->has_shear) {
 	fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
 	fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
       }
@@ -1092,7 +1092,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     FILE *fil=fopen(fname,"w");
     if(fil==NULL) error_open_file(fname);
     fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");
-    if(par->do_srcs_shear)
+    if(par->cats[ipop]->has_shear)
       fprintf(fil,"#[6]e1, [7]e2\n");
     else
       fprintf(fil,"\n");
@@ -1100,7 +1100,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fprintf(fil,"%d %E %E %E %E ",
 	      ipop,par->cats[ipop]->srcs[jj].ra,par->cats[ipop]->srcs[jj].dec,
 	      par->cats[ipop]->srcs[jj].z0,par->cats[ipop]->srcs[jj].dz_rsd);
-      if(par->do_srcs_shear)
+      if(par->cats[ipop]->has_shear)
 	fprintf(fil,"%E %E \n",par->cats[ipop]->srcs[jj].e1,par->cats[ipop]->srcs[jj].e2);
       else
 	fprintf(fil,"\n");
