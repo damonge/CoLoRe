@@ -1331,10 +1331,12 @@ void compute_density_normalization(ParamCoLoRe *par)
     free(norm_srcs_arr[ipop]);
     gsl_spline_free(spline_norm_srcs[ipop]);
   }
+  free(norm_srcs_arr);
   gsl_interp_accel_free(intacc_srcs);
   for(ipop=0;ipop<par->n_imap;ipop++) {
     free(norm_imap_arr[ipop]);
     gsl_spline_free(spline_norm_imap[ipop]);
   }
+  free(norm_imap_arr);
   gsl_interp_accel_free(intacc_imap);
 }

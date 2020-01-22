@@ -53,6 +53,7 @@ void he_write_healpix_map(flouble **tmap,int nfields,long nside,char *fname,int 
   free(ttype);
   free(tform);
   free(tunit);
+  free(map_dum);
 }
 
 flouble *he_read_healpix_map(char *fname,long *nside,int nfield)

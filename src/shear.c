@@ -68,6 +68,12 @@ void shear_beams_preproc(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(ipp=0;ipp<2*par->smap->num_pix*par->smap->nr;ipp++) {
       par->smap->data[ipp]=0;
+    } //end omp for
+
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+    for(ipp=0;ipp<par->smap->num_pix*par->smap->nr;ipp++) {
       par->smap->nadd[ipp]=1;
     } //end omp for
   } //end omp parallel
@@ -178,7 +184,9 @@ void shear_get_beam_properties(ParamCoLoRe *par)
       }
     } //end omp for
 
+#ifdef _HAVE_OMP
 #pragma omp single
+#endif //_HAVE_OMP
     {
       for(i_r=0;i_r<smap->nr;i_r++) {
         smap->r0[i_r]=1./inv_r_max[i_r];

@@ -88,6 +88,7 @@ static ParamCoLoRe *param_colore_new(void)
   sprintf(par->prefixOut,"default");
   par->output_format=0;
   par->do_pred=0;
+  par->just_do_pred=0;
   par->do_pred=1;
 
   //Tracers
@@ -420,9 +421,15 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   par->need_beaming=par->do_srcs_shear+par->do_kappa+par->do_shear+par->do_isw+par->do_skewers;
   init_fftw(par);
 
+  cosmo_set(par);
+
+  // We need to compute the number of maps here
+  if(par->do_shear) {
+    flouble *r_arr=compute_shear_spacing(par);
+    free(r_arr);
+  }
   get_max_memory(par,test_memory+par->just_do_pred);
 
-  cosmo_set(par);
   print_info("\n");
 
   double dk=2*M_PI/par->l_box;
@@ -507,6 +514,8 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     par->pd_map=hp_shell_alloc(1,par->nside_isw,par->nside_base,par->n_isw);
 
   compute_tracer_cosmo(par);
+
+  free(conf);
 
   return par;
 }
@@ -1203,4 +1212,5 @@ void param_colore_free(ParamCoLoRe *par)
 #ifdef _DEBUG
   fclose(par->f_dbg);
 #endif //_DEBUG
+  free(par);
 }
