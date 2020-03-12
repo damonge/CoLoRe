@@ -133,7 +133,7 @@ void shear_get_beam_properties(ParamCoLoRe *par)
       double shear1_1=0,shear1_2=0;
       double shear2_1=0,shear2_2=0;
       double *u=&(smap->pos[3*ip]);
-      double prefac=idx*idx;
+      double prefac=2*idx*idx; //2/Dx^2
       double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
 
       cth_h=u[2];
