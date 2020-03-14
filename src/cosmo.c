@@ -791,14 +791,19 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
 
 flouble *compute_shear_spacing(ParamCoLoRe *par)
 {
-  //Figure out appropriate radial sampling
   flouble *rarr;
-  int ir,nr=(int)(par->r_max/par->dr_shear+1.);
-  par->dr_shear=par->r_max/nr;
+  int ir,nr=par->n_shear;
   rarr=my_malloc(nr*sizeof(flouble));
-  for(ir=0;ir<nr;ir++)
-    rarr[ir]=(ir+1)*par->dr_shear;
+  if(par->shear_spacing_type==SPACING_R) {
+    flouble dr=par->r_max/nr;
+    for(ir=0;ir<nr;ir++)
+      rarr[ir]=(ir+1)*dr;
+  }
+  else {
+    flouble dlogz=log(1+par->z_max)/nr;
+    for(ir=0;ir<nr;ir++)
+      rarr[ir]=r_of_z(par, exp((ir+1)*dlogz));
+  }
 
-  par->n_shear=nr;
   return rarr;
 }

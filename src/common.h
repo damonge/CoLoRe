@@ -73,6 +73,10 @@
 #define RETURN_PDOT 8
 #define RETURN_GAUSS 16
 
+// Radial spacing
+#define SPACING_R 0
+#define SPACING_LOGZ 1
+
 //Interpolation type
 #ifndef INTERP_TYPE_SKW
 #define INTERP_TYPE_SKW INTERP_CIC
@@ -319,7 +323,7 @@ typedef struct {
 #endif //_ADD_EXTRA_KAPPA
   // Shear
   int do_shear; //Do you want to output shear maps?
-  double dr_shear; //Separation between shear maps.
+  int shear_spacing_type; //log(1+z)? r?
   int n_shear; //How many maps?
   int nside_shear;
   HealpixShells *smap; //Shear maps at each redshift

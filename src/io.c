@@ -99,7 +99,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->do_imap=0;
   par->do_kappa=0;
   par->do_shear=0;
-  par->dr_shear=100000.;
+  par->shear_spacing_type=SPACING_R;
   par->do_isw=0;
   par->n_srcs=-1;
   par->n_imap=-1;
@@ -370,10 +370,16 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   if(cset!=NULL) {
     par->do_shear=1;
     par->do_srcs_shear=1;
-    conf_read_double(conf,"shear","dr_shear",&(par->dr_shear));
+    conf_read_int(conf,"shear","n_shear",&(par->n_shear));
+    char spacing_string[256]="default";
+    conf_read_string(conf,"shear","spacing_type",spacing_string);
+    if(!strcmp(spacing_string,"r"))
+      par->shear_spacing_type=SPACING_R;
+    else if(!strcmp(spacing_string,"log(1+z)"))
+      par->shear_spacing_type=SPACING_LOGZ;
+    else
+      report_error(1,"Unknown spacing type %s\n",spacing_string);
     conf_read_int(conf,"shear","nside",&(par->nside_shear));
-    if(par->dr_shear<=par->l_box/par->n_grid)
-      report_error(1,"Spacing between shear source planes is smaller than box resolution\n");
   }
   // Check shear exists if requested with catalog
   if(par->do_srcs_shear && !(par->do_shear))
