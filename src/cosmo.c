@@ -799,10 +799,10 @@ flouble *compute_shear_spacing(ParamCoLoRe *par)
     for(ir=0;ir<nr;ir++)
       rarr[ir]=(ir+1)*dr;
   }
-  else {
+  else if(par->shear_spacing_type==SPACING_LOGZ) {
     flouble dlogz=log(1+par->z_max)/nr;
     for(ir=0;ir<nr;ir++)
-      rarr[ir]=r_of_z(par, exp((ir+1)*dlogz));
+      rarr[ir]=r_of_z(par, exp((ir+1)*dlogz)-1);
   }
 
   return rarr;
