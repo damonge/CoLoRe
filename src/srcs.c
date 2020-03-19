@@ -641,7 +641,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
         ir_s=get_r_index_smap(smap, r, ir_s);
 
         //Find intervals
-        double h = (r - smap->r0[ir_s]) / (smap->r0[ir_s] - smap->r0[ir_s+1]);
+        double h = (r - smap->r0[ir_s]) / (smap->r0[ir_s+1] - smap->r0[ir_s]);
 
         //Find pixel index
         //Find base this galaxy belongs to

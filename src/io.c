@@ -848,6 +848,21 @@ void write_shear(ParamCoLoRe *par)
   free(map_write[1]);
   free(map_write);
   free(map_nadd);
+
+  if(NodeThis==0) {
+    sprintf(fname,"%s_shear_r.txt", par->prefixOut);
+    FILE *f=fopen(fname, "w");
+    if(f==NULL)
+      report_error(1,"Couldn't open file %s\n", fname);
+    for(ir=0;ir<par->smap->nr;ir++) {
+      fprintf(f,"%d %lE %lE %lE %lE\n",ir,
+              par->smap->r0[ir], par->smap->rf[ir],
+              get_bg(par, par->smap->r0[ir], BG_Z, 0),
+              get_bg(par, par->smap->rf[ir], BG_Z, 0));
+    }
+    fclose(f);
+  }
+
   if(NodeThis==0) timer(2);
   print_info("\n");
 }
