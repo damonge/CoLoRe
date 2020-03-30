@@ -300,8 +300,10 @@ void get_beam_properties(ParamCoLoRe *par)
 
   if(par->do_kappa)
     kappa_beams_preproc(par);
+#ifdef _USE_NEW_LENSING
   if(par->do_shear)
     shear_beams_preproc(par);
+#endif //_USE_NEW_LENSING
   if(par->do_isw)
     isw_beams_preproc(par);
   if(par->do_srcs)
@@ -333,8 +335,10 @@ void get_beam_properties(ParamCoLoRe *par)
 
     if(par->do_kappa)
       kappa_get_beam_properties(par);
+#ifdef _USE_NEW_LENSING
     if(par->do_shear)
-      shear_get_beam_properties(par);
+      shear_get_beam_properties(par); 
+#endif //_USE_NEW_LENSING
     if(par->do_isw)
       isw_get_beam_properties(par);
     if(par->do_srcs)
@@ -348,8 +352,10 @@ void get_beam_properties(ParamCoLoRe *par)
 
   if(par->do_kappa)
     kappa_beams_postproc(par);
+#ifdef _USE_NEW_LENSING
   if(par->do_shear)
-    shear_beams_postproc(par);
+    shear_beams_postproc(par); 
+#endif //_USE_NEW_LENSING
   if(par->do_isw)
     isw_beams_postproc(par);
   if(par->do_srcs)

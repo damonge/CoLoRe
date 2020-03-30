@@ -365,6 +365,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
 
+#ifdef _USE_NEW_LENSING
   //Shear maps
   cset=config_lookup(conf,"shear");
   if(cset!=NULL) {
@@ -384,6 +385,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   // Check shear exists if requested with catalog
   if(par->do_srcs_shear && !(par->do_shear))
     report_error(1,"Include a \"shear\" section if you want shear with your galaxies\n");
+#endif //_USE_NEW_LENSING
 
   cset=config_lookup(conf,"isw");
   if(cset!=NULL) {
@@ -430,10 +432,12 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   cosmo_set(par);
 
   // We need to compute the number of maps here
+#ifdef _USE_NEW_LENSING
   if(par->do_shear) {
     flouble *r_arr=compute_shear_spacing(par);
     free(r_arr);
   }
+#endif //_USE_NEW_LENSING
   get_max_memory(par,test_memory+par->just_do_pred);
 
   print_info("\n");
@@ -505,6 +509,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   if(par->do_kappa)
     par->kmap=hp_shell_alloc(1,par->nside_kappa,par->nside_base,par->n_kappa);
 
+#ifdef _USE_NEW_LENSING
   if(par->do_shear) {
     flouble *r_arr=compute_shear_spacing(par);
     par->smap=hp_shell_alloc(2,par->nside_shear,par->nside_base,par->n_shear);
@@ -515,6 +520,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     }
     free(r_arr);
   }
+#endif //_USE_NEW_LENSING
 
   if(par->do_isw)
     par->pd_map=hp_shell_alloc(1,par->nside_isw,par->nside_base,par->n_isw);
@@ -1208,10 +1214,12 @@ void param_colore_free(ParamCoLoRe *par)
 #endif //_ADD_EXTRA_KAPPA
   }
 
+#ifdef _USE_NEW_LENSING
   if(par->do_shear) {
     if(par->smap!=NULL)
       hp_shell_free(par->smap);
   }
+#endif //_USE_NEW_LENSING
 
   if(par->do_isw) {
     if(par->pd_map!=NULL)
