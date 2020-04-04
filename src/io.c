@@ -109,6 +109,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->nside_kappa=-1;
   par->nside_shear=-1;
   par->nside_isw=-1;
+  par->write_shear=0;
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzSrcs[ii],"default");
     sprintf(par->fnameNzSrcs[ii],"default");
@@ -360,7 +361,6 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   cset=config_lookup(conf,"kappa");
   if(cset!=NULL) {
     par->do_kappa=1;
-    par->do_srcs_shear=1;
     conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPLANES_MAX);
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
@@ -381,6 +381,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     else
       report_error(1,"Unknown spacing type %s\n",spacing_string);
     conf_read_int(conf,"shear","nside",&(par->nside_shear));
+    conf_read_bool(conf,"shear","write",&(par->write_shear));
   }
   // Check shear exists if requested with catalog
   if(par->do_srcs_shear && !(par->do_shear))

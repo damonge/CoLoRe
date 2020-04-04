@@ -322,7 +322,8 @@ typedef struct {
   flouble **cl_extra_kappa;
 #endif //_ADD_EXTRA_KAPPA
   // Shear
-  int do_shear; //Do you want to output shear maps?
+  int do_shear; //Do you want to create shear maps?
+  int write_shear; //Do you want to output shear maps?
   int shear_spacing_type; //log(1+z)? r?
   int n_shear; //How many maps?
   int nside_shear;

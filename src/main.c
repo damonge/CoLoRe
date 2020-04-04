@@ -74,7 +74,7 @@ int main(int argc,char **argv)
     //Get information from slabs
     if(par->do_kappa)
       kappa_set_cartesian(par);
-#ifndef _USE_NEW_LENSING
+#ifdef _USE_NEW_LENSING
     if(par->do_shear)
       shear_set_cartesian(par);
 #endif //_USE_NEW_LENSING
@@ -88,7 +88,7 @@ int main(int argc,char **argv)
     //Distribute information across
     if(par->do_kappa)
       kappa_distribute(par);
-#ifndef _USE_NEW_LENSING
+#ifdef _USE_NEW_LENSING
     if(par->do_shear)
       shear_distribute(par);
 #endif //_USE_NEW_LENSING
@@ -102,7 +102,7 @@ int main(int argc,char **argv)
     //Postprocess after 
     if(par->do_kappa)
       kappa_get_local_properties(par);
-#ifndef _USE_NEW_LENSING
+#ifdef _USE_NEW_LENSING
     if(par->do_shear)
       shear_get_local_properties(par);
 #endif //_USE_NEW_LENSING
@@ -121,8 +121,8 @@ int main(int argc,char **argv)
     //Write output
     if(par->do_kappa)
       write_kappa(par);
-#ifndef _USE_NEW_LENSING
-    if(par->do_shear)
+#ifdef _USE_NEW_LENSING
+    if(par->do_shear && par->write_shear)
       write_shear(par);
 #endif ///_USE_NEW_LENSING
     if(par->do_isw)
