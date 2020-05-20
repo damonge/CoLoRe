@@ -21,7 +21,7 @@ USE_SINGLE_PRECISION = yes
 #Add random perturbations to kappa from redshifts outside the box
 ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
-USE_HDF5 = yes
+USE_HDF5 = no
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
