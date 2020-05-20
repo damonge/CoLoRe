@@ -3,7 +3,7 @@
 ###Compiler and compilation options
 COMP_SER = gcc
 COMP_MPI = mpicc
-OPTIONS = -Wall -O3 -std=c99
+OPTIONS = -Wall -Wno-format-overflow -O3 -std=c99
 #
 ### Behavioural flags
 #Use double precision integer (enable in general)
@@ -33,8 +33,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/home/alonso/include
-GSL_LIB = -L/home/alonso/lib
+GSL_INC = -I/users/damonge/include
+GSL_LIB = -L/users/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
