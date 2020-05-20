@@ -117,7 +117,7 @@ int main(int argc,char **argv)
     //and computation of all required quantities
     if(par->need_beaming)
       get_beam_properties(par);
-    
+
     //Write output
     if(par->do_kappa)
       write_kappa(par);

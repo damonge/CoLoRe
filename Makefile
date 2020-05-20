@@ -3,7 +3,7 @@
 ###Compiler and compilation options
 COMP_SER = gcc
 COMP_MPI = mpicc
-OPTIONS = -Wall -O3 -std=c99
+OPTIONS = -Wall -Wno-format-overflow -O3 -std=c99
 #
 ### Behavioural flags
 #Use double precision integer (enable in general)
@@ -21,7 +21,7 @@ USE_SINGLE_PRECISION = yes
 #Add random perturbations to kappa from redshifts outside the box
 ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
-USE_HDF5 = yes
+USE_HDF5 = no
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
@@ -33,8 +33,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/home/alonso/include
-GSL_LIB = -L/home/alonso/lib
+GSL_INC = -I/users/damonge/include
+GSL_LIB = -L/users/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =

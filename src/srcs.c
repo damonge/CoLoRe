@@ -250,17 +250,17 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	    double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
 	    double dz_rsd=rvel*get_bg(par,rr,BG_V1,0);
 	    for(ip=0;ip<npp;ip++) {
+	      int ax;
 	      long pix_id_ring,pix_id_nest;
 	      double pos[3];
 	      long pid=np_tot_thr[ithr];
 
-	      pos[0]=x0+dx*(rng_01(rng_thr)-0.5);
-	      pos[1]=y0+dx*(rng_01(rng_thr)-0.5);
-	      pos[2]=z0+dx*(rng_01(rng_thr)-0.5);
-	      par->cats_c[ipop]->pos[NPOS_CC*pid+0]=pos[0];
-	      par->cats_c[ipop]->pos[NPOS_CC*pid+1]=pos[1];
-	      par->cats_c[ipop]->pos[NPOS_CC*pid+2]=pos[2];
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+0]=x0+dx*(rng_01(rng_thr)-0.5);
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+1]=y0+dx*(rng_01(rng_thr)-0.5);
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+2]=z0+dx*(rng_01(rng_thr)-0.5);
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+3]=dz_rsd;
+	      for(ax=0;ax<3;ax++)
+		pos[ax]=par->cats_c[ipop]->pos[NPOS_CC*pid+ax];
 
 	      vec2pix_ring(par->nside_base,pos,&pix_id_ring);
 	      ring2nest(par->nside_base,pix_id_ring,&pix_id_nest);
@@ -506,12 +506,12 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       	  double rm=(i_r+0.5)*cat->dr;
           for(ax=0;ax<3;ax++)
       	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-            if(cat->skw_gauss) {
-              added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
-            }
-            else {
-              added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
-            }
+	  if(cat->skw_gauss) {
+	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
+	  }
+	  else {
+	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
+	  }
       	  if(added) {
       	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
                   if(cat->skw_gauss) {
@@ -655,6 +655,8 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
         vec2pix_nest(smap->nside,u,&ipix);
         //Offset to pixel indices in this node
         ipix-=(ibase-ibase_here)*nside_ratio*nside_ratio;
+	if((ipix<0) || (ipix>=smap->num_pix))
+	  report_error(1,"Bad pixel!!\n");
 
         //Find shear at edges
         g1_0=smap->data[2*(ir_s*smap->num_pix+ipix)+0];
