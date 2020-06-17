@@ -628,7 +628,8 @@ HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_
     for(ib=0;ib<shell->nbeams;ib++)
       shell->data[ir][ib]=my_malloc(shell->nq*shell->num_pix_per_beam[ir]*sizeof(flouble));
   }
-  exit(1);
+
+  return shell;
 }
     
 HealpixShells *hp_shell_alloc(int nq, int nside,int nside_base,int nr)
