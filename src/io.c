@@ -513,6 +513,9 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
 #ifdef _USE_NEW_LENSING
   if(par->do_shear) {
     flouble *r_arr=compute_shear_spacing(par);
+    HealpixShellsAdaptive *ss=hp_shell_adaptive_alloc(2, 4096, par->nside_base,
+                                                     par->n_shear, r_arr, par->l_box/par->n_grid,
+                                                     1.);
     par->smap=hp_shell_alloc(2,par->nside_shear,par->nside_base,par->n_shear);
     int i_r;
     for(i_r=0;i_r<par->n_shear;i_r++) {

@@ -188,6 +188,19 @@ typedef struct {
 } Catalog;
 
 typedef struct {
+  int nq;
+  int nr; //Number of spherical shells
+  flouble *r; //r in this shell
+  int *nside; //Resolution parameter
+  int *nside_ratio;
+  long *num_pix_per_beam;
+  int nbeams; //Number of different bases
+  long *beam_id;
+  long **ipix_0;
+  flouble ***data;
+} HealpixShellsAdaptive;
+
+typedef struct {
   int nq; //Number of quantities to map
   int nside; //Resolution parameter
   long num_pix;
@@ -373,6 +386,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test);
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
 HealpixShells *hp_shell_alloc(int nq,int nside,int nside_base,int nr);
+HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr, flouble *r_arr, flouble dx, flouble dx_fraction);
 void hp_shell_free(HealpixShells *shell);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);

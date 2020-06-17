@@ -569,6 +569,68 @@ void catalog_free(Catalog *cat)
   free(cat);
 }
 
+HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr, flouble *r_arr, flouble dx, flouble dx_fraction)
+{
+  if(nside_max>NSIDE_MAX_HPX)
+    report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
+  if(nside_max<nside_base)
+    report_error(1,"Can't go below nside=%d\n",nside_base);
+  
+  HealpixShellsAdaptive *shell=my_malloc(sizeof(HealpixShellsAdaptive));
+
+  int ib, ir;
+  int nbases=he_nside2npix(nside_base);
+  shell->nbeams=0;
+  for(ib=NodeThis;ib<nbases;ib+=NNodes)
+    shell->nbeams++;
+
+  shell->nr=nr;
+  shell->nside=my_malloc(nr*sizeof(int));
+  shell->nside_ratio=my_malloc(nr*sizeof(int));
+  shell->num_pix_per_beam=my_malloc(nr*sizeof(long));
+  shell->r=my_malloc(nr*sizeof(flouble));
+  shell->ipix_0=my_malloc(nr*sizeof(long *));
+  shell->beam_id=my_malloc(shell->nbeams*sizeof(long));
+  for(ib=0;ib<shell->nbeams;ib++)
+    shell->beam_id[ib]=NodeThis+NNodes*ib;
+  for(ir=0; ir<nr; ir++) {
+    int nside_ratio;
+    flouble r=r_arr[ir];
+    int nside_here=nside_base;
+    while(nside_here<=nside_max) {
+      double theta=sqrt(4*M_PI/he_nside2npix(nside_here));
+      double dxt=theta*r;
+      if(dxt<=dx)
+        break;
+      nside_here*=2;
+    }
+    shell->r[ir]=r;
+    shell->nside[ir]=nside_here;
+    nside_ratio=nside_here/nside_base;
+    shell->nside_ratio[ir]=nside_ratio;
+    shell->num_pix_per_beam[ir]=nside_ratio*nside_ratio;
+    printf("%d %d %d %ld %lE %lE %lE",ir, shell->nside[ir],
+           shell->nside_ratio[ir], shell->num_pix_per_beam[ir],
+           shell->r[ir],
+           sqrt(4*M_PI/he_nside2npix(nside_here))*r,dx);
+    printf("  [");
+    shell->ipix_0[ir]=my_malloc(shell->nbeams*sizeof(long));
+    for(ib=0;ib<shell->nbeams;ib++) {
+      shell->ipix_0[ir][ib]=shell->beam_id[ib]*nside_ratio*nside_ratio;
+      printf(" %ld", shell->ipix_0[ir][ib]);
+    }
+    printf("]\n");
+  }
+
+  shell->data=my_malloc(nr*sizeof(flouble **));
+  for(ir=0; ir<nr; ir++) {
+    shell->data[ir]=my_malloc(shell->nbeams*sizeof(flouble *));
+    for(ib=0;ib<shell->nbeams;ib++)
+      shell->data[ir][ib]=my_malloc(shell->nq*shell->num_pix_per_beam[ir]*sizeof(flouble));
+  }
+  exit(1);
+}
+    
 HealpixShells *hp_shell_alloc(int nq, int nside,int nside_base,int nr)
 {
   if(nside>NSIDE_MAX_HPX)
