@@ -513,7 +513,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
 #ifdef _USE_NEW_LENSING
   if(par->do_shear) {
     flouble *r_arr=compute_shear_spacing(par);
-    par->smap = hp_shell_adaptive_alloc(2, 4096, par->nside_base,
+    par->smap = hp_shell_adaptive_alloc(2, par->nside_shear, par->nside_base,
                                         par->n_shear, r_arr, par->l_box/par->n_grid,
                                         1.);
     hp_shell_adaptive_free(par->smap);
@@ -800,27 +800,25 @@ void write_shear(ParamCoLoRe *par)
   char fname[256];
   long npx=he_nside2npix(par->nside_shear);
   flouble **map_write=my_malloc(2*sizeof(flouble *));
-  int *map_nadd=my_malloc(npx*sizeof(int));
   map_write[0]=my_malloc(npx*sizeof(flouble));
   map_write[1]=my_malloc(npx*sizeof(flouble));
   if(NodeThis==0) timer(0);
   print_info("*** Writing shear source maps\n");
   for(ir=0;ir<par->smap->nr;ir++) {
-    long ip;
-    long ir_t=ir*par->smap->num_pix;
+    long ip, ib;
 
     //Write local pixels to dummy map
     for(ip=0;ip<npx;ip++) {
       map_write[0][ip]=0;
       map_write[1][ip]=0;
-      map_nadd[ip]=0;
     }
     sprintf(fname,"!%s_shear_z%03d.fits",par->prefixOut,ir);
-    for(ip=0;ip<par->smap->num_pix;ip++) {
-      int id_pix=par->smap->listpix[ip];
-      map_write[0][id_pix]+=par->smap->data[0 + 2*(ip + ir_t)];
-      map_write[1][id_pix]+=par->smap->data[1 + 2*(ip + ir_t)];
-      map_nadd[id_pix]+=par->smap->nadd[ir_t+ip];
+    for(ib=0;ib<par->smap->nbeams;ib++) {
+      for(ip=0;ip<par->smap->num_pix_per_beam[ir];ip++) {
+        int id_pix=par->smap->ipix_0[ir][ib]+ip;
+        map_write[0][id_pix]+=par->smap->data[ir][ib][2*ip+0];
+        map_write[1][id_pix]+=par->smap->data[ir][ib][2*ip+1];
+      }
     }
 
     //Collect all dummy maps
@@ -833,18 +831,7 @@ void write_shear(ParamCoLoRe *par)
       MPI_Reduce(MPI_IN_PLACE,map_write[1],npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
     else
       MPI_Reduce(map_write[1],NULL        ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
-    if(NodeThis==0)
-      MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
-    else
-      MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
-
-    for(ip=0;ip<npx;ip++) {
-      if(map_nadd[ip]>0) {
-	map_write[0][ip]/=map_nadd[ip];
-	map_write[1][ip]/=map_nadd[ip];
-      }
-    }
 
     //Write dummy map
     if(NodeThis==0)
@@ -853,7 +840,6 @@ void write_shear(ParamCoLoRe *par)
   free(map_write[0]);
   free(map_write[1]);
   free(map_write);
-  free(map_nadd);
 
   if(NodeThis==0) {
     sprintf(fname,"%s_shear_r.txt", par->prefixOut);
@@ -861,10 +847,9 @@ void write_shear(ParamCoLoRe *par)
     if(f==NULL)
       report_error(1,"Couldn't open file %s\n", fname);
     for(ir=0;ir<par->smap->nr;ir++) {
-      fprintf(f,"%d %lE %lE %lE %lE\n",ir,
-              par->smap->r0[ir], par->smap->rf[ir],
-              get_bg(par, par->smap->r0[ir], BG_Z, 0),
-              get_bg(par, par->smap->rf[ir], BG_Z, 0));
+      fprintf(f,"%d %lE %lE\n",ir,
+              par->smap->r[ir], 
+              get_bg(par, par->smap->r[ir], BG_Z, 0));
     }
     fclose(f);
   }
@@ -1217,7 +1202,7 @@ void param_colore_free(ParamCoLoRe *par)
 #ifdef _USE_NEW_LENSING
   if(par->do_shear) {
     if(par->smap!=NULL)
-      hp_shell_free(par->smap);
+      hp_shell_adaptive_free(par->smap);
   }
 #endif //_USE_NEW_LENSING
 
