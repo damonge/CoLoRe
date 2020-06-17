@@ -340,7 +340,7 @@ typedef struct {
   int shear_spacing_type; //log(1+z)? r?
   int n_shear; //How many maps?
   int nside_shear;
-  HealpixShells *smap; //Shear maps at each redshift
+  HealpixShellsAdaptive *smap; //Shear maps at each redshift
   // ISW
   int do_isw; //Do you want to output isw maps?
   int n_isw; //How many maps?
