@@ -569,6 +569,26 @@ void catalog_free(Catalog *cat)
   free(cat);
 }
 
+void hp_shell_adaptive_free(HealpixShellsAdaptive *shell)
+{
+  int ir;
+  free(shell->r);
+  free(shell->nside);
+  free(shell->nside_ratio);
+  free(shell->num_pix_per_beam);
+  free(shell->beam_id);
+  for(ir=0;ir<shell->nr;ir++) {
+    int ib;
+    free(shell->ipix_0[ir]);
+    for(ib=0;ib<shell->nbeams;ib++)
+      free(shell->data[ir][ib]);
+    free(shell->data[ir]);
+  }
+  free(shell->ipix_0);
+  free(shell->data);
+  free(shell);
+}
+
 HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr, flouble *r_arr, flouble dx, flouble dx_fraction)
 {
   if(nside_max>NSIDE_MAX_HPX)
@@ -584,6 +604,7 @@ HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_
   for(ib=NodeThis;ib<nbases;ib+=NNodes)
     shell->nbeams++;
 
+  shell->nq=nq;
   shell->nr=nr;
   shell->nside=my_malloc(nr*sizeof(int));
   shell->nside_ratio=my_malloc(nr*sizeof(int));

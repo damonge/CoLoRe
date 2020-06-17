@@ -388,6 +388,7 @@ void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 HealpixShells *hp_shell_alloc(int nq,int nside,int nside_base,int nr);
 HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr, flouble *r_arr, flouble dx, flouble dx_fraction);
 void hp_shell_free(HealpixShells *shell);
+void hp_shell_adaptive_free(HealpixShellsAdaptive *shell);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
 Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,int skw_gauss,double rmax,int ng);
