@@ -22,7 +22,7 @@
 #include "common.h"
 
 #ifdef _USE_NEW_LENSING
-static int get_r_index_smap(HealpixShellsAdaptive *sh,double r,int ir_start)
+static int get_r_index_shear(HealpixShellsAdaptive *sh,double r,int ir_start)
 {
   int gotit=0;
   int ir0;
@@ -637,7 +637,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
         double u[3];
         double g1_lo,g1_up,g2_lo,g2_up;
         //Find lower shell index
-        ir_s=get_r_index_smap(smap, r, ir_s);
+        ir_s=get_r_index_shear(smap, r, ir_s);
         if(ir_s>=smap->nr-1)
           report_error(1, "SHIT\n");
 

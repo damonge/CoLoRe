@@ -432,13 +432,6 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
 
   cosmo_set(par);
 
-  // We need to compute the number of maps here
-#ifdef _USE_NEW_LENSING
-  if(par->do_shear) {
-    flouble *r_arr=compute_shear_spacing(par);
-    free(r_arr);
-  }
-#endif //_USE_NEW_LENSING
   get_max_memory(par,test_memory+par->just_do_pred);
 
   print_info("\n");

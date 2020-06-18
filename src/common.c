@@ -615,7 +615,7 @@ HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_
     while(nside_here<nside_max) {
       double theta=sqrt(4*M_PI/he_nside2npix(nside_here));
       double dxt=theta*r;
-      if(dxt<=dx)
+      if(dxt<=dx*dx_fraction)
         break;
       nside_here*=2;
     }

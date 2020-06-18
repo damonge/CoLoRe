@@ -194,7 +194,7 @@ typedef struct {
   int *nside; //Resolution parameter
   long *num_pix_per_beam;
   int nbeams; //Number of different bases
-  double **pos;
+  double **pos; //3D positions of the pixels in the furthest shell
   flouble ***data;
 } HealpixShellsAdaptive;
 
@@ -384,7 +384,8 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test);
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
 HealpixShells *hp_shell_alloc(int nq,int nside,int nside_base,int nr);
-HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr, flouble *r_arr, flouble dx, flouble dx_fraction);
+HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr,
+                                               flouble *r_arr, flouble dx, flouble dx_fraction);
 void hp_shell_free(HealpixShells *shell);
 void hp_shell_adaptive_free(HealpixShellsAdaptive *shell);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
