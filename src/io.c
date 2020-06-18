@@ -516,8 +516,6 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     par->smap = hp_shell_adaptive_alloc(2, par->nside_shear, par->nside_base,
                                         par->n_shear, r_arr, par->l_box/par->n_grid,
                                         1.);
-    hp_shell_adaptive_free(par->smap);
-    exit(1);
     free(r_arr);
   }
 #endif //_USE_NEW_LENSING

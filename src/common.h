@@ -197,6 +197,7 @@ typedef struct {
   int nbeams; //Number of different bases
   long *beam_id;
   long **ipix_0;
+  double **pos;
   flouble ***data;
 } HealpixShellsAdaptive;
 

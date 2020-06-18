@@ -571,21 +571,23 @@ void catalog_free(Catalog *cat)
 
 void hp_shell_adaptive_free(HealpixShellsAdaptive *shell)
 {
-  int ir;
+  int ib,ir;
   free(shell->r);
   free(shell->nside);
   free(shell->nside_ratio);
   free(shell->num_pix_per_beam);
   free(shell->beam_id);
-  for(ir=0;ir<shell->nr;ir++) {
-    int ib;
-    free(shell->ipix_0[ir]);
-    for(ib=0;ib<shell->nbeams;ib++)
-      free(shell->data[ir][ib]);
-    free(shell->data[ir]);
+  for(ib=0;ib<shell->nbeams;ib++) {
+    for(ir=0;ir<shell->nr;ir++)
+      free(shell->data[ib][ir]);
+    free(shell->data[ib]);
+    free(shell->pos[ib]);
   }
+  for(ir=0;ir<shell->nr;ir++)
+    free(shell->ipix_0[ir]);
   free(shell->ipix_0);
   free(shell->data);
+  free(shell->pos);
   free(shell);
 }
 
@@ -630,26 +632,30 @@ HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_
     nside_ratio=nside_here/nside_base;
     shell->nside_ratio[ir]=nside_ratio;
     shell->num_pix_per_beam[ir]=nside_ratio*nside_ratio;
-    printf("%d %d %d %ld %lE %lE %lE",ir, shell->nside[ir],
-           shell->nside_ratio[ir], shell->num_pix_per_beam[ir],
-           shell->r[ir],
-           sqrt(4*M_PI/he_nside2npix(nside_here))*r,dx);
-    printf("  [");
     shell->ipix_0[ir]=my_malloc(shell->nbeams*sizeof(long));
-    for(ib=0;ib<shell->nbeams;ib++) {
-      shell->ipix_0[ir][ib]=shell->beam_id[ib]*nside_ratio*nside_ratio;
-      printf(" %ld", shell->ipix_0[ir][ib]);
-    }
-    printf("]\n");
-  }
-
-  shell->data=my_malloc(nr*sizeof(flouble **));
-  for(ir=0; ir<nr; ir++) {
-    shell->data[ir]=my_malloc(shell->nbeams*sizeof(flouble *));
     for(ib=0;ib<shell->nbeams;ib++)
-      shell->data[ir][ib]=my_malloc(shell->nq*shell->num_pix_per_beam[ir]*sizeof(flouble));
+      shell->ipix_0[ir][ib]=shell->beam_id[ib]*nside_ratio*nside_ratio;
   }
 
+  long npix_hi=shell->num_pix_per_beam[nr-1];
+  shell->data=my_malloc(shell->nbeams*sizeof(flouble **));
+  shell->pos=my_malloc(shell->nbeams*sizeof(double **));
+  for(ib=0;ib<shell->nbeams;ib++) {
+    shell->data[ib]=my_malloc(nr*sizeof(flouble *));
+    shell->pos[ib]=my_malloc(npix_hi*3*sizeof(double));
+    for(ir=0; ir<nr; ir++)
+      shell->data[ib][ir]=my_malloc(shell->nq*shell->num_pix_per_beam[ir]*sizeof(flouble));
+  }
+
+  for(ib=0;ib<shell->nbeams;ib++) {
+    long ip, ip0=(ib*NNodes+NodeThis)*npix_hi;
+    double *u=shell->pos[ib];
+    for(ip=0;ip<npix_hi;ip++) {
+      long id_nest=ip0+ip;
+      pix2vec_nest(shell->nside[nr-1],id_nest,u);
+      u+=3;
+    }
+  }
   return shell;
 }
     

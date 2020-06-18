@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-static int get_r_index_smap(HealpixShells *sh,double r,int ir_start)
+static int get_r_index_smap(HealpixShellsAdaptive *sh,double r,int ir_start)
 {
   int gotit=0;
   int ir0;
@@ -34,13 +34,13 @@ static int get_r_index_smap(HealpixShells *sh,double r,int ir_start)
 
   while(!gotit) {
     if(ir0==0) {
-      if(r<sh->r0[1])
+      if(r<sh->r[1])
         gotit=1;
       else
         ir0++;
     }
     else if(ir0==sh->nr-1) {
-      if(r>=sh->rf[sh->nr-2]) {
+      if(r>=sh->r[sh->nr-2]) {
         ir0=sh->nr-2;
         gotit=1;
       }
@@ -48,10 +48,10 @@ static int get_r_index_smap(HealpixShells *sh,double r,int ir_start)
         ir0--;
     }
     else {
-      if(r<sh->r0[ir0])
+      if(r<sh->r[ir0])
         ir0--;
       else {
-        if(r>=sh->rf[ir0+1])
+        if(r>=sh->r[ir0+1])
           ir0++;
         else
           gotit=1;

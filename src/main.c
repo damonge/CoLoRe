@@ -70,7 +70,7 @@ int main(int argc,char **argv)
     
     //Compute normalization of density field for biasing
     compute_density_normalization(par);
-    
+
     //Get information from slabs
     if(par->do_kappa)
       kappa_set_cartesian(par);
@@ -112,7 +112,7 @@ int main(int argc,char **argv)
       srcs_get_local_properties(par);
     if(par->do_imap)
       imap_get_local_properties(par);
-    
+
     //All-to-all communication of density field
     //and computation of all required quantities
     if(par->need_beaming)

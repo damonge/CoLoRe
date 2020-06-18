@@ -337,7 +337,7 @@ void get_beam_properties(ParamCoLoRe *par)
       kappa_get_beam_properties(par);
 #ifdef _USE_NEW_LENSING
     if(par->do_shear)
-      shear_get_beam_properties(par); 
+      shear_get_beam_properties(par);
 #endif //_USE_NEW_LENSING
     if(par->do_isw)
       isw_get_beam_properties(par);
@@ -349,7 +349,8 @@ void get_beam_properties(ParamCoLoRe *par)
 #ifdef _HAVE_MPI
   free(buffer_sr);
 #endif //_HAVE_MPI
-
+  exit(1);
+  
   if(par->do_kappa)
     kappa_beams_postproc(par);
 #ifdef _USE_NEW_LENSING
