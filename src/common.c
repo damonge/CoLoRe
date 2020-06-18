@@ -330,162 +330,6 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th
 }
 */
 
-unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
-{
-  unsigned long long total_GB=0;
-  unsigned long long total_GB_gau=0;
-  unsigned long long total_GB_lpt=0;
-  int fac_gau=2;
-  if(par->need_beaming) fac_gau=3;
-
-  total_GB_gau=(fac_gau*(par->nz_here+1)*((long)(par->n_grid*(par->n_grid/2+1))))*sizeof(dftw_complex);
-
-  if(par->dens_type==DENS_TYPE_1LPT) {
-    total_GB_lpt=(unsigned long long)(3*(1+par->lpt_buffer_fraction)*par->nz_here*
-				      ((long)((par->n_grid/2+1)*par->n_grid))*sizeof(dftw_complex));
-  }
-  else if(par->dens_type==DENS_TYPE_2LPT) {
-    total_GB_lpt=0;
-    total_GB_lpt=(unsigned long long)(8*(1+par->lpt_buffer_fraction)*par->nz_here*
-				      ((long)((par->n_grid/2+1)*par->n_grid))*sizeof(dftw_complex));
-  }
-
-  unsigned long long total_GB_srcs=0;
-  if(par->do_srcs) {
-    int ipop;
-    for(ipop=0;ipop<par->n_srcs;ipop++) {
-      int nz,ii;
-      long nsrc=0;
-      double nztot=0;
-      FILE *fi=fopen(par->fnameNzSrcs[ipop],"r");
-
-      double *zarr,*nzarr;
-      if(fi==NULL) error_open_file(par->fnameNzSrcs[ipop]);
-      nz=linecount(fi); rewind(fi);
-      zarr=my_malloc(nz*sizeof(double));
-      nzarr=my_malloc(nz*sizeof(double));
-      for(ii=0;ii<nz;ii++) {
-	int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(nzarr[ii]));
-	if(stat!=2) error_read_line(par->fnameNzSrcs[ipop],ii+1);
-	nzarr[ii]*=RTOD*RTOD;
-      }
-      for(ii=0;ii<nz-1;ii++) {
-	if((zarr[ii]>=par->z_min) && (zarr[ii]<=par->z_max))
-	  nztot+=nzarr[ii]*(zarr[ii+1]-zarr[ii]);
-      }
-      if((zarr[ii]>=par->z_min) && (zarr[ii]<=par->z_max))
-	nztot+=nzarr[ii]*(zarr[ii+1]-zarr[ii]);
-      nztot*=4*M_PI/NNodes;
-      nsrc+=(long)(nztot);
-      if(just_test)
-	print_info(" Expect %ld type-%d sources\n",(long)(nztot*NNodes),ipop);
-      free(zarr);
-      free(nzarr);
-      fclose(fi);
-
-      long size_source=sizeof(Src)+NPOS_CC*sizeof(float)+sizeof(int);
-      if(par->skw_srcs[ipop]) {
-	int nr=NSAMP_RAD*par->n_grid/2;
-	size_source+=2*nr*sizeof(float);
-      }
-      total_GB_srcs+=size_source*nsrc;
-    }
-  }
-
-  unsigned long long total_GB_imap=0;
-  if(par->do_imap) {
-    int ipop;
-    for(ipop=0;ipop<par->n_imap;ipop++) {
-      int nr;
-      unsigned long long size_map=he_nside2npix(par->nside_imap[ipop]);
-      FILE *fnu=fopen(par->fnameNuImap[ipop],"r");
-      if(fnu==NULL) error_open_file(par->fnameNuImap[ipop]);
-      nr=linecount(fnu);
-      fclose(fnu);
-      total_GB_imap+=size_map*nr*(sizeof(flouble)+sizeof(int));
-    }
-  }
-
-  unsigned long long total_GB_kappa=0;
-  if(par->do_kappa) {
-    int ib;
-    int nr=par->n_kappa;
-    int nbases=he_nside2npix(par->nside_base);
-    int nside_ratio=par->nside_kappa/par->nside_base;
-    int npix_perbeam=nside_ratio*nside_ratio;
-    unsigned long long size_map=0;
-    for(ib=NodeThis;ib<nbases;ib+=NNodes)
-      size_map+=npix_perbeam;
-    total_GB_kappa+=size_map*nr*(sizeof(flouble)+sizeof(int));
-  }
-
-  unsigned long long total_GB_shear=0;
-  if(par->do_shear) {
-    int ib;
-    int nr=par->n_shear;
-    int nbases=he_nside2npix(par->nside_base);
-    int nside_ratio=par->nside_shear/par->nside_base;
-    int npix_perbeam=nside_ratio*nside_ratio;
-    unsigned long long size_map=0;
-    for(ib=NodeThis;ib<nbases;ib+=NNodes)
-      size_map+=npix_perbeam;
-    total_GB_shear+=size_map*nr*(2*sizeof(flouble)+sizeof(int));
-  }
-
-  unsigned long long total_GB_isw=0;
-  if(par->do_isw) {
-    int ib;
-    int nr=par->n_isw;
-    int nbases=he_nside2npix(par->nside_base);
-    int nside_ratio=par->nside_isw/par->nside_base;
-    int npix_perbeam=nside_ratio*nside_ratio;
-    unsigned long long size_map=0;
-    for(ib=NodeThis;ib<nbases;ib+=NNodes)
-      size_map+=npix_perbeam;
-    total_GB_isw+=size_map*nr*(sizeof(flouble)+sizeof(int));
-  }
-  total_GB=total_GB_gau+
-    total_GB_lpt+
-    total_GB_srcs+
-    total_GB_imap+
-    total_GB_kappa+
-    total_GB_shear+
-    total_GB_isw;
-
-#ifdef _DEBUG
-  int jj;
-  for(jj=0;jj<NNodes;jj++) {
-    if(jj==NodeThis) {
-      printf("Node %d will allocate %.3lf GB [",NodeThis,(double)(total_GB/pow(1024.,3)));
-      printf("%.3lf GB (Gaussian)",(double)(total_GB_gau/pow(1024.,3)));
-      if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
-	printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
-      if(par->do_srcs)
-	printf(", %.3lf GB (srcs)",(double)(total_GB_srcs/pow(1024.,3)));
-      if(par->do_imap)
-	printf(", %.3lf GB (imap)",(double)(total_GB_imap/pow(1024.,3)));
-      if(par->do_kappa)
-	printf(", %.3lf MB (kappa)",(double)(total_GB_kappa/pow(1024.,2)));
-      if(par->do_shear)
-	printf(", %.3lf MB (shear)",(double)(total_GB_shear/pow(1024.,2)));
-      if(par->do_isw)
-	printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
-      printf("]\n");
-    }
-#ifdef _HAVE_MPI
-    MPI_Barrier(MPI_COMM_WORLD);
-#endif //_HAVE_MPI
-  }
-#endif //_DEBUG
-
-  if(just_test==0) {
-    void *ptest=my_malloc(total_GB);
-    free(ptest);
-  }
-
-  return total_GB;
-}
-
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
 {
   *nr=NSAMP_RAD*ngrid/2;
@@ -586,6 +430,26 @@ void hp_shell_adaptive_free(HealpixShellsAdaptive *shell)
   free(shell);
 }
 
+static int *get_adaptive_nside(int nside_max, int nside_base,
+                               int nr, flouble *r_arr, flouble dx, flouble dx_fraction)
+{
+  int ir;
+  int *nsides=my_malloc(nr*sizeof(int));
+  for(ir=0; ir<nr; ir++) {
+    flouble r=r_arr[ir];
+    int nside_here=nside_base;
+    while(nside_here<nside_max) {
+      double theta=sqrt(4*M_PI/he_nside2npix(nside_here));
+      double dxt=theta*r;
+      if(dxt<=dx*dx_fraction)
+        break;
+      nside_here*=2;
+    }
+    nsides[ir]=nside_here;
+  }
+  return nsides;
+}
+  
 HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,
                                                int nr, flouble *r_arr, flouble dx,
                                                flouble dx_fraction)
@@ -605,23 +469,14 @@ HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_
 
   shell->nq=nq;
   shell->nr=nr;
-  shell->nside=my_malloc(nr*sizeof(int));
+  shell->nside=get_adaptive_nside(nside_max, nside_base, nr,
+                                  r_arr, dx, dx_fraction);
   shell->num_pix_per_beam=my_malloc(nr*sizeof(long));
   shell->r=my_malloc(nr*sizeof(flouble));
   for(ir=0; ir<nr; ir++) {
     int nside_ratio;
-    flouble r=r_arr[ir];
-    int nside_here=nside_base;
-    while(nside_here<nside_max) {
-      double theta=sqrt(4*M_PI/he_nside2npix(nside_here));
-      double dxt=theta*r;
-      if(dxt<=dx*dx_fraction)
-        break;
-      nside_here*=2;
-    }
-    shell->r[ir]=r;
-    shell->nside[ir]=nside_here;
-    nside_ratio=nside_here/nside_base;
+    shell->r[ir]=r_arr[ir];
+    nside_ratio=shell->nside[ir]/nside_base;
     shell->num_pix_per_beam[ir]=nside_ratio*nside_ratio;
   }
 
@@ -711,4 +566,173 @@ void hp_shell_free(HealpixShells *shell)
   if(shell->nadd!=NULL)
     free(shell->nadd);
   free(shell);
+}
+
+unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
+{
+  unsigned long long total_GB=0;
+  unsigned long long total_GB_gau=0;
+  unsigned long long total_GB_lpt=0;
+  int fac_gau=2;
+  if(par->need_beaming) fac_gau=3;
+
+  total_GB_gau=(fac_gau*(par->nz_here+1)*((long)(par->n_grid*(par->n_grid/2+1))))*sizeof(dftw_complex);
+
+  if(par->dens_type==DENS_TYPE_1LPT) {
+    total_GB_lpt=(unsigned long long)(3*(1+par->lpt_buffer_fraction)*par->nz_here*
+				      ((long)((par->n_grid/2+1)*par->n_grid))*sizeof(dftw_complex));
+  }
+  else if(par->dens_type==DENS_TYPE_2LPT) {
+    total_GB_lpt=0;
+    total_GB_lpt=(unsigned long long)(8*(1+par->lpt_buffer_fraction)*par->nz_here*
+				      ((long)((par->n_grid/2+1)*par->n_grid))*sizeof(dftw_complex));
+  }
+
+  unsigned long long total_GB_srcs=0;
+  if(par->do_srcs) {
+    int ipop;
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      int nz,ii;
+      long nsrc=0;
+      double nztot=0;
+      FILE *fi=fopen(par->fnameNzSrcs[ipop],"r");
+
+      double *zarr,*nzarr;
+      if(fi==NULL) error_open_file(par->fnameNzSrcs[ipop]);
+      nz=linecount(fi); rewind(fi);
+      zarr=my_malloc(nz*sizeof(double));
+      nzarr=my_malloc(nz*sizeof(double));
+      for(ii=0;ii<nz;ii++) {
+	int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(nzarr[ii]));
+	if(stat!=2) error_read_line(par->fnameNzSrcs[ipop],ii+1);
+	nzarr[ii]*=RTOD*RTOD;
+      }
+      for(ii=0;ii<nz-1;ii++) {
+	if((zarr[ii]>=par->z_min) && (zarr[ii]<=par->z_max))
+	  nztot+=nzarr[ii]*(zarr[ii+1]-zarr[ii]);
+      }
+      if((zarr[ii]>=par->z_min) && (zarr[ii]<=par->z_max))
+	nztot+=nzarr[ii]*(zarr[ii+1]-zarr[ii]);
+      nztot*=4*M_PI/NNodes;
+      nsrc+=(long)(nztot);
+      if(just_test)
+	print_info(" Expect %ld type-%d sources\n",(long)(nztot*NNodes),ipop);
+      free(zarr);
+      free(nzarr);
+      fclose(fi);
+
+      long size_source=sizeof(Src)+NPOS_CC*sizeof(float)+sizeof(int);
+      if(par->skw_srcs[ipop]) {
+	int nr=NSAMP_RAD*par->n_grid/2;
+	size_source+=2*nr*sizeof(float);
+      }
+      total_GB_srcs+=size_source*nsrc;
+    }
+  }
+
+  unsigned long long total_GB_imap=0;
+  if(par->do_imap) {
+    int ipop;
+    for(ipop=0;ipop<par->n_imap;ipop++) {
+      int nr;
+      unsigned long long size_map=he_nside2npix(par->nside_imap[ipop]);
+      FILE *fnu=fopen(par->fnameNuImap[ipop],"r");
+      if(fnu==NULL) error_open_file(par->fnameNuImap[ipop]);
+      nr=linecount(fnu);
+      fclose(fnu);
+      total_GB_imap+=size_map*nr*(sizeof(flouble)+sizeof(int));
+    }
+  }
+
+  unsigned long long total_GB_kappa=0;
+  if(par->do_kappa) {
+    int ib;
+    int nr=par->n_kappa;
+    int nbases=he_nside2npix(par->nside_base);
+    int nside_ratio=par->nside_kappa/par->nside_base;
+    int npix_perbeam=nside_ratio*nside_ratio;
+    unsigned long long size_map=0;
+    for(ib=NodeThis;ib<nbases;ib+=NNodes)
+      size_map+=npix_perbeam;
+    total_GB_kappa+=size_map*nr*(sizeof(flouble)+sizeof(int));
+  }
+
+  unsigned long long total_GB_shear=0;
+  if(par->do_shear) {
+    int ib,ir;
+    int nr=par->n_shear;
+    int nbases=he_nside2npix(par->nside_base);
+    flouble *rs=compute_shear_spacing(par);
+    int *nsides=get_adaptive_nside(par->nside_shear,
+                                   par->nside_base, nr, rs,
+                                   par->l_box/par->n_grid, 1.);
+    int nbeams_here=0;
+    for(ib=NodeThis;ib<nbases;ib+=NNodes)
+      nbeams_here++;
+
+    unsigned long long npix_total=0;
+    for(ir=0;ir<nr;ir++) {
+      int nside_ratio=nsides[ir]/par->nside_base;
+      npix_total+=nside_ratio*nside_ratio;
+    }
+    npix_total*=nbeams_here;
+    int nside_ratio_hi=nsides[nr-1]/par->nside_base;
+    unsigned long long npix_hi=nside_ratio_hi*nside_ratio_hi*nbeams_here;
+    total_GB_shear+=npix_total*2*sizeof(flouble)+npix_hi*3*sizeof(double);
+    free(rs);
+    free(nsides);
+  }
+
+  unsigned long long total_GB_isw=0;
+  if(par->do_isw) {
+    int ib;
+    int nr=par->n_isw;
+    int nbases=he_nside2npix(par->nside_base);
+    int nside_ratio=par->nside_isw/par->nside_base;
+    int npix_perbeam=nside_ratio*nside_ratio;
+    unsigned long long size_map=0;
+    for(ib=NodeThis;ib<nbases;ib+=NNodes)
+      size_map+=npix_perbeam;
+    total_GB_isw+=size_map*nr*(sizeof(flouble)+sizeof(int));
+  }
+  total_GB=total_GB_gau+
+    total_GB_lpt+
+    total_GB_srcs+
+    total_GB_imap+
+    total_GB_kappa+
+    total_GB_shear+
+    total_GB_isw;
+
+#ifdef _DEBUG
+  int jj;
+  for(jj=0;jj<NNodes;jj++) {
+    if(jj==NodeThis) {
+      printf("Node %d will allocate %.3lf GB [",NodeThis,(double)(total_GB/pow(1024.,3)));
+      printf("%.3lf GB (Gaussian)",(double)(total_GB_gau/pow(1024.,3)));
+      if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
+	printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
+      if(par->do_srcs)
+	printf(", %.3lf GB (srcs)",(double)(total_GB_srcs/pow(1024.,3)));
+      if(par->do_imap)
+	printf(", %.3lf GB (imap)",(double)(total_GB_imap/pow(1024.,3)));
+      if(par->do_kappa)
+	printf(", %.3lf MB (kappa)",(double)(total_GB_kappa/pow(1024.,2)));
+      if(par->do_shear)
+	printf(", %.3lf MB (shear)",(double)(total_GB_shear/pow(1024.,2)));
+      if(par->do_isw)
+	printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
+      printf("]\n");
+    }
+#ifdef _HAVE_MPI
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+  }
+#endif //_DEBUG
+
+  if(just_test==0) {
+    void *ptest=my_malloc(total_GB);
+    free(ptest);
+  }
+
+  return total_GB;
 }
