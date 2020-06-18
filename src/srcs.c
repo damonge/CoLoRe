@@ -21,6 +21,7 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
+#ifdef _USE_NEW_LENSING
 static int get_r_index_smap(HealpixShellsAdaptive *sh,double r,int ir_start)
 {
   int gotit=0;
@@ -61,6 +62,7 @@ static int get_r_index_smap(HealpixShellsAdaptive *sh,double r,int ir_start)
 
   return ir0;
 }
+#endif //_USE_NEW_LENSING
 
 
 static inline void cart2sph(double x,double y,double z,double *r,double *cth,double *phi)
@@ -458,10 +460,10 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
   {
     long ip;
     double idx=par->n_grid/par->l_box;
-    double *fac_r_1=NULL,*fac_r_2=NULL;
 
     //Kernels for the LOS integrals
 #ifndef _USE_NEW_LENSING
+    double *fac_r_1=NULL,*fac_r_2=NULL;
     if(cat->has_shear) {
       fac_r_1=my_malloc(cat->nr*sizeof(double));
       fac_r_2=my_malloc(cat->nr*sizeof(double));
@@ -609,14 +611,11 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
   {
     int ii;
     double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
-    int ir_s=0;
 #ifdef _USE_NEW_LENSING
-    int nside_ratio=1;
-    HealpixShells *smap=NULL;
-    if(cat->has_shear) {
+    int ir_s=0;
+    HealpixShellsAdaptive *smap=NULL;
+    if(cat->has_shear)
       smap = par->smap;
-      nside_ratio=smap->nside/par->nside_base;
-    }
 #endif //_USE_NEW_LENSING
 
 #ifdef _HAVE_OMP
@@ -634,14 +633,16 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       if(cat->has_shear) {
 #ifdef _USE_NEW_LENSING
         int ax;
-        long ipix,ibase,ibase_here;
+        long ipix_up,ipix_lo,ibase,ibase_here;
         double u[3];
-        double g1_0,g1_f,g2_0,g2_f;
+        double g1_lo,g1_up,g2_lo,g2_up;
         //Find lower shell index
         ir_s=get_r_index_smap(smap, r, ir_s);
+        if(ir_s>=smap->nr-1)
+          report_error(1, "SHIT\n");
 
         //Find intervals
-        double h = (r - smap->r0[ir_s]) / (smap->r0[ir_s+1] - smap->r0[ir_s]);
+        double h = (r - smap->r[ir_s]) / (smap->r[ir_s+1] - smap->r[ir_s]);
 
         //Find pixel index
         //Find base this galaxy belongs to
@@ -652,21 +653,28 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
           report_error(1,"Bad base!!\n");
         //Find base index within this node
         ibase_here=(ibase-NodeThis)/NNodes;
-        vec2pix_nest(smap->nside,u,&ipix);
-        //Offset to pixel indices in this node
-        ipix-=(ibase-ibase_here)*nside_ratio*nside_ratio;
-	if((ipix<0) || (ipix>=smap->num_pix))
-	  report_error(1,"Bad pixel!!\n");
 
+        //Find pixel in lower edge
+        vec2pix_nest(smap->nside[ir_s],u,&ipix_lo);
+        //Offset to pixel indices in this node
+        ipix_lo-=ibase*smap->num_pix_per_beam[ir_s];
+	if((ipix_lo<0) || (ipix_lo>=smap->num_pix_per_beam[ir_s]))
+	  report_error(1,"Bad pixel!!\n");
         //Find shear at edges
-        g1_0=smap->data[2*(ir_s*smap->num_pix+ipix)+0];
-        g2_0=smap->data[2*(ir_s*smap->num_pix+ipix)+1];
-        g1_f=smap->data[2*((ir_s+1)*smap->num_pix+ipix)+0];
-        g2_f=smap->data[2*((ir_s+1)*smap->num_pix+ipix)+1];
+        g1_lo=smap->data[ibase_here][ir_s][2*ipix_lo+0];
+        g2_lo=smap->data[ibase_here][ir_s][2*ipix_lo+1];
+
+        //Same in upper edge
+        vec2pix_nest(smap->nside[ir_s+1],u,&ipix_up);
+        ipix_up-=ibase*smap->num_pix_per_beam[ir_s+1];
+	if((ipix_up<0) || (ipix_up>=smap->num_pix_per_beam[ir_s+1]))
+	  report_error(1,"Bad pixel!!\n");
+        g1_up=smap->data[ibase_here][ir_s+1][2*ipix_up+0];
+        g2_up=smap->data[ibase_here][ir_s+1][2*ipix_up+1];
 
         //Interpolate
-        cat->srcs[ii].e1=g1_0*(1-h)+g1_f*h;
-        cat->srcs[ii].e2=g2_0*(1-h)+g2_f*h;
+        cat->srcs[ii].e1=g1_lo*(1-h)+g1_up*h;
+        cat->srcs[ii].e2=g2_lo*(1-h)+g2_up*h;
 #endif //_USE_NEW_LENSING
       }
 

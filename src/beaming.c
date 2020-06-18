@@ -349,7 +349,6 @@ void get_beam_properties(ParamCoLoRe *par)
 #ifdef _HAVE_MPI
   free(buffer_sr);
 #endif //_HAVE_MPI
-  exit(1);
   
   if(par->do_kappa)
     kappa_beams_postproc(par);

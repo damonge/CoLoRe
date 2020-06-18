@@ -796,7 +796,7 @@ void write_shear(ParamCoLoRe *par)
 {
   int ir;
   char fname[256];
-  long npx=he_nside2npix(par->nside_shear);
+  long npx=he_nside2npix(par->smap->nside[par->smap->nr-1]);
   flouble **map_write=my_malloc(2*sizeof(flouble *));
   map_write[0]=my_malloc(npx*sizeof(flouble));
   map_write[1]=my_malloc(npx*sizeof(flouble));
@@ -812,10 +812,11 @@ void write_shear(ParamCoLoRe *par)
     }
     sprintf(fname,"!%s_shear_z%03d.fits",par->prefixOut,ir);
     for(ib=0;ib<par->smap->nbeams;ib++) {
+      long ipix_0=(NodeThis+NNodes*ib)*par->smap->num_pix_per_beam[ir];
       for(ip=0;ip<par->smap->num_pix_per_beam[ir];ip++) {
-        int id_pix=par->smap->ipix_0[ir][ib]+ip;
-        map_write[0][id_pix]+=par->smap->data[ir][ib][2*ip+0];
-        map_write[1][id_pix]+=par->smap->data[ir][ib][2*ip+1];
+        long id_pix=ipix_0+ip;
+        map_write[0][id_pix]+=par->smap->data[ib][ir][2*ip+0];
+        map_write[1][id_pix]+=par->smap->data[ib][ir][2*ip+1];
       }
     }
 
@@ -833,7 +834,7 @@ void write_shear(ParamCoLoRe *par)
 
     //Write dummy map
     if(NodeThis==0)
-      he_write_healpix_map(map_write,2,par->nside_shear,fname,1);
+      he_write_healpix_map(map_write,2,par->smap->nside[ir],fname,1);
   }
   free(map_write[0]);
   free(map_write[1]);

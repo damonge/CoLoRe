@@ -574,24 +574,21 @@ void hp_shell_adaptive_free(HealpixShellsAdaptive *shell)
   int ib,ir;
   free(shell->r);
   free(shell->nside);
-  free(shell->nside_ratio);
   free(shell->num_pix_per_beam);
-  free(shell->beam_id);
   for(ib=0;ib<shell->nbeams;ib++) {
     for(ir=0;ir<shell->nr;ir++)
       free(shell->data[ib][ir]);
     free(shell->data[ib]);
     free(shell->pos[ib]);
   }
-  for(ir=0;ir<shell->nr;ir++)
-    free(shell->ipix_0[ir]);
-  free(shell->ipix_0);
   free(shell->data);
   free(shell->pos);
   free(shell);
 }
 
-HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr, flouble *r_arr, flouble dx, flouble dx_fraction)
+HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,
+                                               int nr, flouble *r_arr, flouble dx,
+                                               flouble dx_fraction)
 {
   if(nside_max>NSIDE_MAX_HPX)
     report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
@@ -609,13 +606,8 @@ HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_
   shell->nq=nq;
   shell->nr=nr;
   shell->nside=my_malloc(nr*sizeof(int));
-  shell->nside_ratio=my_malloc(nr*sizeof(int));
   shell->num_pix_per_beam=my_malloc(nr*sizeof(long));
   shell->r=my_malloc(nr*sizeof(flouble));
-  shell->ipix_0=my_malloc(nr*sizeof(long *));
-  shell->beam_id=my_malloc(shell->nbeams*sizeof(long));
-  for(ib=0;ib<shell->nbeams;ib++)
-    shell->beam_id[ib]=NodeThis+NNodes*ib;
   for(ir=0; ir<nr; ir++) {
     int nside_ratio;
     flouble r=r_arr[ir];
@@ -630,11 +622,7 @@ HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_
     shell->r[ir]=r;
     shell->nside[ir]=nside_here;
     nside_ratio=nside_here/nside_base;
-    shell->nside_ratio[ir]=nside_ratio;
     shell->num_pix_per_beam[ir]=nside_ratio*nside_ratio;
-    shell->ipix_0[ir]=my_malloc(shell->nbeams*sizeof(long));
-    for(ib=0;ib<shell->nbeams;ib++)
-      shell->ipix_0[ir][ib]=shell->beam_id[ib]*nside_ratio*nside_ratio;
   }
 
   long npix_hi=shell->num_pix_per_beam[nr-1];

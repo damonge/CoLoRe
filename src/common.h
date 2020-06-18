@@ -192,11 +192,8 @@ typedef struct {
   int nr; //Number of spherical shells
   flouble *r; //r in this shell
   int *nside; //Resolution parameter
-  int *nside_ratio;
   long *num_pix_per_beam;
   int nbeams; //Number of different bases
-  long *beam_id;
-  long **ipix_0;
   double **pos;
   flouble ***data;
 } HealpixShellsAdaptive;
