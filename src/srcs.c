@@ -22,7 +22,7 @@
 #include "common.h"
 
 #ifdef _USE_NEW_LENSING
-static int get_r_index_shear(HealpixShellsAdaptive *sh,double r,int ir_start)
+static int get_r_index_lensing(HealpixShellsAdaptive *sh,double r,int ir_start)
 {
   int gotit=0;
   int ir0;
@@ -385,7 +385,7 @@ void srcs_distribute(ParamCoLoRe *par)
 static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
 {
   par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,
-                                par->shear_srcs[ipop],
+                                par->lensing_srcs[ipop],
                                 par->skw_srcs[ipop],
                                 par->skw_gauss[ipop],
 				par->r_max,par->n_grid);
@@ -464,7 +464,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
     //Kernels for the LOS integrals
 #ifndef _USE_NEW_LENSING
     double *fac_r_1=NULL,*fac_r_2=NULL;
-    if(cat->has_shear) {
+    if(cat->has_lensing) {
       fac_r_1=my_malloc(cat->nr*sizeof(double));
       fac_r_2=my_malloc(cat->nr*sizeof(double));
 
@@ -528,10 +528,11 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       }
 
 #ifndef _USE_NEW_LENSING
-      //Compute lensing shear
-      if(cat->has_shear) {
-	//Compute linear transformations needed for shear
-	double r1[6],r2[6];
+      //Compute lensing
+      if(cat->has_lensing) {
+	//Compute linear transformations needed for lensing
+        double u_x[3], u_y[3];
+	double r_k[6], r_e1[6],r_e2[6];
 	double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
 	double prefac=2*idx*idx*ir; //2/(Dx^2 * r)
 
@@ -544,47 +545,74 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  sph_h=u[1]/sth_h;
 	}
 
-	r1[0]=(cth_h*cth_h*cph_h*cph_h-sph_h*sph_h)*prefac;
-	r1[1]=(2*cph_h*sph_h*(cth_h*cth_h+1))*prefac;
-	r1[2]=(-2*cth_h*sth_h*cph_h)*prefac;
-	r1[3]=(cth_h*cth_h*sph_h*sph_h-cph_h*cph_h)*prefac;
-	r1[4]=(-2*cth_h*sth_h*sph_h)*prefac;
-	r1[5]=(sth_h*sth_h)*prefac;
+        u_x[0]=cth_h*cph_h;
+        u_x[1]=cth_h*sph_h;
+        u_x[2]=-sth_h;
 
-	r2[0]=(-2*cth_h*cph_h*sph_h)*prefac;
-	r2[1]=(2*cth_h*(cph_h*cph_h-sph_h*sph_h))*prefac;
-	r2[2]=(2*sth_h*sph_h)*prefac;
-	r2[3]=(2*cth_h*sph_h*cph_h)*prefac;
-	r2[4]=(-2*sth_h*cph_h)*prefac;
-	r2[5]=0;
+        u_y[0]=-sph_h;
+        u_y[1]=cph_h;
+        u_y[2]=0;
+
+        r_k[0] =(cth_h*cth_h*cph_h*cph_h+sph_h*sph_h)*prefac;
+        r_k[1] =(2*cph_h*sph_h*(cth_h*cth_h-1))*prefac;
+        r_k[2] =(-2*cth_h*sth_h*cph_h)*prefac;
+        r_k[3] =(cth_h*cth_h*sph_h*sph_h+cph_h*cph_h)*prefac;
+        r_k[4] =(-2*cth_h*sth_h*sph_h)*prefac;
+        r_k[5] =(sth_h*sth_h)*prefac;
+
+	r_e1[0]=(cth_h*cth_h*cph_h*cph_h-sph_h*sph_h)*prefac;
+	r_e1[1]=(2*cph_h*sph_h*(cth_h*cth_h+1))*prefac;
+	r_e1[2]=(-2*cth_h*sth_h*cph_h)*prefac;
+	r_e1[3]=(cth_h*cth_h*sph_h*sph_h-cph_h*cph_h)*prefac;
+	r_e1[4]=(-2*cth_h*sth_h*sph_h)*prefac;
+	r_e1[5]=(sth_h*sth_h)*prefac;
+
+	r_e2[0]=(-2*cth_h*cph_h*sph_h)*prefac;
+	r_e2[1]=(2*cth_h*(cph_h*cph_h-sph_h*sph_h))*prefac;
+	r_e2[2]=(2*sth_h*sph_h)*prefac;
+	r_e2[3]=(2*cth_h*sph_h*cph_h)*prefac;
+	r_e2[4]=(-2*sth_h*cph_h)*prefac;
+	r_e2[5]=0;
 
 	//Integrate along the LOS
-	flouble t[6];
-	double e1=0,e2=0;
+	flouble tp[6],vp[3];
+	double dtx=0,dty=0,kp=0,e1=0,e2=0;
 	int i_r,i_r_max=MIN((int)(r*cat->idr+0.5),cat->nr-1);
 	for(i_r=0;i_r<=i_r_max;i_r++) {
 	  double rm=(i_r+0.5)*cat->dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
+	  added=interpolate_from_grid(par,xn,NULL,vp,tp,NULL,NULL,RETURN_VEL | RETURN_TID,
+                                      INTERP_TYPE_LENSING);
 	  if(added) {
 	    double fr=fac_r_1[i_r]*r-fac_r_2[i_r];
-	    double dotp1=0,dotp2=0;
+	    double dotvx=0,dotvy=0,dotk=0,dote1=0,dote2=0;
 	    for(ax=0;ax<6;ax++) {
-	      dotp1+=r1[ax]*t[ax];
-	      dotp2+=r2[ax]*t[ax];
+	      dote1+=r_e1[ax]*tp[ax];
+	      dote2+=r_e2[ax]*tp[ax];
+	      dotk+=r_k[ax]*tp[ax];
 	    }
-	    e1+=dotp1*fr;
-	    e2+=dotp2*fr;
+	    for(ax=0;ax<3;ax++) {
+              dotvx+=u_x[ax]*vp[ax];
+              dotvy+=u_y[ax]*vp[ax];
+            }
+	    e1+=dote1*fr;
+	    e2+=dote2*fr;
+	    kp+=dotk*fr;
+            dtx+=dotvx*fr;
+            dty+=dotvy*fr;
 	  }
 	}
 	cat->srcs[ip].e1+=e1;
 	cat->srcs[ip].e2+=e2;
+	cat->srcs[ip].kappa+=kp;
+        cat->srcs[ip].dra+=dty;
+        cat->srcs[ip].ddec+=dtx;
       }
 #endif //_USE_NEW_LENSING
     }//end omp for
 #ifndef _USE_NEW_LENSING
-    if(cat->has_shear) {
+    if(cat->has_lensing) {
       free(fac_r_1);
       free(fac_r_2);
     }
@@ -614,7 +642,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
 #ifdef _USE_NEW_LENSING
     int ir_s=0;
     HealpixShellsAdaptive *smap=NULL;
-    if(cat->has_shear)
+    if(cat->has_lensing)
       smap = par->smap;
 #endif //_USE_NEW_LENSING
 
@@ -629,15 +657,17 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       //RSDs
       cat->srcs[ii].dz_rsd*=vg*factor_vel;
 
-      //Shear
-      if(cat->has_shear) {
+      //Lensing
+      if(cat->has_lensing) {
 #ifdef _USE_NEW_LENSING
         int ax;
         long ipix_up,ipix_lo,ibase,ibase_here;
         double u[3];
         double g1_lo,g1_up,g2_lo,g2_up;
+        double kp_lo,kp_up;
+        double dx_lo,dx_up,dy_lo,dy_up;
         //Find lower shell index
-        ir_s=get_r_index_shear(smap, r, ir_s);
+        ir_s=get_r_index_lensing(smap, r, ir_s);
         if(ir_s>=smap->nr-1)
           report_error(1, "SHIT\n");
 
@@ -660,9 +690,12 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
         ipix_lo-=ibase*smap->num_pix_per_beam[ir_s];
 	if((ipix_lo<0) || (ipix_lo>=smap->num_pix_per_beam[ir_s]))
 	  report_error(1,"Bad pixel!!\n");
-        //Find shear at edges
-        g1_lo=smap->data[ibase_here][ir_s][2*ipix_lo+0];
-        g2_lo=smap->data[ibase_here][ir_s][2*ipix_lo+1];
+        //Find lensing at edges
+        g1_lo=smap->data[ibase_here][ir_s][5*ipix_lo+0];
+        g2_lo=smap->data[ibase_here][ir_s][5*ipix_lo+1];
+        kp_lo=smap->data[ibase_here][ir_s][5*ipix_lo+2];
+        dx_lo=smap->data[ibase_here][ir_s][5*ipix_lo+3];
+        dy_lo=smap->data[ibase_here][ir_s][5*ipix_lo+4];
 
         //Same in upper edge
         vec2pix_nest(smap->nside[ir_s+1],u,&ipix_up);
@@ -671,11 +704,19 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
 	  report_error(1,"Bad pixel!!\n");
         g1_up=smap->data[ibase_here][ir_s+1][2*ipix_up+0];
         g2_up=smap->data[ibase_here][ir_s+1][2*ipix_up+1];
+        kp_up=smap->data[ibase_here][ir_s+1][2*ipix_up+2];
+        dx_up=smap->data[ibase_here][ir_s+1][2*ipix_up+3];
+        dy_up=smap->data[ibase_here][ir_s+1][2*ipix_up+4];
 
         //Interpolate
         cat->srcs[ii].e1=g1_lo*(1-h)+g1_up*h;
         cat->srcs[ii].e2=g2_lo*(1-h)+g2_up*h;
+        cat->srcs[ii].kappa=kp_lo*(1-h)+kp_up*h;
+        cat->srcs[ii].dra=dy_lo*(1-h)+dy_up*h;
+        cat->srcs[ii].ddec=dx_lo*(1-h)+dx_up*h;
 #endif //_USE_NEW_LENSING
+        cat->srcs[ii].dra*=RTOD;
+        cat->srcs[ii].ddec*=RTOD;
       }
 
       //Skewers

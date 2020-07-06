@@ -81,9 +81,9 @@
 #ifndef INTERP_TYPE_SKW
 #define INTERP_TYPE_SKW INTERP_CIC
 #endif //INTERP_TYPE_SKW
-#ifndef INTERP_TYPE_SHEAR
-#define INTERP_TYPE_SHEAR INTERP_NGP
-#endif //INTERP_TYPE_SHEAR
+#ifndef INTERP_TYPE_LENSING
+#define INTERP_TYPE_LENSING INTERP_NGP
+#endif //INTERP_TYPE_LENSING
 
 //dr_par = dx/NSAMP_RAD
 #ifndef NSAMP_RAD
@@ -170,6 +170,9 @@ typedef struct {
   float dz_rsd; //RSD contribution
   float e1;
   float e2;
+  float kappa;
+  float dra;
+  float ddec;
 } Src;
 
 typedef struct {
@@ -179,7 +182,7 @@ typedef struct {
   double rmax;
   double dr;
   double idr;
-  int has_shear;
+  int has_lensing;
   int has_skw;
   int skw_gauss;
   float *d_skw;
@@ -291,7 +294,7 @@ typedef struct {
   // Sources
   int do_srcs; //Do we include sources?
   int do_skewers; //Do we include skewer information?
-  int do_srcs_shear; //Do we need to compute the lensing potential?
+  int do_srcs_lensing; //Do we need to compute the lensing potential?
   int n_srcs; //Number of source types
   char fnameBzSrcs[NPOP_MAX][256]; //Files containing b(z) for each source type
   char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega (in deg^-2)
@@ -300,7 +303,7 @@ typedef struct {
   double *srcs_norm_arr[NPOP_MAX];
   double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
   double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
-  int shear_srcs[NPOP_MAX]; //Do we do lensing for this source type?
+  int lensing_srcs[NPOP_MAX]; //Do we do lensing for this source type?
   int skw_srcs[NPOP_MAX]; //Do we want to store skewers for each source of this type?
   int skw_gauss[NPOP_MAX]; //Do we want the skewers to be gaussian? (as opposed to physical density)
   long *nsources_c_this; //Number of sources initially found in this node
@@ -332,13 +335,13 @@ typedef struct {
   flouble **fl_mean_extra_kappa;
   flouble **cl_extra_kappa;
 #endif //_ADD_EXTRA_KAPPA
-  // Shear
-  int do_shear; //Do you want to create shear maps?
-  int write_shear; //Do you want to output shear maps?
-  int shear_spacing_type; //log(1+z)? r?
-  int n_shear; //How many maps?
-  int nside_shear;
-  HealpixShellsAdaptive *smap; //Shear maps at each redshift
+  // Lensing
+  int do_lensing; //Do you want to create lensing maps?
+  int write_lensing; //Do you want to output lensing maps?
+  int lensing_spacing_type; //log(1+z)? r?
+  int n_lensing; //How many maps?
+  int nside_lensing;
+  HealpixShellsAdaptive *smap; //Lensing maps at each redshift
   // ISW
   int do_isw; //Do you want to output isw maps?
   int n_isw; //How many maps?
@@ -390,7 +393,7 @@ void hp_shell_free(HealpixShells *shell);
 void hp_shell_adaptive_free(HealpixShellsAdaptive *shell);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
-Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,int skw_gauss,double rmax,int ng);
+Catalog *catalog_alloc(int nsrcs,int has_lensing,int has_skw,int skw_gauss,double rmax,int ng);
 void catalog_free(Catalog *cat);
 
 static inline double bias_model(double d,double b)
@@ -417,7 +420,7 @@ void cosmo_set(ParamCoLoRe *par);
 double r_of_z(ParamCoLoRe *par,double z);
 double get_bg(ParamCoLoRe *par,double r,int tag,int ipop);
 void compute_tracer_cosmo(ParamCoLoRe *par);
-flouble *compute_shear_spacing(ParamCoLoRe *par);
+flouble *compute_lensing_spacing(ParamCoLoRe *par);
 
 //////
 // Functions defined in io.c
@@ -427,7 +430,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
 void write_srcs(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
-void write_shear(ParamCoLoRe *par);
+void write_lensing(ParamCoLoRe *par);
 void write_isw(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
@@ -492,13 +495,13 @@ void kappa_beams_postproc(ParamCoLoRe *par);
 
 
 //////
-// Functions defined in shear.c
-void shear_set_cartesian(ParamCoLoRe *par);
-void shear_distribute(ParamCoLoRe *par);
-void shear_get_local_properties(ParamCoLoRe *par);
-void shear_beams_preproc(ParamCoLoRe *par);
-void shear_get_beam_properties(ParamCoLoRe *par);
-void shear_beams_postproc(ParamCoLoRe *par);
+// Functions defined in lensing.c
+void lensing_set_cartesian(ParamCoLoRe *par);
+void lensing_distribute(ParamCoLoRe *par);
+void lensing_get_local_properties(ParamCoLoRe *par);
+void lensing_beams_preproc(ParamCoLoRe *par);
+void lensing_get_beam_properties(ParamCoLoRe *par);
+void lensing_beams_postproc(ParamCoLoRe *par);
 
 
 //////

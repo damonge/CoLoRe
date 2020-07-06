@@ -12,7 +12,7 @@ DEFINEFLAGS += -D_LONGIDS
 #DEFINEFLAGS += -D_BIAS_MODEL_2
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
-#Use new shear method
+#Use new lensing method
 DEFINEFLAGS += -D_USE_NEW_LENSING
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
@@ -122,7 +122,7 @@ DENSO = src/density.o
 SRCSO = src/srcs.o
 IMAPO = src/imap.o
 KAPPAO = src/kappa.o
-SHEARO = src/shear.o
+LENSINGO = src/lensing.o
 ISWO = src/isw.o
 IOO = src/io.o
 HPIXO = src/healpix_extra.o
@@ -130,7 +130,7 @@ BEAMO = src/beaming.o
 PREDICTO = src/predictions.o
 FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(SHEARO) $(ISWO) $(FFTLOGO) $(PREDICTO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(LENSINGO) $(ISWO) $(FFTLOGO) $(PREDICTO)
 #OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe

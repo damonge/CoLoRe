@@ -363,7 +363,7 @@ void catalog_cartesian_free(CatalogCartesian *cat)
   free(cat);
 }
 
-Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,
+Catalog *catalog_alloc(int nsrcs,int has_lensing,int has_skw,
                        int skw_gauss,double rmax,int ng)
 {
   Catalog *cat=my_malloc(sizeof(Catalog));
@@ -371,7 +371,7 @@ Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,
   if(nsrcs>0) {
     cat->nsrc=nsrcs;
     cat->srcs=my_malloc(nsrcs*sizeof(Src));
-    cat->has_shear=has_shear;
+    cat->has_lensing=has_lensing;
     cat->has_skw=has_skw;
     cat->skw_gauss=skw_gauss;
     get_radial_params(rmax,ng,&(cat->nr),&(cat->dr));
@@ -657,13 +657,13 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
     total_GB_kappa+=size_map*nr*(sizeof(flouble)+sizeof(int));
   }
 
-  unsigned long long total_GB_shear=0;
-  if(par->do_shear) {
+  unsigned long long total_GB_lensing=0;
+  if(par->do_lensing) {
     int ib,ir;
-    int nr=par->n_shear;
+    int nr=par->n_lensing;
     int nbases=he_nside2npix(par->nside_base);
-    flouble *rs=compute_shear_spacing(par);
-    int *nsides=get_adaptive_nside(par->nside_shear,
+    flouble *rs=compute_lensing_spacing(par);
+    int *nsides=get_adaptive_nside(par->nside_lensing,
                                    par->nside_base, nr, rs,
                                    par->l_box/par->n_grid, 1.);
     int nbeams_here=0;
@@ -678,7 +678,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
     npix_total*=nbeams_here;
     int nside_ratio_hi=nsides[nr-1]/par->nside_base;
     unsigned long long npix_hi=nside_ratio_hi*nside_ratio_hi*nbeams_here;
-    total_GB_shear+=npix_total*2*sizeof(flouble)+npix_hi*3*sizeof(double);
+    total_GB_lensing+=npix_total*5*sizeof(flouble)+npix_hi*3*sizeof(double);
     free(rs);
     free(nsides);
   }
@@ -700,7 +700,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
     total_GB_srcs+
     total_GB_imap+
     total_GB_kappa+
-    total_GB_shear+
+    total_GB_lensing+
     total_GB_isw;
 
 #ifdef _DEBUG
@@ -717,8 +717,8 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
 	printf(", %.3lf GB (imap)",(double)(total_GB_imap/pow(1024.,3)));
       if(par->do_kappa)
 	printf(", %.3lf MB (kappa)",(double)(total_GB_kappa/pow(1024.,2)));
-      if(par->do_shear)
-	printf(", %.3lf MB (shear)",(double)(total_GB_shear/pow(1024.,2)));
+      if(par->do_lensing)
+	printf(", %.3lf MB (lensing)",(double)(total_GB_lensing/pow(1024.,2)));
       if(par->do_isw)
 	printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
       printf("]\n");

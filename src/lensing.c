@@ -21,22 +21,22 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-void shear_set_cartesian(ParamCoLoRe *par)
+void lensing_set_cartesian(ParamCoLoRe *par)
 {
   return;
 }
 
-void shear_get_local_properties(ParamCoLoRe *par)
+void lensing_get_local_properties(ParamCoLoRe *par)
 {
   return;
 }
 
-void shear_distribute(ParamCoLoRe *par)
+void lensing_distribute(ParamCoLoRe *par)
 {
   return;
 }
 
-void shear_beams_preproc(ParamCoLoRe *par)
+void lensing_beams_preproc(ParamCoLoRe *par)
 {
   //Sort radii in ascending order
   int ir;
@@ -64,7 +64,7 @@ void shear_beams_preproc(ParamCoLoRe *par)
 #endif //_HAVE_OMP
     for(ir=0;ir<par->smap->nr;ir++) {
       for(ib=0;ib<par->smap->nbeams;ib++) {
-        for(ipp=0;ipp<2*par->smap->num_pix_per_beam[ir];ipp++)
+        for(ipp=0;ipp<5*par->smap->num_pix_per_beam[ir];ipp++)
           par->smap->data[ib][ir][ipp]=0;
       }
     } //end omp for
@@ -73,7 +73,7 @@ void shear_beams_preproc(ParamCoLoRe *par)
   return;
 }
 
-void shear_get_beam_properties(ParamCoLoRe *par)
+void lensing_get_beam_properties(ParamCoLoRe *par)
 {
   HealpixShellsAdaptive *smap=par->smap;
 
@@ -129,8 +129,12 @@ void shear_get_beam_properties(ParamCoLoRe *par)
 #endif //_HAVE_OMP
       for(ip=0;ip<npix_hi;ip++) {
         int ax,added;
-        flouble t[6];
-        double r1[6],r2[6],xn[3];
+        flouble t[6],v[3];
+        double xn[3], u_x[3], u_y[3];
+        double r_k[6], r_e1[6],r_e2[6];
+        double dx_1=0,dx_2=0;
+        double dy_1=0,dy_2=0;
+        double kappa_1=0,kappa_2=0;
         double shear1_1=0,shear1_2=0;
         double shear2_1=0,shear2_2=0;
         double *u=&(smap->pos[ib][3*ip]);
@@ -146,19 +150,34 @@ void shear_get_beam_properties(ParamCoLoRe *par)
           sph_h=u[1]/sth_h;
         }
 
-        r1[0]=(cth_h*cth_h*cph_h*cph_h-sph_h*sph_h)*prefac;
-        r1[1]=(2*cph_h*sph_h*(cth_h*cth_h+1))*prefac;
-        r1[2]=(-2*cth_h*sth_h*cph_h)*prefac;
-        r1[3]=(cth_h*cth_h*sph_h*sph_h-cph_h*cph_h)*prefac;
-        r1[4]=(-2*cth_h*sth_h*sph_h)*prefac;
-        r1[5]=(sth_h*sth_h)*prefac;
+        u_x[0]=cth_h*cph_h;
+        u_x[1]=cth_h*sph_h;
+        u_x[2]=-sth_h;
 
-        r2[0]=(-2*cth_h*cph_h*sph_h)*prefac;
-        r2[1]=(2*cth_h*(cph_h*cph_h-sph_h*sph_h))*prefac;
-        r2[2]=(2*sth_h*sph_h)*prefac;
-        r2[3]=(2*cth_h*sph_h*cph_h)*prefac;
-        r2[4]=(-2*sth_h*cph_h)*prefac;
-        r2[5]=0;
+        u_y[0]=-sph_h;
+        u_y[1]=cph_h;
+        u_y[2]=0;
+
+        r_k[0] =(cth_h*cth_h*cph_h*cph_h+sph_h*sph_h)*prefac;
+        r_k[1] =(2*cph_h*sph_h*(cth_h*cth_h-1))*prefac;
+        r_k[2] =(-2*cth_h*sth_h*cph_h)*prefac;
+        r_k[3] =(cth_h*cth_h*sph_h*sph_h+cph_h*cph_h)*prefac;
+        r_k[4] =(-2*cth_h*sth_h*sph_h)*prefac;
+        r_k[5] =(sth_h*sth_h)*prefac;
+
+        r_e1[0]=(cth_h*cth_h*cph_h*cph_h-sph_h*sph_h)*prefac;
+        r_e1[1]=(2*cph_h*sph_h*(cth_h*cth_h+1))*prefac;
+        r_e1[2]=(-2*cth_h*sth_h*cph_h)*prefac;
+        r_e1[3]=(cth_h*cth_h*sph_h*sph_h-cph_h*cph_h)*prefac;
+        r_e1[4]=(-2*cth_h*sth_h*sph_h)*prefac;
+        r_e1[5]=(sth_h*sth_h)*prefac;
+
+        r_e2[0]=(-2*cth_h*cph_h*sph_h)*prefac;
+        r_e2[1]=(2*cth_h*(cph_h*cph_h-sph_h*sph_h))*prefac;
+        r_e2[2]=(2*sth_h*sph_h)*prefac;
+        r_e2[3]=(2*cth_h*sph_h*cph_h)*prefac;
+        r_e2[4]=(-2*sth_h*cph_h)*prefac;
+        r_e2[5]=0;
         for(i_r=0;i_r<smap->nr;i_r++) {
           int irr;
           int irmin=i_r_min_arr[i_r];
@@ -168,25 +187,40 @@ void shear_get_beam_properties(ParamCoLoRe *par)
             double rm=(irr+0.5)*dr;
             for(ax=0;ax<3;ax++)
               xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-            added=interpolate_from_grid(par,xn,NULL,NULL,t,NULL,NULL,RETURN_TID,INTERP_TYPE_SHEAR);
+            added=interpolate_from_grid(par,xn,NULL,v,t,NULL,NULL,RETURN_VEL | RETURN_TID,
+                                        INTERP_TYPE_LENSING);
             if(added) {
-              double dotp1=0,dotp2=0;
+              double dotk=0,dote1=0,dote2=0,dotvx=0,dotvy=0;
               for(ax=0;ax<6;ax++) {
-                dotp1+=r1[ax]*t[ax];
-                dotp2+=r2[ax]*t[ax];
+                dote1+=r_e1[ax]*t[ax];
+                dote2+=r_e2[ax]*t[ax];
+                dotk +=r_k[ax]*t[ax];
               }
-              shear1_1+=dotp1*fac_r_1[irr];
-              shear1_2+=dotp1*fac_r_2[irr];
-              shear2_1+=dotp2*fac_r_1[irr];
-              shear2_2+=dotp2*fac_r_2[irr];
+              for(ax=0;ax<3;ax++) {
+                dotvx+=u_x[ax]*v[ax];
+                dotvy+=u_y[ax]*v[ax];
+              }
+              dx_1+=dotvx*fac_r_1[irr];
+              dx_2+=dotvx*fac_r_2[irr];
+              dy_1+=dotvy*fac_r_1[irr];
+              dy_2+=dotvy*fac_r_2[irr];
+              kappa_1+=dotk*fac_r_1[irr];
+              kappa_2+=dotk*fac_r_2[irr];
+              shear1_1+=dote1*fac_r_1[irr];
+              shear1_2+=dote1*fac_r_2[irr];
+              shear2_1+=dote2*fac_r_1[irr];
+              shear2_2+=dote2*fac_r_2[irr];
             }
           }
           if(ipix_this>=smap->num_pix_per_beam[i_r]) {
             printf("SHIT\n");
             exit(1);
           }
-          smap->data[ib][i_r][2*ipix_this+0]+=(shear1_1-inv_r_max[i_r]*shear1_2)*inv_npix_ratio[i_r];
-          smap->data[ib][i_r][2*ipix_this+1]+=(shear2_1-inv_r_max[i_r]*shear2_2)*inv_npix_ratio[i_r];
+          smap->data[ib][i_r][5*ipix_this+0]+=(shear1_1-inv_r_max[i_r]*shear1_2)*inv_npix_ratio[i_r];
+          smap->data[ib][i_r][5*ipix_this+1]+=(shear2_1-inv_r_max[i_r]*shear2_2)*inv_npix_ratio[i_r];
+          smap->data[ib][i_r][5*ipix_this+2]+=(kappa_1-inv_r_max[i_r]*kappa_2)*inv_npix_ratio[i_r];
+          smap->data[ib][i_r][5*ipix_this+3]+=(dx_1-inv_r_max[i_r]*dx_2)*inv_npix_ratio[i_r];
+          smap->data[ib][i_r][5*ipix_this+4]+=(dy_1-inv_r_max[i_r]*dy_2)*inv_npix_ratio[i_r];
         }
       } //end omp for
     }
@@ -211,7 +245,7 @@ void shear_get_beam_properties(ParamCoLoRe *par)
   return;
 }
 
-void shear_beams_postproc(ParamCoLoRe *par)
+void lensing_beams_postproc(ParamCoLoRe *par)
 {
   //Set rf to end of cell
   return;

@@ -75,8 +75,8 @@ int main(int argc,char **argv)
     if(par->do_kappa)
       kappa_set_cartesian(par);
 #ifdef _USE_NEW_LENSING
-    if(par->do_shear)
-      shear_set_cartesian(par);
+    if(par->do_lensing)
+      lensing_set_cartesian(par);
 #endif //_USE_NEW_LENSING
     if(par->do_isw)
       isw_set_cartesian(par);
@@ -89,8 +89,8 @@ int main(int argc,char **argv)
     if(par->do_kappa)
       kappa_distribute(par);
 #ifdef _USE_NEW_LENSING
-    if(par->do_shear)
-      shear_distribute(par);
+    if(par->do_lensing)
+      lensing_distribute(par);
 #endif //_USE_NEW_LENSING
     if(par->do_isw)
       isw_distribute(par);
@@ -103,8 +103,8 @@ int main(int argc,char **argv)
     if(par->do_kappa)
       kappa_get_local_properties(par);
 #ifdef _USE_NEW_LENSING
-    if(par->do_shear)
-      shear_get_local_properties(par);
+    if(par->do_lensing)
+      lensing_get_local_properties(par);
 #endif //_USE_NEW_LENSING
     if(par->do_isw)
       isw_get_local_properties(par);
@@ -122,8 +122,8 @@ int main(int argc,char **argv)
     if(par->do_kappa)
       write_kappa(par);
 #ifdef _USE_NEW_LENSING
-    if(par->do_shear && par->write_shear)
-      write_shear(par);
+    if(par->do_lensing && par->write_lensing)
+      write_lensing(par);
 #endif ///_USE_NEW_LENSING
     if(par->do_isw)
       write_isw(par);
