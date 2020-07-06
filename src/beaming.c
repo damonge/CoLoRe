@@ -337,7 +337,7 @@ void get_beam_properties(ParamCoLoRe *par)
       kappa_get_beam_properties(par);
 #ifdef _USE_NEW_LENSING
     if(par->do_shear)
-      shear_get_beam_properties(par); 
+      shear_get_beam_properties(par);
 #endif //_USE_NEW_LENSING
     if(par->do_isw)
       isw_get_beam_properties(par);

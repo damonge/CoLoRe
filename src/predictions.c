@@ -31,8 +31,8 @@ void write_predictions(ParamCoLoRe *par)
   // first generate k array, sufficiently finely spaced
   // note that we need to sufficiently pad on both ends
   const int Nk=10000;
-  const double kmin=1e-3;
-  const double kmax=50;;
+  const double kmin=1e-4;
+  const double kmax=100;
   const double kminout=kmin;
   const double kmaxout=kmax;
   const double rminout=0.5;
