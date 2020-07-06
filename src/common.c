@@ -330,6 +330,244 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th
 }
 */
 
+void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
+{
+  *nr=NSAMP_RAD*ngrid/2;
+  *dr=rmax/(*nr);
+}
+
+CatalogCartesian *catalog_cartesian_alloc(int nsrcs)
+{
+  CatalogCartesian *cat=my_malloc(sizeof(CatalogCartesian));
+
+  if(nsrcs>0) {
+    cat->nsrc=nsrcs;
+    cat->pos=my_malloc(NPOS_CC*nsrcs*sizeof(float));
+    cat->ipix=my_malloc(nsrcs*sizeof(int));
+  }
+  else {
+    cat->nsrc=0;
+    cat->pos=NULL;
+    cat->ipix=NULL;
+  }
+
+  return cat;
+}
+
+void catalog_cartesian_free(CatalogCartesian *cat)
+{
+  if(cat->nsrc>0) {
+    free(cat->pos);
+    free(cat->ipix);
+  }
+  free(cat);
+}
+
+Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,
+                       int skw_gauss,double rmax,int ng)
+{
+  Catalog *cat=my_malloc(sizeof(Catalog));
+
+  if(nsrcs>0) {
+    cat->nsrc=nsrcs;
+    cat->srcs=my_malloc(nsrcs*sizeof(Src));
+    cat->has_shear=has_shear;
+    cat->has_skw=has_skw;
+    cat->skw_gauss=skw_gauss;
+    get_radial_params(rmax,ng,&(cat->nr),&(cat->dr));
+    cat->rmax=rmax;
+    cat->idr=1./cat->dr;
+    if(has_skw) {
+      if(skw_gauss) {
+        cat->g_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+      }
+      else {
+        cat->d_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+      }
+      cat->v_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+    }
+  }
+  else {
+    cat->nsrc=0;
+    cat->srcs=NULL;
+    cat->has_skw=0;
+  }
+
+  return cat;
+}
+
+void catalog_free(Catalog *cat)
+{
+  if(cat->nsrc>0) {
+    free(cat->srcs);
+    if(cat->has_skw) {
+      if(cat->skw_gauss) {
+        free(cat->g_skw);
+      }
+      else {
+        free(cat->d_skw);
+      }
+      free(cat->v_skw);
+    }
+  }
+  free(cat);
+}
+
+void hp_shell_adaptive_free(HealpixShellsAdaptive *shell)
+{
+  int ib,ir;
+  free(shell->r);
+  free(shell->nside);
+  free(shell->num_pix_per_beam);
+  for(ib=0;ib<shell->nbeams;ib++) {
+    for(ir=0;ir<shell->nr;ir++)
+      free(shell->data[ib][ir]);
+    free(shell->data[ib]);
+    free(shell->pos[ib]);
+  }
+  free(shell->data);
+  free(shell->pos);
+  free(shell);
+}
+
+static int *get_adaptive_nside(int nside_max, int nside_base,
+                               int nr, flouble *r_arr, flouble dx, flouble dx_fraction)
+{
+  int ir;
+  int *nsides=my_malloc(nr*sizeof(int));
+  for(ir=0; ir<nr; ir++) {
+    flouble r=r_arr[ir];
+    int nside_here=nside_base;
+    while(nside_here<nside_max) {
+      double theta=sqrt(4*M_PI/he_nside2npix(nside_here));
+      double dxt=theta*r;
+      if(dxt<=dx*dx_fraction)
+        break;
+      nside_here*=2;
+    }
+    nsides[ir]=nside_here;
+  }
+  return nsides;
+}
+  
+HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,
+                                               int nr, flouble *r_arr, flouble dx,
+                                               flouble dx_fraction)
+{
+  if(nside_max>NSIDE_MAX_HPX)
+    report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
+  if(nside_max<nside_base)
+    report_error(1,"Can't go below nside=%d\n",nside_base);
+  
+  HealpixShellsAdaptive *shell=my_malloc(sizeof(HealpixShellsAdaptive));
+
+  int ib, ir;
+  int nbases=he_nside2npix(nside_base);
+  shell->nbeams=0;
+  for(ib=NodeThis;ib<nbases;ib+=NNodes)
+    shell->nbeams++;
+
+  shell->nq=nq;
+  shell->nr=nr;
+  shell->nside=get_adaptive_nside(nside_max, nside_base, nr,
+                                  r_arr, dx, dx_fraction);
+  shell->num_pix_per_beam=my_malloc(nr*sizeof(long));
+  shell->r=my_malloc(nr*sizeof(flouble));
+  for(ir=0; ir<nr; ir++) {
+    int nside_ratio;
+    shell->r[ir]=r_arr[ir];
+    nside_ratio=shell->nside[ir]/nside_base;
+    shell->num_pix_per_beam[ir]=nside_ratio*nside_ratio;
+  }
+
+  long npix_hi=shell->num_pix_per_beam[nr-1];
+  shell->data=my_malloc(shell->nbeams*sizeof(flouble **));
+  shell->pos=my_malloc(shell->nbeams*sizeof(double **));
+  for(ib=0;ib<shell->nbeams;ib++) {
+    shell->data[ib]=my_malloc(nr*sizeof(flouble *));
+    shell->pos[ib]=my_malloc(npix_hi*3*sizeof(double));
+    for(ir=0; ir<nr; ir++)
+      shell->data[ib][ir]=my_malloc(shell->nq*shell->num_pix_per_beam[ir]*sizeof(flouble));
+  }
+
+  for(ib=0;ib<shell->nbeams;ib++) {
+    long ip, ip0=(ib*NNodes+NodeThis)*npix_hi;
+    double *u=shell->pos[ib];
+    for(ip=0;ip<npix_hi;ip++) {
+      long id_nest=ip0+ip;
+      pix2vec_nest(shell->nside[nr-1],id_nest,u);
+      u+=3;
+    }
+  }
+  return shell;
+}
+    
+HealpixShells *hp_shell_alloc(int nq, int nside,int nside_base,int nr)
+{
+  if(nside>NSIDE_MAX_HPX)
+    report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
+  if(nside<nside_base)
+    report_error(1,"Can't go below nside=%d\n",nside_base);
+
+  int ib;
+  long ip;
+  HealpixShells *shell=my_malloc(sizeof(HealpixShells));
+
+  //Figure out pixel angular positions
+  int nbases=he_nside2npix(nside_base);
+  int nside_ratio=nside/nside_base;
+  long npix_perbeam=nside_ratio*nside_ratio;
+  int nbeams_here=0;
+
+  for(ib=NodeThis;ib<nbases;ib+=NNodes)
+    nbeams_here++;
+  shell->nq=nq;
+  shell->nside=nside;
+  shell->num_pix=nside_ratio*nside_ratio*nbeams_here;
+  shell->listpix=my_malloc(shell->num_pix*sizeof(long));
+  shell->pos=my_malloc(3*shell->num_pix*sizeof(double));
+
+  double *u=shell->pos;
+  long ipix=0;
+  for(ib=NodeThis;ib<nbases;ib+=NNodes) {
+    for(ip=0;ip<npix_perbeam;ip++) {
+      long id_nest=ib*npix_perbeam+ip;
+      shell->listpix[ipix]=id_nest;
+      pix2vec_nest(shell->nside,id_nest,u);
+      u+=3;
+      ipix++;
+    }
+  }
+
+  //Figure out radial shells
+  shell->nr=nr;
+  shell->r0=my_malloc(shell->nr*sizeof(flouble));
+  shell->rf=my_malloc(shell->nr*sizeof(flouble));
+
+  //Zero all data and clear
+  shell->data=my_calloc(shell->nq*shell->nr*shell->num_pix,sizeof(flouble));
+  shell->nadd=my_calloc(shell->nr*shell->num_pix,sizeof(int));
+
+  return shell;
+}
+
+void hp_shell_free(HealpixShells *shell)
+{
+  if(shell->listpix!=NULL)
+    free(shell->listpix);
+  if(shell->pos!=NULL)
+    free(shell->pos);
+  if(shell->r0!=NULL)
+    free(shell->r0);
+  if(shell->rf!=NULL)
+    free(shell->rf);
+  if(shell->data!=NULL)
+    free(shell->data);
+  if(shell->nadd!=NULL)
+    free(shell->nadd);
+  free(shell);
+}
+
 unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
 {
   unsigned long long total_GB=0;
@@ -419,6 +657,32 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
     total_GB_kappa+=size_map*nr*(sizeof(flouble)+sizeof(int));
   }
 
+  unsigned long long total_GB_shear=0;
+  if(par->do_shear) {
+    int ib,ir;
+    int nr=par->n_shear;
+    int nbases=he_nside2npix(par->nside_base);
+    flouble *rs=compute_shear_spacing(par);
+    int *nsides=get_adaptive_nside(par->nside_shear,
+                                   par->nside_base, nr, rs,
+                                   par->l_box/par->n_grid, 1.);
+    int nbeams_here=0;
+    for(ib=NodeThis;ib<nbases;ib+=NNodes)
+      nbeams_here++;
+
+    unsigned long long npix_total=0;
+    for(ir=0;ir<nr;ir++) {
+      int nside_ratio=nsides[ir]/par->nside_base;
+      npix_total+=nside_ratio*nside_ratio;
+    }
+    npix_total*=nbeams_here;
+    int nside_ratio_hi=nsides[nr-1]/par->nside_base;
+    unsigned long long npix_hi=nside_ratio_hi*nside_ratio_hi*nbeams_here;
+    total_GB_shear+=npix_total*2*sizeof(flouble)+npix_hi*3*sizeof(double);
+    free(rs);
+    free(nsides);
+  }
+
   unsigned long long total_GB_isw=0;
   if(par->do_isw) {
     int ib;
@@ -431,13 +695,19 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
       size_map+=npix_perbeam;
     total_GB_isw+=size_map*nr*(sizeof(flouble)+sizeof(int));
   }
-  total_GB=total_GB_gau+total_GB_lpt+total_GB_srcs+total_GB_imap+total_GB_kappa+total_GB_isw;
+  total_GB=total_GB_gau+
+    total_GB_lpt+
+    total_GB_srcs+
+    total_GB_imap+
+    total_GB_kappa+
+    total_GB_shear+
+    total_GB_isw;
 
 #ifdef _DEBUG
   int jj;
   for(jj=0;jj<NNodes;jj++) {
     if(jj==NodeThis) {
-      printf("MPI task %d will allocate %.3lf GB [",NodeThis,(double)(total_GB/pow(1024.,3)));
+      printf("Node %d will allocate %.3lf GB [",NodeThis,(double)(total_GB/pow(1024.,3)));
       printf("%.3lf GB (Gaussian)",(double)(total_GB_gau/pow(1024.,3)));
       if((par->dens_type==DENS_TYPE_1LPT) || (par->dens_type==DENS_TYPE_2LPT))
 	printf(", %.3lf GB (%dLPT)",(double)(total_GB_lpt/pow(1024.,3)),par->dens_type);
@@ -447,6 +717,8 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
 	printf(", %.3lf GB (imap)",(double)(total_GB_imap/pow(1024.,3)));
       if(par->do_kappa)
 	printf(", %.3lf MB (kappa)",(double)(total_GB_kappa/pow(1024.,2)));
+      if(par->do_shear)
+	printf(", %.3lf MB (shear)",(double)(total_GB_shear/pow(1024.,2)));
       if(par->do_isw)
 	printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
       printf("]\n");
@@ -463,150 +735,4 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
   }
 
   return total_GB;
-}
-
-void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
-{
-  *nr=NSAMP_RAD*ngrid/2;
-  *dr=rmax/(*nr);
-}
-
-CatalogCartesian *catalog_cartesian_alloc(int nsrcs)
-{
-  CatalogCartesian *cat=my_malloc(sizeof(CatalogCartesian));
-
-  if(nsrcs>0) {
-    cat->nsrc=nsrcs;
-    cat->pos=my_malloc(NPOS_CC*nsrcs*sizeof(float));
-    cat->ipix=my_malloc(nsrcs*sizeof(int));
-  }
-  else {
-    cat->nsrc=0;
-    cat->pos=NULL;
-    cat->ipix=NULL;
-  }
-
-  return cat;
-}
-
-void catalog_cartesian_free(CatalogCartesian *cat)
-{
-  if(cat->nsrc>0) {
-    free(cat->pos);
-    free(cat->ipix);
-  }
-  free(cat);
-}
-
-Catalog *catalog_alloc(int nsrcs,int has_skw,int skw_gauss,double rmax,int ng)
-{
-  Catalog *cat=my_malloc(sizeof(Catalog));
-
-  if(nsrcs>0) {
-    cat->nsrc=nsrcs;
-    cat->srcs=my_malloc(nsrcs*sizeof(Src));
-    cat->has_skw=has_skw;
-    cat->skw_gauss=skw_gauss;
-    get_radial_params(rmax,ng,&(cat->nr),&(cat->dr));
-    cat->rmax=rmax;
-    cat->idr=1./cat->dr;
-    if(has_skw) {
-      if(skw_gauss) {
-        cat->g_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
-      }
-      else {
-        cat->d_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
-      }
-      cat->v_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
-    }
-  }
-  else {
-    cat->nsrc=0;
-    cat->srcs=NULL;
-    cat->has_skw=0;
-  }
-
-  return cat;
-}
-
-void catalog_free(Catalog *cat)
-{
-  if(cat->nsrc>0) {
-    free(cat->srcs);
-    if(cat->has_skw) {
-      if(cat->skw_gauss) {
-        free(cat->g_skw);
-      }
-      else {
-        free(cat->d_skw);
-      }
-      free(cat->v_skw);
-    }
-  }
-  free(cat);
-}
-
-HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr)
-{
-  if(nside>NSIDE_MAX_HPX)
-    report_error(1,"Can't go beyond nside=%d\n",NSIDE_MAX_HPX);
-  if(nside<nside_base)
-    report_error(1,"Can't go below nside=%d\n",nside_base);
-
-  int ib;
-  long ip;
-  HealpixShells *shell=my_malloc(sizeof(HealpixShells));
-
-  //Figure out pixel angular positions
-  int nbases=he_nside2npix(nside_base);
-  int nside_ratio=nside/nside_base;
-  long npix_perbeam=nside_ratio*nside_ratio;
-  int nbeams_here=0;
-
-  for(ib=NodeThis;ib<nbases;ib+=NNodes)
-    nbeams_here++;
-  shell->nside=nside;
-  shell->num_pix=nside_ratio*nside_ratio*nbeams_here;
-  shell->listpix=my_malloc(shell->num_pix*sizeof(long));
-  shell->pos=my_malloc(3*shell->num_pix*sizeof(double));
-
-  double *u=shell->pos;
-  long ipix=0;
-  for(ib=NodeThis;ib<nbases;ib+=NNodes) {
-    for(ip=0;ip<npix_perbeam;ip++) {
-      long id_nest=ib*npix_perbeam+ip;
-      shell->listpix[ipix]=id_nest;
-      pix2vec_nest(shell->nside,id_nest,u);
-      u+=3;
-      ipix++;
-    }
-  }
-
-  //Figure out radial shells
-  shell->nr=nr;
-  shell->r0=my_malloc(shell->nr*sizeof(flouble));
-  shell->rf=my_malloc(shell->nr*sizeof(flouble));
-
-  //Zero all data and clear
-  shell->data=my_calloc(shell->nr*shell->num_pix,sizeof(flouble));
-  shell->nadd=my_calloc(shell->nr*shell->num_pix,sizeof(int));
-
-  return shell;
-}
-
-void hp_shell_free(HealpixShells *shell)
-{
-  if(shell->listpix!=NULL)
-    free(shell->listpix);
-  if(shell->pos!=NULL)
-    free(shell->pos);
-  if(shell->r0!=NULL)
-    free(shell->r0);
-  if(shell->rf!=NULL)
-    free(shell->rf);
-  if(shell->data!=NULL)
-    free(shell->data);
-  if(shell->nadd!=NULL)
-    free(shell->nadd);
-  free(shell);
 }

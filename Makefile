@@ -3,7 +3,7 @@
 ###Compiler and compilation options
 COMP_SER = gcc
 COMP_MPI = mpicc
-OPTIONS = -Wall -O3 -std=c99
+OPTIONS = -Wall -Wno-format-overflow -O3 -std=c99
 #
 ### Behavioural flags
 #Use double precision integer (enable in general)
@@ -12,6 +12,8 @@ DEFINEFLAGS += -D_LONGIDS
 #DEFINEFLAGS += -D_BIAS_MODEL_2
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
+#Use new shear method
+DEFINEFLAGS += -D_USE_NEW_LENSING
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
@@ -19,7 +21,7 @@ USE_SINGLE_PRECISION = yes
 #Add random perturbations to kappa from redshifts outside the box
 ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
-USE_HDF5 = yes
+USE_HDF5 = no
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
@@ -120,6 +122,7 @@ DENSO = src/density.o
 SRCSO = src/srcs.o
 IMAPO = src/imap.o
 KAPPAO = src/kappa.o
+SHEARO = src/shear.o
 ISWO = src/isw.o
 IOO = src/io.o
 HPIXO = src/healpix_extra.o
@@ -127,7 +130,7 @@ BEAMO = src/beaming.o
 PREDICTO = src/predictions.o
 FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(ISWO) $(FFTLOGO) $(PREDICTO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(SHEARO) $(ISWO) $(FFTLOGO) $(PREDICTO)
 #OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe

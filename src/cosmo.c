@@ -24,7 +24,8 @@
 #include <gsl/gsl_errno.h>
 
 #define CL_TYPE_KAPPA 0
-#define CL_TYPE_ISW 1
+#define CL_TYPE_SHEAR 1
+#define CL_TYPE_ISW 2
 
 static double f_of_r_linear(ParamCoLoRe *par,double r,double *f,double f0,double ff)
 {
@@ -127,6 +128,20 @@ static double window_kappa_limber(ParamCoLoRe *par,int l,double k,double chi_0,d
   }
 }
 
+static double window_shear_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
+{
+  double chi_l=(l+0.5)/k;
+
+  if((chi_l<=0) || (chi_l<chi_0) || (chi_l>chi_f))
+    return 0;
+  else {
+    double gf=get_bg(par,chi_l,BG_D1,0);
+    double aa=1/(1+get_bg(par,chi_l,BG_Z,0));
+  
+    return par->prefac_lensing*sqrt((l-1)*l*(l+1.)*(l+2.))*gf*(chi_s-chi_l)/(k*k*chi_s*chi_l*aa);
+  }
+}
+
 static double window_isw_limber(ParamCoLoRe *par,int l,double k,double chi_0,double chi_f,double chi_s)
 {
   double chi_l=(l+0.5)/k;
@@ -146,6 +161,10 @@ static double cl_integrand(double lk,void *params)
   if(p->cl_type==CL_TYPE_KAPPA) {
     wa=window_kappa_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
     wb=window_kappa_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
+  }
+  else if(p->cl_type==CL_TYPE_SHEAR) {
+    wa=window_shear_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
+    wb=window_shear_limber(p->par,p->l,k,p->chi_0_b,p->chi_f_b,p->chi_s);
   }
   else if(p->cl_type==CL_TYPE_ISW) {
     wa=window_isw_limber(p->par,p->l,k,p->chi_0_a,p->chi_f_a,p->chi_s);
@@ -768,4 +787,23 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
   }
 
   csm_params_free(pars);
+}
+
+flouble *compute_shear_spacing(ParamCoLoRe *par)
+{
+  flouble *rarr;
+  int ir,nr=par->n_shear;
+  rarr=my_malloc(nr*sizeof(flouble));
+  if(par->shear_spacing_type==SPACING_R) {
+    flouble dr=par->r_max/nr;
+    for(ir=0;ir<nr;ir++)
+      rarr[ir]=(ir+1)*dr;
+  }
+  else if(par->shear_spacing_type==SPACING_LOGZ) {
+    flouble dlogz=log(1+par->z_max)/nr;
+    for(ir=0;ir<nr;ir++)
+      rarr[ir]=r_of_z(par, exp((ir+1)*dlogz)-1);
+  }
+
+  return rarr;
 }

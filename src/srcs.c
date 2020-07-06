@@ -21,6 +21,50 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
+#ifdef _USE_NEW_LENSING
+static int get_r_index_shear(HealpixShellsAdaptive *sh,double r,int ir_start)
+{
+  int gotit=0;
+  int ir0;
+  if(ir_start<0)
+    ir0=0;
+  else if(ir_start>=sh->nr)
+    ir0=sh->nr-1;
+  else
+    ir0=ir_start;
+
+  while(!gotit) {
+    if(ir0==0) {
+      if(r<sh->r[1])
+        gotit=1;
+      else
+        ir0++;
+    }
+    else if(ir0==sh->nr-1) {
+      if(r>=sh->r[sh->nr-2]) {
+        ir0=sh->nr-2;
+        gotit=1;
+      }
+      else
+        ir0--;
+    }
+    else {
+      if(r<sh->r[ir0])
+        ir0--;
+      else {
+        if(r>=sh->r[ir0+1])
+          ir0++;
+        else
+          gotit=1;
+      }
+    }
+  }
+
+  return ir0;
+}
+#endif //_USE_NEW_LENSING
+
+
 static inline void cart2sph(double x,double y,double z,double *r,double *cth,double *phi)
 {
   *r=sqrt(x*x+y*y+z*z);
@@ -208,17 +252,17 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	    double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
 	    double dz_rsd=rvel*get_bg(par,rr,BG_V1,0);
 	    for(ip=0;ip<npp;ip++) {
+	      int ax;
 	      long pix_id_ring,pix_id_nest;
 	      double pos[3];
 	      long pid=np_tot_thr[ithr];
 
-	      pos[0]=x0+dx*(rng_01(rng_thr)-0.5);
-	      pos[1]=y0+dx*(rng_01(rng_thr)-0.5);
-	      pos[2]=z0+dx*(rng_01(rng_thr)-0.5);
-	      par->cats_c[ipop]->pos[NPOS_CC*pid+0]=pos[0];
-	      par->cats_c[ipop]->pos[NPOS_CC*pid+1]=pos[1];
-	      par->cats_c[ipop]->pos[NPOS_CC*pid+2]=pos[2];
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+0]=x0+dx*(rng_01(rng_thr)-0.5);
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+1]=y0+dx*(rng_01(rng_thr)-0.5);
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+2]=z0+dx*(rng_01(rng_thr)-0.5);
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+3]=dz_rsd;
+	      for(ax=0;ax<3;ax++)
+		pos[ax]=par->cats_c[ipop]->pos[NPOS_CC*pid+ax];
 
 	      vec2pix_ring(par->nside_base,pos,&pix_id_ring);
 	      ring2nest(par->nside_base,pix_id_ring,&pix_id_nest);
@@ -340,7 +384,10 @@ void srcs_distribute(ParamCoLoRe *par)
 
 static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
 {
-  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,par->skw_srcs[ipop],par->skw_gauss[ipop],
+  par->cats[ipop]=catalog_alloc(par->cats_c[ipop]->nsrc,
+                                par->shear_srcs[ipop],
+                                par->skw_srcs[ipop],
+                                par->skw_gauss[ipop],
 				par->r_max,par->n_grid);
 
 #ifdef _HAVE_OMP
@@ -413,10 +460,11 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
   {
     long ip;
     double idx=par->n_grid/par->l_box;
-    double *fac_r_1=NULL,*fac_r_2=NULL;
 
     //Kernels for the LOS integrals
-    if(par->do_lensing) {
+#ifndef _USE_NEW_LENSING
+    double *fac_r_1=NULL,*fac_r_2=NULL;
+    if(cat->has_shear) {
       fac_r_1=my_malloc(cat->nr*sizeof(double));
       fac_r_2=my_malloc(cat->nr*sizeof(double));
 
@@ -427,6 +475,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	fac_r_2[ip]=rm*rm*pg*cat->dr;
       }
     }
+#endif //_USE_NEW_LENSING
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -459,12 +508,12 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       	  double rm=(i_r+0.5)*cat->dr;
           for(ax=0;ax<3;ax++)
       	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-            if(cat->skw_gauss) {
-              added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
-            }
-            else {
-              added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
-            }
+	  if(cat->skw_gauss) {
+	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
+	  }
+	  else {
+	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
+	  }
       	  if(added) {
       	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
                   if(cat->skw_gauss) {
@@ -478,8 +527,9 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       	}
       }
 
+#ifndef _USE_NEW_LENSING
       //Compute lensing shear
-      if(par->do_lensing) {
+      if(cat->has_shear) {
 	//Compute linear transformations needed for shear
 	double r1[6],r2[6];
 	double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
@@ -531,11 +581,14 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	cat->srcs[ip].e1+=e1;
 	cat->srcs[ip].e2+=e2;
       }
+#endif //_USE_NEW_LENSING
     }//end omp for
-    if(par->do_lensing) {
+#ifndef _USE_NEW_LENSING
+    if(cat->has_shear) {
       free(fac_r_1);
       free(fac_r_2);
     }
+#endif //_USE_NEW_LENSING
   }//end omp parallel
 }
 
@@ -549,14 +602,21 @@ void srcs_get_beam_properties(ParamCoLoRe *par)
 static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
 {
   Catalog *cat=par->cats[ipop];
+  CatalogCartesian *catc=par->cats_c[ipop];
 
 #ifdef _HAVE_OMP
-#pragma omp parallel default(none) \
-  shared(par,cat)
+#pragma omp parallel default(none)              \
+  shared(par,cat,catc,NNodes,NodeThis)
 #endif //_HAVE_OMP
   {
     int ii;
     double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
+#ifdef _USE_NEW_LENSING
+    int ir_s=0;
+    HealpixShellsAdaptive *smap=NULL;
+    if(cat->has_shear)
+      smap = par->smap;
+#endif //_USE_NEW_LENSING
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -570,7 +630,53 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       cat->srcs[ii].dz_rsd*=vg*factor_vel;
 
       //Shear
-      //Nothing else to do here
+      if(cat->has_shear) {
+#ifdef _USE_NEW_LENSING
+        int ax;
+        long ipix_up,ipix_lo,ibase,ibase_here;
+        double u[3];
+        double g1_lo,g1_up,g2_lo,g2_up;
+        //Find lower shell index
+        ir_s=get_r_index_shear(smap, r, ir_s);
+        if(ir_s>=smap->nr-1)
+          report_error(1, "SHIT\n");
+
+        //Find intervals
+        double h = (r - smap->r[ir_s]) / (smap->r[ir_s+1] - smap->r[ir_s]);
+
+        //Find pixel index
+        //Find base this galaxy belongs to
+        for(ax=0;ax<3;ax++)
+          u[ax]=catc->pos[NPOS_CC*ii+ax];
+        vec2pix_nest(par->nside_base,u,&ibase);
+        if(ibase%NNodes!=NodeThis)
+          report_error(1,"Bad base!!\n");
+        //Find base index within this node
+        ibase_here=(ibase-NodeThis)/NNodes;
+
+        //Find pixel in lower edge
+        vec2pix_nest(smap->nside[ir_s],u,&ipix_lo);
+        //Offset to pixel indices in this node
+        ipix_lo-=ibase*smap->num_pix_per_beam[ir_s];
+	if((ipix_lo<0) || (ipix_lo>=smap->num_pix_per_beam[ir_s]))
+	  report_error(1,"Bad pixel!!\n");
+        //Find shear at edges
+        g1_lo=smap->data[ibase_here][ir_s][2*ipix_lo+0];
+        g2_lo=smap->data[ibase_here][ir_s][2*ipix_lo+1];
+
+        //Same in upper edge
+        vec2pix_nest(smap->nside[ir_s+1],u,&ipix_up);
+        ipix_up-=ibase*smap->num_pix_per_beam[ir_s+1];
+	if((ipix_up<0) || (ipix_up>=smap->num_pix_per_beam[ir_s+1]))
+	  report_error(1,"Bad pixel!!\n");
+        g1_up=smap->data[ibase_here][ir_s+1][2*ipix_up+0];
+        g2_up=smap->data[ibase_here][ir_s+1][2*ipix_up+1];
+
+        //Interpolate
+        cat->srcs[ii].e1=g1_lo*(1-h)+g1_up*h;
+        cat->srcs[ii].e2=g2_lo*(1-h)+g2_up*h;
+#endif //_USE_NEW_LENSING
+      }
 
       //Skewers
       if(cat->has_skw) {

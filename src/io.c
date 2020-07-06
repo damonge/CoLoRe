@@ -88,22 +88,28 @@ static ParamCoLoRe *param_colore_new(void)
   sprintf(par->prefixOut,"default");
   par->output_format=0;
   par->do_pred=0;
+  par->just_do_pred=0;
   par->do_pred=1;
 
   //Tracers
   par->do_srcs=0;
   par->do_skewers=0;
-  par->do_lensing=0;
+  par->do_srcs_shear=0;
   par->do_isw=0;
   par->do_imap=0;
   par->do_kappa=0;
+  par->do_shear=0;
+  par->shear_spacing_type=SPACING_R;
   par->do_isw=0;
   par->n_srcs=-1;
   par->n_imap=-1;
   par->n_kappa=-1;
+  par->n_shear=-1;
   par->n_isw=-1;
   par->nside_kappa=-1;
+  par->nside_shear=-1;
   par->nside_isw=-1;
+  par->write_shear=0;
   for(ii=0;ii<NPOP_MAX;ii++) {
     sprintf(par->fnameBzSrcs[ii],"default");
     sprintf(par->fnameNzSrcs[ii],"default");
@@ -132,6 +138,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->nsources_this=NULL;
   par->imap=NULL;
   par->kmap=NULL;
+  par->smap=NULL;
   par->pd_map=NULL;
 
   //Beam distribution
@@ -315,7 +322,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
     conf_read_bool(conf,c_dum,"include_shear",&(par->shear_srcs[ii]));
     if(par->shear_srcs[ii])
-      par->do_lensing=1;
+      par->do_srcs_shear=1;
     conf_read_bool(conf,c_dum,"store_skewers",&(par->skw_srcs[ii]));
     if(par->skw_srcs[ii]) {
       par->do_skewers=1;
@@ -354,10 +361,32 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   cset=config_lookup(conf,"kappa");
   if(cset!=NULL) {
     par->do_kappa=1;
-    par->do_lensing=1;
     conf_read_double_array(conf,"kappa","z_out",par->z_kappa_out,&(par->n_kappa),NPLANES_MAX);
     conf_read_int(conf,"kappa","nside",&(par->nside_kappa));
   }
+
+#ifdef _USE_NEW_LENSING
+  //Shear maps
+  cset=config_lookup(conf,"shear");
+  if(cset!=NULL) {
+    par->do_shear=1;
+    par->do_srcs_shear=1;
+    conf_read_int(conf,"shear","n_shear",&(par->n_shear));
+    char spacing_string[256]="default";
+    conf_read_string(conf,"shear","spacing_type",spacing_string);
+    if(!strcmp(spacing_string,"r"))
+      par->shear_spacing_type=SPACING_R;
+    else if(!strcmp(spacing_string,"log(1+z)"))
+      par->shear_spacing_type=SPACING_LOGZ;
+    else
+      report_error(1,"Unknown spacing type %s\n",spacing_string);
+    conf_read_int(conf,"shear","nside",&(par->nside_shear));
+    conf_read_bool(conf,"shear","write",&(par->write_shear));
+  }
+  // Check shear exists if requested with catalog
+  if(par->do_srcs_shear && !(par->do_shear))
+    report_error(1,"Include a \"shear\" section if you want shear with your galaxies\n");
+#endif //_USE_NEW_LENSING
 
   cset=config_lookup(conf,"isw");
   if(cset!=NULL) {
@@ -398,12 +427,13 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   else
     par->do_smoothing=0;
 
-  par->need_beaming=par->do_lensing+par->do_kappa+par->do_isw+par->do_skewers;
+  par->need_beaming=par->do_srcs_shear+par->do_kappa+par->do_shear+par->do_isw+par->do_skewers;
   init_fftw(par);
+
+  cosmo_set(par);
 
   get_max_memory(par,test_memory+par->just_do_pred);
 
-  cosmo_set(par);
   print_info("\n");
 
   double dk=2*M_PI/par->l_box;
@@ -426,10 +456,12 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     print_info("  %d intensity mapping species\n",par->n_imap);
   if(par->do_kappa)
     print_info("  %d lensing source planes\n",par->n_kappa);
+  if(par->do_shear)
+    print_info("  %d lensing source planes\n",par->n_shear);
   if(par->do_isw)
     print_info("  %d ISW source planes\n",par->n_isw);
-  if(par->do_lensing)
-    print_info("  Will include lensing shear\n");
+  if(par->do_srcs_shear)
+    print_info("  Will include lensing shear in source catalog\n");
   if(!par->need_beaming)
     print_info("  Will NOT need to all-to-all communicate fields\n");
   print_info("\n");
@@ -463,18 +495,30 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     for(ii=0;ii<par->n_imap;ii++) {
       FILE *fnu=fopen(par->fnameNuImap[ii],"r");
       if(fnu==NULL) error_open_file(par->fnameNuImap[ii]);
-      par->imap[ii]=hp_shell_alloc(par->nside_imap[ii],par->nside_base,linecount(fnu));
+      par->imap[ii]=hp_shell_alloc(1,par->nside_imap[ii],par->nside_base,linecount(fnu));
       fclose(fnu);
     }
   }
 
   if(par->do_kappa)
-    par->kmap=hp_shell_alloc(par->nside_kappa,par->nside_base,par->n_kappa);
+    par->kmap=hp_shell_alloc(1,par->nside_kappa,par->nside_base,par->n_kappa);
+
+#ifdef _USE_NEW_LENSING
+  if(par->do_shear) {
+    flouble *r_arr=compute_shear_spacing(par);
+    par->smap = hp_shell_adaptive_alloc(2, par->nside_shear, par->nside_base,
+                                        par->n_shear, r_arr, par->l_box/par->n_grid,
+                                        1.);
+    free(r_arr);
+  }
+#endif //_USE_NEW_LENSING
 
   if(par->do_isw)
-    par->pd_map=hp_shell_alloc(par->nside_isw,par->nside_base,par->n_isw);
+    par->pd_map=hp_shell_alloc(1,par->nside_isw,par->nside_base,par->n_isw);
 
   compute_tracer_cosmo(par);
+
+  free(conf);
 
   return par;
 }
@@ -741,6 +785,71 @@ void write_kappa(ParamCoLoRe *par)
   print_info("\n");
 }
 
+void write_shear(ParamCoLoRe *par)
+{
+  int ir;
+  char fname[256];
+  long npx=he_nside2npix(par->smap->nside[par->smap->nr-1]);
+  flouble **map_write=my_malloc(2*sizeof(flouble *));
+  map_write[0]=my_malloc(npx*sizeof(flouble));
+  map_write[1]=my_malloc(npx*sizeof(flouble));
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing shear source maps\n");
+  for(ir=0;ir<par->smap->nr;ir++) {
+    long ip, ib;
+
+    //Write local pixels to dummy map
+    for(ip=0;ip<npx;ip++) {
+      map_write[0][ip]=0;
+      map_write[1][ip]=0;
+    }
+    sprintf(fname,"!%s_shear_z%03d.fits",par->prefixOut,ir);
+    for(ib=0;ib<par->smap->nbeams;ib++) {
+      long ipix_0=(NodeThis+NNodes*ib)*par->smap->num_pix_per_beam[ir];
+      for(ip=0;ip<par->smap->num_pix_per_beam[ir];ip++) {
+        long id_pix=ipix_0+ip;
+        map_write[0][id_pix]+=par->smap->data[ib][ir][2*ip+0];
+        map_write[1][id_pix]+=par->smap->data[ib][ir][2*ip+1];
+      }
+    }
+
+    //Collect all dummy maps
+#ifdef _HAVE_MPI
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_write[0],npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_write[0],NULL        ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_write[1],npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_write[1],NULL        ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+
+    //Write dummy map
+    if(NodeThis==0)
+      he_write_healpix_map(map_write,2,par->smap->nside[ir],fname,1);
+  }
+  free(map_write[0]);
+  free(map_write[1]);
+  free(map_write);
+
+  if(NodeThis==0) {
+    sprintf(fname,"%s_shear_r.txt", par->prefixOut);
+    FILE *f=fopen(fname, "w");
+    if(f==NULL)
+      report_error(1,"Couldn't open file %s\n", fname);
+    for(ir=0;ir<par->smap->nr;ir++) {
+      fprintf(f,"%d %lE %lE\n",ir,
+              par->smap->r[ir], 
+              get_bg(par, par->smap->r[ir], BG_Z, 0));
+    }
+    fclose(f);
+  }
+
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
 void write_isw(ParamCoLoRe *par)
 {
   int ir;
@@ -868,7 +977,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2"};
     char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    ,"1E","1E"};
     char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA"};
-    if(par->do_lensing)
+    if(par->cats[ipop]->has_shear)
       nfields=7;
 
     print_info(" %d-th population (FITS)\n",ipop);
@@ -901,7 +1010,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 	dec_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dec;
 	z0_arr[ii]=par->cats[ipop]->srcs[row_here+ii].z0;
 	rsd_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dz_rsd;
-	if(par->do_lensing) {
+        if(par->cats[ipop]->has_shear) {
 	  e1_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e1;
 	  e2_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e2;
 	}
@@ -911,7 +1020,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,dec_arr,&status);
       fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,z0_arr,&status);
       fits_write_col(fptr,TFLOAT,5,row_here+1,1,nrw_here,rsd_arr,&status);
-      if(par->do_lensing) {
+      if(par->cats[ipop]->has_shear) {
 	fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
 	fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
       }
@@ -994,7 +1103,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     FILE *fil=fopen(fname,"w");
     if(fil==NULL) error_open_file(fname);
     fprintf(fil,"#[1]type [2]RA, [3]dec, [4]z0, [5]dz_RSD ");
-    if(par->do_lensing)
+    if(par->cats[ipop]->has_shear)
       fprintf(fil,"#[6]e1, [7]e2\n");
     else
       fprintf(fil,"\n");
@@ -1002,7 +1111,7 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fprintf(fil,"%d %E %E %E %E ",
 	      ipop,par->cats[ipop]->srcs[jj].ra,par->cats[ipop]->srcs[jj].dec,
 	      par->cats[ipop]->srcs[jj].z0,par->cats[ipop]->srcs[jj].dz_rsd);
-      if(par->do_lensing)
+      if(par->cats[ipop]->has_shear)
 	fprintf(fil,"%E %E \n",par->cats[ipop]->srcs[jj].e1,par->cats[ipop]->srcs[jj].e2);
       else
 	fprintf(fil,"\n");
@@ -1082,6 +1191,13 @@ void param_colore_free(ParamCoLoRe *par)
 #endif //_ADD_EXTRA_KAPPA
   }
 
+#ifdef _USE_NEW_LENSING
+  if(par->do_shear) {
+    if(par->smap!=NULL)
+      hp_shell_adaptive_free(par->smap);
+  }
+#endif //_USE_NEW_LENSING
+
   if(par->do_isw) {
     if(par->pd_map!=NULL)
       hp_shell_free(par->pd_map);
@@ -1102,4 +1218,5 @@ void param_colore_free(ParamCoLoRe *par)
 #ifdef _DEBUG
   fclose(par->f_dbg);
 #endif //_DEBUG
+  free(par);
 }

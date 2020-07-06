@@ -73,6 +73,10 @@
 #define RETURN_PDOT 8
 #define RETURN_GAUSS 16
 
+// Radial spacing
+#define SPACING_R 0
+#define SPACING_LOGZ 1
+
 //Interpolation type
 #ifndef INTERP_TYPE_SKW
 #define INTERP_TYPE_SKW INTERP_CIC
@@ -175,6 +179,7 @@ typedef struct {
   double rmax;
   double dr;
   double idr;
+  int has_shear;
   int has_skw;
   int skw_gauss;
   float *d_skw;
@@ -183,6 +188,18 @@ typedef struct {
 } Catalog;
 
 typedef struct {
+  int nq;
+  int nr; //Number of spherical shells
+  flouble *r; //r in this shell
+  int *nside; //Resolution parameter
+  long *num_pix_per_beam;
+  int nbeams; //Number of different bases
+  double **pos; //3D positions of the pixels in the furthest shell
+  flouble ***data;
+} HealpixShellsAdaptive;
+
+typedef struct {
+  int nq; //Number of quantities to map
   int nside; //Resolution parameter
   long num_pix;
   long *listpix;
@@ -274,7 +291,7 @@ typedef struct {
   // Sources
   int do_srcs; //Do we include sources?
   int do_skewers; //Do we include skewer information?
-  int do_lensing; //Do we need to compute the lensing potential?
+  int do_srcs_shear; //Do we need to compute the lensing potential?
   int n_srcs; //Number of source types
   char fnameBzSrcs[NPOP_MAX][256]; //Files containing b(z) for each source type
   char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega (in deg^-2)
@@ -315,6 +332,13 @@ typedef struct {
   flouble **fl_mean_extra_kappa;
   flouble **cl_extra_kappa;
 #endif //_ADD_EXTRA_KAPPA
+  // Shear
+  int do_shear; //Do you want to create shear maps?
+  int write_shear; //Do you want to output shear maps?
+  int shear_spacing_type; //log(1+z)? r?
+  int n_shear; //How many maps?
+  int nside_shear;
+  HealpixShellsAdaptive *smap; //Shear maps at each redshift
   // ISW
   int do_isw; //Do you want to output isw maps?
   int n_isw; //How many maps?
@@ -359,11 +383,14 @@ void end_rng(gsl_rng *rng);
 unsigned long long get_max_memory(ParamCoLoRe *par,int just_test);
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
-HealpixShells *hp_shell_alloc(int nside,int nside_base,int nr);
+HealpixShells *hp_shell_alloc(int nq,int nside,int nside_base,int nr);
+HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr,
+                                               flouble *r_arr, flouble dx, flouble dx_fraction);
 void hp_shell_free(HealpixShells *shell);
+void hp_shell_adaptive_free(HealpixShellsAdaptive *shell);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
-Catalog *catalog_alloc(int nsrcs,int has_skw,int skw_gauss,double rmax,int ng);
+Catalog *catalog_alloc(int nsrcs,int has_shear,int has_skw,int skw_gauss,double rmax,int ng);
 void catalog_free(Catalog *cat);
 
 static inline double bias_model(double d,double b)
@@ -390,6 +417,7 @@ void cosmo_set(ParamCoLoRe *par);
 double r_of_z(ParamCoLoRe *par,double z);
 double get_bg(ParamCoLoRe *par,double r,int tag,int ipop);
 void compute_tracer_cosmo(ParamCoLoRe *par);
+flouble *compute_shear_spacing(ParamCoLoRe *par);
 
 //////
 // Functions defined in io.c
@@ -399,6 +427,7 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
 void write_srcs(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
+void write_shear(ParamCoLoRe *par);
 void write_isw(ParamCoLoRe *par);
 void param_colore_free(ParamCoLoRe *par);
 
@@ -460,6 +489,16 @@ void kappa_get_local_properties(ParamCoLoRe *par);
 void kappa_beams_preproc(ParamCoLoRe *par);
 void kappa_get_beam_properties(ParamCoLoRe *par);
 void kappa_beams_postproc(ParamCoLoRe *par);
+
+
+//////
+// Functions defined in shear.c
+void shear_set_cartesian(ParamCoLoRe *par);
+void shear_distribute(ParamCoLoRe *par);
+void shear_get_local_properties(ParamCoLoRe *par);
+void shear_beams_preproc(ParamCoLoRe *par);
+void shear_get_beam_properties(ParamCoLoRe *par);
+void shear_beams_postproc(ParamCoLoRe *par);
 
 
 //////
