@@ -226,7 +226,7 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
       z_bright_right[inode]=(par->lpt_interp_type+1)*0.5*dx;
     }
 #ifdef _DEBUG
-    print_info("Node %d: [%lf,%lf] [%lf,%lf] [%lf %lf] [%lf %lf]\n",inode,
+    print_info("MPI task %d: [%lf,%lf] [%lf,%lf] [%lf %lf] [%lf %lf]\n",inode,
 	       z_left[inode],z_right[inode],
 	       z_true_left[inode],z_true_right[inode],
 	       z_bleft_left[inode],z_bleft_right[inode],
@@ -269,7 +269,7 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
   }
 
 #ifdef _DEBUG
-  printf("Node %d: %llu %llu %llu %llu\n",NodeThis,np_allocated,n_inrange,nbuffer,n_inbuffer);
+  printf("MPI task %d: %llu %llu %llu %llu\n",NodeThis,np_allocated,n_inrange,nbuffer,n_inbuffer);
 #ifdef _HAVE_MPI
   MPI_Barrier(MPI_COMM_WORLD);
 #endif
@@ -335,7 +335,7 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
     
 
 #ifdef _DEBUG
-    printf("%d. Node %d: send %d particles to node %d, receive %d particles from node %d\n",
+    printf("%d. MPI task %d: send %d particles to node %d, receive %d particles from MPI task %d\n",
 	   inode,NodeThis,nsend,node_to,nrecv,node_from);
 #ifdef _HAVE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
