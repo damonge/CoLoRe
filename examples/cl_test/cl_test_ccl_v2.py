@@ -75,6 +75,7 @@ def compute_all_cls(sim_path, source=1, nside=128, max_files=None, downsampling=
     sigz = 0.03
 
     # These will be the density and ellipticity maps
+    nmap = np.zeros([nbins, npix])
     dmap = np.zeros([nbins, npix])
     e1map = np.zeros([nbins, npix])
     e2map = np.zeros([nbins, npix])
@@ -117,7 +118,7 @@ def compute_all_cls(sim_path, source=1, nside=128, max_files=None, downsampling=
             n = np.bincount(pix, minlength=npix)
             e1 = np.bincount(pix, minlength=npix, weights=dd['E1'])
             e2 = np.bincount(pix, minlength=npix, weights=dd['E2'])
-            dmap[ibin, :] += n
+            nmap[ibin, :] += n
             e1map[ibin, :] += e1
             e2map[ibin, :] += e2
 
@@ -135,13 +136,13 @@ def compute_all_cls(sim_path, source=1, nside=128, max_files=None, downsampling=
     # Compute also shot noise level
     shotnoise = np.zeros(nbins)
     for ib in range(nbins):
-        ndens = (np.sum(dmap[ib])+0.0)/(4*np.pi)
+        ndens = (np.sum(nmap[ib])+0.0)/(4*np.pi)
         shotnoise[ib] = 1./ndens
-        e1map[ib, :] = e1map[ib]/dmap[ib]
-        e1map[ib, dmap[ib] <= 0] = 0
-        e2map[ib, :] = e2map[ib]/dmap[ib]
-        e2map[ib, dmap[ib] <= 0] = 0
-        dmap[ib, :] = (dmap[ib, :] + 0.0) / np.mean(dmap[ib] + 0.0) - 1
+        e1map[ib, :] = e1map[ib]/nmap[ib]
+        e1map[ib, nmap[ib] <= 0] = 0
+        e2map[ib, :] = e2map[ib]/nmap[ib]
+        e2map[ib, nmap[ib] <= 0] = 0
+        dmap[ib, :] = (nmap[ib, :] + 0.0) / np.mean(nmap[ib] + 0.0) - 1
 
     # Read P(k) theory prediction
     zs = []
@@ -198,15 +199,48 @@ def compute_all_cls(sim_path, source=1, nside=128, max_files=None, downsampling=
                         for p2, p1 in pairs])
 
     log.info('Computing values from data...\n')
-    d_values = np.array([hp.anafast(np.asarray([dmap[p1],e1map[p1],e2map[p1]]),np.asarray([dmap[p2],e1map[p2],e2map[p2]]), pol=True) for p1,p2 in pairs])
+    import pymaster as nmt
 
-    cl_md_d = np.copy(d_values[:,3])
+    b=nmt.NmtBin.from_edges(np.arange(3*nside+1)[:-1],
+                            np.arange(3*nside+1)[1:])
+    # Spin-0 fields
+    mone = np.ones(npix)
+    f0 = [nmt.NmtField(mone, [d], n_iter=0) for d in dmap]
+    # Spin-2 fields
+    f2 = [nmt.NmtField(n, [e1, e2], n_iter=0) for n, e1, e2 in zip(nmap, e1map, e2map)]
 
-    for i, (p1,p2) in enumerate(pairs):
-        if p1 != p2:
-            cl_md_d[i] = np.array(hp.anafast(np.asarray([dmap[p2],e1map[p2],e2map[p2]]), np.asarray([dmap[p1],e1map[p1],e2map[p1]])))[3]
+    # DD power spectra
+    w_dd = nmt.NmtWorkspace()
+    w_dd.compute_coupling_matrix(f0, f0, b)
+    cl_dd = np.array([w_dd.decouple_cell(nmt.compute_coupled_cell(f0[p1], f0[p2]))[0]
+                      for p1, p2 in pairs])
+        
+    # DM power spectra
+    w_dl = []
+    for p in range(nbins):
+        w_dl[p] = nmt.NmtWorkspace()
+        w_dl[p].compute_coupling_matrix(f0[p], f2[p], b)
+    cl_dm = np.array([[w_dl[p2].decouple_cell(nmt.compute_coupled_cell(f0[p1], f2[p2]))
+                       for p2 in range(nbins)]
+                      for p1 in range(nbins)])
 
-    return shotnoise, pairs, nz_tot, z_nz, d_values, cl_md_d, cl_dd_t, cl_dm_t, cl_md_t, cl_mm_t
+    # MM power spectra
+    w_ll = {}
+    for p1, p2 in pairs:
+        w_ll[f'{p1}{p2}'] = nmt.NmtWorkspace()
+        w_ll[f'{p1}{p2}'].compute_coupling_matrix(f2[p1], f2[p2], b)
+    cl_mm = np.array([w_ll['{p1}{p2}'].decouple_cell(nmt.compute_coupled_cell(f2[p1], f2[p2]))
+                       for p1, p2 in pairs])
+        
+    #d_values = np.array([hp.anafast(np.asarray([dmap[p1],e1map[p1],e2map[p1]]),np.asarray([dmap[p2],e1map[p2],e2map[p2]]), pol=True) for p1,p2 in pairs])
+    #
+    #cl_md_d = np.copy(d_values[:,3])
+    #
+    #for i, (p1,p2) in enumerate(pairs):
+    #    if p1 != p2:
+    #        cl_md_d[i] = np.array(hp.anafast(np.asarray([dmap[p2],e1map[p2],e2map[p2]]), np.asarray([dmap[p1],e1map[p1],e2map[p1]])))[3]
+
+    return shotnoise, pairs, nz_tot, z_nz, cl_dd, cl_dm, cl_mm, cl_dd_t, cl_dm_t, cl_md_t, cl_mm_t
 
 
 def compute_data(sim_path,source=1, output_path=None, nside=128, max_files=None, downsampling=1, zbins=[-1,0.15,1], nz_h = 50, nz_min=0, nz_max=None):
@@ -226,14 +260,21 @@ def compute_data(sim_path,source=1, output_path=None, nside=128, max_files=None,
 
     log.debug(f'Computing data for:\nsim_path: { sim_path }\nsource: { source }\noutput_path: { output_path }')
 
-    shotnoise, pairs, nz_tot, z_nz, d_values, cl_md_d, cl_dd_t, cl_dm_t, cl_md_t, cl_mm_t = compute_all_cls(sim_path, source, nside, max_files, downsampling, zbins, nz_h, nz_min, nz_max)
+    shotnoise, pairs, nz_tot, z_nz, cl_dd, cl_dm, cl_mm, cl_dd_t, cl_dm_t, cl_md_t, cl_mm_t = compute_all_cls(sim_path, source, nside, max_files, downsampling, zbins, nz_h, nz_min, nz_max)
 
-    cl_dd_d = d_values[:,0]
-    cl_mm_d = d_values[:,1]
-    cl_bb_d = d_values[:,2]
-    cl_dm_d = d_values[:,3]
-    cl_mb_d = d_values[:,4]
-    cl_db_d = d_values[:,5]
+    cl_dd_d = cl_dd
+    cl_mm_d = cl_mm[:, 0, :]
+    cl_bb_d = cl_mm[:, 3, :]
+    cl_dm_d = np.array([cl_dm[0, 0, 0, :],
+                        cl_dm[0, 1, 0, :],
+                        cl_dm[1, 1, 0, :]])
+    cl_md_d = np.array([cl_dm[0, 0, 0, :],
+                        cl_dm[1, 0, 0, :],
+                        cl_dm[1, 1, 0, :]])
+    cl_mb_d = cl_mm[:, 1, :]
+    cl_db_d = np.array([cl_dm[0, 0, 1, :],
+                        cl_dm[0, 1, 1, :],
+                        cl_dm[1, 1, 1, :]])
 
     savetofile(output_path, (pairs, shotnoise, nz_tot, z_nz, cl_dd_d, cl_dd_t, cl_dm_d, cl_dm_t, cl_md_d, cl_md_t, cl_mm_d, cl_mm_t, cl_bb_d, cl_mb_d, cl_db_d), ('pairs', 'shotnoise', 'nz_tot', 'z_nz', 'cl_dd_d', 'cl_dd_t', 'cl_dm_d', 'cl_dm_t', 'cl_md_d', 'cl_md_t', 'cl_mm_d', 'cl_mm_t','cl_bb_d','cl_mb_d','cl_db_d'))
 
