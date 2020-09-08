@@ -217,11 +217,6 @@ def compute_all_cls(sim_path, source=1, nside=128, max_files=None, downsampling=
     cl_dd = np.array([[w_dd[p2].decouple_cell(nmt.compute_coupled_cell(f0[p1], f0[p2]))
                         for p2 in range(nbins)]
                     for p1 in range(nbins)])
-
-    # w_dd = nmt.NmtWorkspace()
-    # w_dd.compute_coupling_matrix(f0, f0, b)
-    # cl_dd = np.array([w_dd.decouple_cell(nmt.compute_coupled_cell(f0[p1], f0[p2]))[0]
-    #                   for p1, p2 in pairs])
         
     # DM power spectra
     w_dl = {}
