@@ -210,13 +210,21 @@ def compute_all_cls(sim_path, source=1, nside=128, max_files=None, downsampling=
     f2 = [nmt.NmtField(n, [e1, e2], n_iter=0) for n, e1, e2 in zip(nmap, e1map, e2map)]
 
     # DD power spectra
-    w_dd = nmt.NmtWorkspace()
-    w_dd.compute_coupling_matrix(f0, f0, b)
-    cl_dd = np.array([w_dd.decouple_cell(nmt.compute_coupled_cell(f0[p1], f0[p2]))[0]
-                      for p1, p2 in pairs])
+    w_dd = {}
+    for p in range(nbins):
+        w_dd[p] = nmt.NmtWorkspace()
+        w_dd[p].compute_coupling_matrix(f0[p],f0[p], b)
+    cl_dd = np.array([[w_dd[p2].decouple_cell(nmt.compute_coupled_cell(f0[p1], f0[p2]))
+                        for p2 in range(nbins)]
+                    for p1 in range(nbins)])
+
+    # w_dd = nmt.NmtWorkspace()
+    # w_dd.compute_coupling_matrix(f0, f0, b)
+    # cl_dd = np.array([w_dd.decouple_cell(nmt.compute_coupled_cell(f0[p1], f0[p2]))[0]
+    #                   for p1, p2 in pairs])
         
     # DM power spectra
-    w_dl = []
+    w_dl = {}
     for p in range(nbins):
         w_dl[p] = nmt.NmtWorkspace()
         w_dl[p].compute_coupling_matrix(f0[p], f2[p], b)
@@ -229,7 +237,7 @@ def compute_all_cls(sim_path, source=1, nside=128, max_files=None, downsampling=
     for p1, p2 in pairs:
         w_ll[f'{p1}{p2}'] = nmt.NmtWorkspace()
         w_ll[f'{p1}{p2}'].compute_coupling_matrix(f2[p1], f2[p2], b)
-    cl_mm = np.array([w_ll['{p1}{p2}'].decouple_cell(nmt.compute_coupled_cell(f2[p1], f2[p2]))
+    cl_mm = np.array([w_ll[f'{p1}{p2}'].decouple_cell(nmt.compute_coupled_cell(f2[p1], f2[p2]))
                        for p1, p2 in pairs])
         
     #d_values = np.array([hp.anafast(np.asarray([dmap[p1],e1map[p1],e2map[p1]]),np.asarray([dmap[p2],e1map[p2],e2map[p2]]), pol=True) for p1,p2 in pairs])
@@ -243,7 +251,7 @@ def compute_all_cls(sim_path, source=1, nside=128, max_files=None, downsampling=
     return shotnoise, pairs, nz_tot, z_nz, cl_dd, cl_dm, cl_mm, cl_dd_t, cl_dm_t, cl_md_t, cl_mm_t
 
 
-def compute_data(sim_path,source=1, output_path=None, nside=128, max_files=None, downsampling=1, zbins=[-1,0.15,1], nz_h = 50, nz_min=0, nz_max=None):
+def compute_data(sim_path,source=1, output_path=None, nside=128, max_files=None, downsampling=1, zbins=[-1,0.15,1], nz_h = 50, nz_min=0, nz_max=None, code=None):
     ''' Method to compute the values needed for CCL test plots.
     
     Args:
@@ -251,6 +259,8 @@ def compute_data(sim_path,source=1, output_path=None, nside=128, max_files=None,
         source (int, optional): Source of which to compute data (default: 1)
         output_path (str, optional): Output where to save the data (default: { sim_path }/ccl_data/{ datetime.now() }/)
     '''
+    if code != 'namaster':
+        raise ValueError('Configuration set to run namaster code.')
 
     id_ = datetime.today().strftime('%Y%m%d_%H%M%S')
     if not output_path:
@@ -262,7 +272,9 @@ def compute_data(sim_path,source=1, output_path=None, nside=128, max_files=None,
 
     shotnoise, pairs, nz_tot, z_nz, cl_dd, cl_dm, cl_mm, cl_dd_t, cl_dm_t, cl_md_t, cl_mm_t = compute_all_cls(sim_path, source, nside, max_files, downsampling, zbins, nz_h, nz_min, nz_max)
 
-    cl_dd_d = cl_dd
+    cl_dd_d = np.array([cl_dd[0, 0, 0, :],
+                        cl_dd[0, 1, 0, :],
+                        cl_dd[1, 1, 0, :]])
     cl_mm_d = cl_mm[:, 0, :]
     cl_bb_d = cl_mm[:, 3, :]
     cl_dm_d = np.array([cl_dm[0, 0, 0, :],
@@ -287,7 +299,8 @@ def compute_data(sim_path,source=1, output_path=None, nside=128, max_files=None,
         'zbins'         : zbins,
         'nz_h'          : nz_h,
         'nz_min'        : nz_min,
-        'nz_max'        : nz_max
+        'nz_max'        : nz_max,
+        'code'          : 'namaster'
     }
 
     with open(output_path + '/INFO.json','w') as outfile:
