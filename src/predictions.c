@@ -46,7 +46,9 @@ void write_predictions(ParamCoLoRe *par)
   for (int i=0; i<Nk; i++) ka[i]=kmin*pow((kmax/kmin),i*1.0/(Nk-1));
   FILE *fpk, *fxi, *fg;
   char fnamepk[256], fnamexi[256], gbiasfn[256];
-  double rsm2=par->r2_smooth+pow(par->l_box/par->n_grid,2)/12.;
+  double rsm2_gg=par->r2_smooth+1.1*pow(par->l_box/par->n_grid,2)/12.;
+  double rsm2_gm=par->r2_smooth+2.1*pow(par->l_box/par->n_grid,2)/6.;
+  double rsm2_mm=par->r2_smooth+2.0*pow(par->l_box/par->n_grid,2)/6.;
   sprintf(gbiasfn,"%s_gbias.txt",par->prefixOut);
   fg=fopen(gbiasfn,"w");
   fprintf (fg,"#1-z 2-r(z) 3-g(z) ");
@@ -75,7 +77,7 @@ void write_predictions(ParamCoLoRe *par)
 #ifdef _DEBUG
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
 #endif //_DEBUG
-	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2*ka[i]*ka[i]);
+	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2_gg*ka[i]*ka[i]);
 	pk2xi(Nk,ka,pk,ra,xi);
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
 	xi2pk(Nk,ra,xi,ka,pk);
@@ -88,7 +90,7 @@ void write_predictions(ParamCoLoRe *par)
 	fprintf (fxi, "# r[Mpc/h] xi_tt xi_ll*b^2 xi_ll\n");
 	for (int i=0; i<Nk; i++) {
 	  if ((ka[i]>=kminout) && (ka[i]<=kmaxout))
-	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias*exp(-rsm2*ka[i]*ka[i]), pklin[i]*exp(-rsm2*ka[i]*ka[i]));
+	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias*exp(-rsm2_gm*ka[i]*ka[i]), pklin[i]*exp(-rsm2_mm*ka[i]*ka[i]));
 	  if ((ra[i]>=rminout) && (ra[i]<=rmaxout))
 	    fprintf (fxi,"%g %g %g %g\n",ra[i],xi[i], xilin[i]*bias*bias, xilin[i]);
 	}
@@ -103,7 +105,7 @@ void write_predictions(ParamCoLoRe *par)
 #ifdef _DEBUG
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
 #endif //_DEBUG
-	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2*ka[i]*ka[i]);
+	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2_gg*ka[i]*ka[i]);
 	pk2xi(Nk,ka,pk,ra,xi);
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
 	xi2pk(Nk,ra,xi,ka,pk);

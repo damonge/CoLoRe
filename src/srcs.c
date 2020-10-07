@@ -473,7 +473,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       for(ip=0;ip<cat->nr;ip++) {
 	double rm=(ip+0.5)*cat->dr;
 	double pg=get_bg(par,rm,BG_D1,0)*(1+get_bg(par,rm,BG_Z,0));
-	fac_r_0[ip]=rm*pg*cat->dr;
+	fac_r_0[ip]=pg*cat->dr;
 	fac_r_1[ip]=rm*pg*cat->dr;
 	fac_r_2[ip]=rm*rm*pg*cat->dr;
       }
@@ -519,12 +519,10 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  }
       	  if(added) {
       	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
-                  if(cat->skw_gauss) {
-        	      cat->g_skw[offp+i_r]+=gauss;
-                  }
-                  else {
-                    cat->d_skw[offp+i_r]+=dens;
-                  }
+            if(cat->skw_gauss)
+              cat->g_skw[offp+i_r]+=gauss;
+            else
+              cat->d_skw[offp+i_r]+=dens;
       	    cat->v_skw[offp+i_r]+=vr;
       	  }
       	}
@@ -537,7 +535,8 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
         double u_x[3], u_y[3];
 	double r_k[6], r_e1[6],r_e2[6];
 	double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
-	double prefac=idx*idx*ir; //1/(Dx^2 * r)
+	double prefac=idx*idx*ir;  // 1 / (Dx^2 * r)
+        double prefac_m=0.5*idx*ir;  // 1 / (2 * Dx * r)
 
 	cth_h=u[2];
 	if(cth_h>=1) cth_h=1;
@@ -548,12 +547,12 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  sph_h=u[1]/sth_h;
 	}
 
-        u_x[0]=cth_h*cph_h;
-        u_x[1]=cth_h*sph_h;
-        u_x[2]=-sth_h;
+        u_x[0]=cth_h*cph_h*prefac_m;
+        u_x[1]=cth_h*sph_h*prefac_m;
+        u_x[2]=-sth_h*prefac_m;
 
-        u_y[0]=-sph_h;
-        u_y[1]=cph_h;
+        u_y[0]=-sph_h*prefac_m;
+        u_y[1]=cph_h*prefac_m;
         u_y[2]=0;
 
         r_k[0] =(cth_h*cth_h*cph_h*cph_h+sph_h*sph_h)*prefac;

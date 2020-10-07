@@ -140,7 +140,8 @@ void lensing_get_beam_properties(ParamCoLoRe *par)
         double shear1_1=0,shear1_2=0;
         double shear2_1=0,shear2_2=0;
         double *u=&(smap->pos[ib][3*ip]);
-        double prefac=idx*idx; //2/Dx^2
+        double prefac=idx*idx; //1/Dx^2
+        double prefac_m=0.5*idx; //1/(2 * Dx)
         double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
 
         cth_h=u[2];
@@ -152,12 +153,12 @@ void lensing_get_beam_properties(ParamCoLoRe *par)
           sph_h=u[1]/sth_h;
         }
 
-        u_x[0]=cth_h*cph_h;
-        u_x[1]=cth_h*sph_h;
-        u_x[2]=-sth_h;
+        u_x[0]=cth_h*cph_h*prefac_m;
+        u_x[1]=cth_h*sph_h*prefac_m;
+        u_x[2]=-sth_h*prefac_m;
 
-        u_y[0]=-sph_h;
-        u_y[1]=cph_h;
+        u_y[0]=-sph_h*prefac_m;
+        u_y[1]=cph_h*prefac_m;
         u_y[2]=0;
 
         r_k[0] =(cth_h*cth_h*cph_h*cph_h+sph_h*sph_h)*prefac;
