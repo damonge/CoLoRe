@@ -172,6 +172,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	      double bias=get_bg(par,r,BG_BZ_SRCS,ipop);
 	      double dnorm=get_bg(par,r,BG_NORM_SRCS,ipop);
 	      double lambda=ndens*cell_vol*bias_model(par->grid_dens[index],bias)*dnorm;
+	      //double lambda=ndens*cell_vol*dnorm;
 	      npp=rng_poisson(lambda,rng_thr);
 	    }
 	  }
@@ -463,14 +464,16 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 
     //Kernels for the LOS integrals
 #ifndef _USE_NEW_LENSING
-    double *fac_r_1=NULL,*fac_r_2=NULL;
+    double *fac_r_0=NULL,*fac_r_1=NULL,*fac_r_2=NULL;
     if(cat->has_lensing) {
+      fac_r_0=my_malloc(cat->nr*sizeof(double));
       fac_r_1=my_malloc(cat->nr*sizeof(double));
       fac_r_2=my_malloc(cat->nr*sizeof(double));
 
       for(ip=0;ip<cat->nr;ip++) {
 	double rm=(ip+0.5)*cat->dr;
 	double pg=get_bg(par,rm,BG_D1,0)*(1+get_bg(par,rm,BG_Z,0));
+	fac_r_0[ip]=rm*pg*cat->dr;
 	fac_r_1[ip]=rm*pg*cat->dr;
 	fac_r_2[ip]=rm*rm*pg*cat->dr;
       }
@@ -534,7 +537,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
         double u_x[3], u_y[3];
 	double r_k[6], r_e1[6],r_e2[6];
 	double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
-	double prefac=2*idx*idx*ir; //2/(Dx^2 * r)
+	double prefac=idx*idx*ir; //1/(Dx^2 * r)
 
 	cth_h=u[2];
 	if(cth_h>=1) cth_h=1;
@@ -586,6 +589,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
                                       INTERP_TYPE_LENSING);
 	  if(added) {
 	    double fr=fac_r_1[i_r]*r-fac_r_2[i_r];
+	    double frm=2*(fac_r_0[i_r]*r-fac_r_1[i_r]);
 	    double dotvx=0,dotvy=0,dotk=0,dote1=0,dote2=0;
 	    for(ax=0;ax<6;ax++) {
 	      dote1+=r_e1[ax]*tp[ax];
@@ -599,8 +603,8 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	    e1+=dote1*fr;
 	    e2+=dote2*fr;
 	    kp+=dotk*fr;
-            dtx+=dotvx*fr;
-            dty+=dotvy*fr;
+            dtx+=dotvx*frm;
+            dty+=dotvy*frm;
 	  }
 	}
 	cat->srcs[ip].e1+=e1;
@@ -613,6 +617,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
     }//end omp for
 #ifndef _USE_NEW_LENSING
     if(cat->has_lensing) {
+      free(fac_r_0);
       free(fac_r_1);
       free(fac_r_2);
     }

@@ -110,11 +110,13 @@ void lensing_get_beam_properties(ParamCoLoRe *par)
       i_r_min_arr[i_r]=i_r_max_arr[i_r-1]+1;
 
     //Fill up integral kernels
+    double *fac_r_0=my_malloc(nr*sizeof(double));
     double *fac_r_1=my_malloc(nr*sizeof(double));
     double *fac_r_2=my_malloc(nr*sizeof(double));
     for(i_r=0;i_r<nr;i_r++) {
       double rm=(i_r+0.5)*dr;
       double pg=get_bg(par,rm,BG_D1,0)*(1+get_bg(par,rm,BG_Z,0));
+      fac_r_0[i_r]=pg*dr;
       fac_r_1[i_r]=rm*pg*dr;
       fac_r_2[i_r]=rm*rm*pg*dr;
     }
@@ -132,13 +134,13 @@ void lensing_get_beam_properties(ParamCoLoRe *par)
         flouble t[6],v[3];
         double xn[3], u_x[3], u_y[3];
         double r_k[6], r_e1[6],r_e2[6];
-        double dx_1=0,dx_2=0;
-        double dy_1=0,dy_2=0;
+        double dx_0=0,dx_1=0;
+        double dy_0=0,dy_1=0;
         double kappa_1=0,kappa_2=0;
         double shear1_1=0,shear1_2=0;
         double shear2_1=0,shear2_2=0;
         double *u=&(smap->pos[ib][3*ip]);
-        double prefac=2*idx*idx; //2/Dx^2
+        double prefac=idx*idx; //2/Dx^2
         double cth_h=1,sth_h=0,cph_h=1,sph_h=0;
 
         cth_h=u[2];
@@ -200,10 +202,10 @@ void lensing_get_beam_properties(ParamCoLoRe *par)
                 dotvx+=u_x[ax]*v[ax];
                 dotvy+=u_y[ax]*v[ax];
               }
+              dx_0+=dotvx*fac_r_0[irr];
               dx_1+=dotvx*fac_r_1[irr];
-              dx_2+=dotvx*fac_r_2[irr];
+              dy_0+=dotvy*fac_r_0[irr];
               dy_1+=dotvy*fac_r_1[irr];
-              dy_2+=dotvy*fac_r_2[irr];
               kappa_1+=dotk*fac_r_1[irr];
               kappa_2+=dotk*fac_r_2[irr];
               shear1_1+=dote1*fac_r_1[irr];
@@ -219,8 +221,8 @@ void lensing_get_beam_properties(ParamCoLoRe *par)
           smap->data[ib][i_r][5*ipix_this+0]+=(shear1_1-inv_r_max[i_r]*shear1_2)*inv_npix_ratio[i_r];
           smap->data[ib][i_r][5*ipix_this+1]+=(shear2_1-inv_r_max[i_r]*shear2_2)*inv_npix_ratio[i_r];
           smap->data[ib][i_r][5*ipix_this+2]+=(kappa_1-inv_r_max[i_r]*kappa_2)*inv_npix_ratio[i_r];
-          smap->data[ib][i_r][5*ipix_this+3]+=(dx_1-inv_r_max[i_r]*dx_2)*inv_npix_ratio[i_r];
-          smap->data[ib][i_r][5*ipix_this+4]+=(dy_1-inv_r_max[i_r]*dy_2)*inv_npix_ratio[i_r];
+          smap->data[ib][i_r][5*ipix_this+3]+=2*(dx_0-inv_r_max[i_r]*dx_1)*inv_npix_ratio[i_r];
+          smap->data[ib][i_r][5*ipix_this+4]+=2*(dy_0-inv_r_max[i_r]*dy_1)*inv_npix_ratio[i_r];
         }
       } //end omp for
     }
@@ -233,6 +235,7 @@ void lensing_get_beam_properties(ParamCoLoRe *par)
         smap->r[i_r]=1./inv_r_max[i_r];
     }
 
+    free(fac_r_0);
     free(fac_r_1);
     free(fac_r_2);
     free(i_r_max_arr);

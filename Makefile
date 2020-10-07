@@ -13,7 +13,7 @@ DEFINEFLAGS += -D_LONGIDS
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
 #Use new lensing method
-DEFINEFLAGS += -D_USE_NEW_LENSING
+#DEFINEFLAGS += -D_USE_NEW_LENSING
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
@@ -33,8 +33,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/home/alonso/include
-GSL_LIB = -L/home/alonso/lib
+GSL_INC = -I/users/damonge/include
+GSL_LIB = -L/users/damonge/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
