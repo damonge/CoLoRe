@@ -92,7 +92,8 @@ void write_predictions(ParamCoLoRe *par)
 	  if ((ka[i]>=kminout) && (ka[i]<=kmaxout))
 	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias*exp(-rsm2_gm*ka[i]*ka[i]), pklin[i]*exp(-rsm2_mm*ka[i]*ka[i]));
 	  if ((ra[i]>=rminout) && (ra[i]<=rmaxout))
-	    fprintf (fxi,"%g %g %g %g\n",ra[i],xi[i], xilin[i]*bias*bias, xilin[i]);
+	    fprintf (fxi,"%g %g %g %g\n",ra[i], xi[i],
+                     xilin[i]*bias, xilin[i]);
 	}
 	fclose(fpk);
 	fclose(fxi);
@@ -118,9 +119,11 @@ void write_predictions(ParamCoLoRe *par)
 	fprintf (fxi, "# k[Mpc/h] xi_tt xi_ll*b^2 xi_ll\n");
 	for (int i=0; i<Nk; i++) {
 	  if ((ka[i]>=kminout) && (ka[i]<=kmaxout))
-	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias, pklin[i]);
+	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i],
+                     pklin[i]*bias*exp(-rsm2_gm*ka[i]*ka[i]),
+                     pklin[i]*exp(-rsm2_mm*ka[i]*ka[i]));
 	  if ((ra[i]>=rminout) && (ra[i]<=rmaxout))
-	    fprintf (fxi,"%g %g %g %g\n",ra[i],xi[i], xilin[i]*bias*bias, xilin[i]);
+	    fprintf (fxi,"%g %g %g %g\n",ra[i],xi[i], xilin[i]*bias, xilin[i]);
 	}
 	fclose(fpk);
 	fclose(fxi);

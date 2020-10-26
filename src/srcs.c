@@ -199,7 +199,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 
   print_info("   There will be %ld objects in total \n",(long)nsources_total);
 #ifdef _DEBUG
-  fprintf(par->f_dbg,"Node %d has %ld particles\n",NodeThis,(long)(par->nsources_c_this[ipop]));
+  fprintf(par->f_dbg,"MPI task %d has %ld particles\n",NodeThis,(long)(par->nsources_c_this[ipop]));
 #endif //_DEBUG
 
   for(ii=nthr-1;ii>0;ii--) {
@@ -352,7 +352,7 @@ static void srcs_distribute_single(ParamCoLoRe *par,int ipop)
     int node_from=(NodeLeft -ii+NNodes)%NNodes;
     int npart_send=ns_transfer_matrix[NodeThis*NNodes+node_to];
     int npart_recv=ns_transfer_matrix[node_from*NNodes+NodeThis];
-    //    print_info("Node %d: %d-th iteration. to->%d from->%d.",NodeThis,ii,node_to,node_from);
+    //    print_info("MPI task %d: %d-th iteration. to->%d from->%d.",NodeThis,ii,node_to,node_from);
     //    print_info(" Should get %07ld objects, and will send %07ld.\n",npart_recv,npart_send);
 #ifdef _HAVE_MPI
     MPI_Sendrecv(&(pos_ordered[NPOS_CC*i0_in_nodes[node_to]]),NPOS_CC*npart_send,MPI_FLOAT,node_to  ,ii,
