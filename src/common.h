@@ -401,7 +401,10 @@ static inline double bias_model(double d,double b)
   if(d<=-1)
     return 0;
 #ifdef _BIAS_MODEL_2
-  return pow(1+d,b)/pow(1+d*d,0.5*(b-1));
+  if(d < 0)
+    return exp(b*d/(1+d));
+  else
+    return 1+b*d;
 #elif defined _BIAS_MODEL_3
   if(1+b*d>0)
     return 1+b*d;

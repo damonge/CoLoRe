@@ -9,7 +9,7 @@ OPTIONS = -Wall -Wno-format-overflow -O3 -std=c99
 #Use double precision integer (enable in general)
 DEFINEFLAGS += -D_LONGIDS
 #Use normalized bias model
-#DEFINEFLAGS += -D_BIAS_MODEL_2
+DEFINEFLAGS += -D_BIAS_MODEL_2
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
 #Use new lensing method
