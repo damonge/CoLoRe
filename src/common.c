@@ -248,7 +248,7 @@ void mpi_init(int* p_argc,char*** p_argv)
 #ifdef _DEBUG
   if(NodeThis==0) {
     for(ii=0;ii<NNodes;ii++)
-      printf("Node %d has %d threads\n",ii,nthreads_all[ii]);
+      printf("MPI task %d has %d OMP threads\n",ii,nthreads_all[ii]);
   }
 #endif //_DEBUG
   IThread0=0;
@@ -268,8 +268,8 @@ void mpi_init(int* p_argc,char*** p_argv)
 #endif //_HAVE_MPI
 
 #ifdef _DEBUG
-  printf("Node %d, thread count starts at %d\n",NodeThis,IThread0);
-  print_info(" MPIThreads = %d\n",MPIThreadsOK);
+  printf("MPI task %d, OMP thread count starts at %d\n",NodeThis,IThread0);
+  print_info(" MPIThreadsOK = %d\n",MPIThreadsOK);
 #endif //_DEBUG
 }
 
@@ -297,11 +297,11 @@ void report_error(int level,char *fmt,...)
   va_end(args);
 
   if(level) {
-    fprintf(stderr,"Node %d, Fatal: %s",NodeThis,msg);
+    fprintf(stderr,"MPI task %d, Fatal: %s",NodeThis,msg);
     exit(level);
   }
   else {
-    fprintf(stderr,"Node %d, Warning: %s",NodeThis,msg);
+    fprintf(stderr,"MPI task %d, Warning: %s",NodeThis,msg);
   }
 }
 

@@ -324,7 +324,7 @@ void get_beam_properties(ParamCoLoRe *par)
     int node_i_am_now=(NodeThis-i-1+NNodes)%NNodes;
 #ifdef _HAVE_MPI
 #ifdef _DEBUG
-    print_info("Communication %d, Node %d is now Node %d\n",i,NodeThis,node_i_am_now);
+    print_info("Communication %d, MPI task %d is now MPI task %d\n",i,NodeThis,node_i_am_now);
 #endif //_DEBUG
     mpi_sendrecv_wrap(par->grid_npot,buffer_sr,size_slice_npot,i);
     mpi_sendrecv_wrap(par->grid_dens,buffer_sr,size_slice_dens,i);
