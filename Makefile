@@ -9,7 +9,7 @@ OPTIONS = -Wall -Wno-format-overflow -O3 -std=c99
 #Use double precision integer (enable in general)
 DEFINEFLAGS += -D_LONGIDS
 #Use normalized bias model
-DEFINEFLAGS += -D_BIAS_MODEL_2
+#DEFINEFLAGS += -D_BIAS_MODEL_2
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
 #Use new lensing method
@@ -121,6 +121,7 @@ FOURIERO = src/fourier.o
 DENSO = src/density.o
 SRCSO = src/srcs.o
 IMAPO = src/imap.o
+CSTMO = src/cstm.o
 KAPPAO = src/kappa.o
 LENSINGO = src/lensing.o
 ISWO = src/isw.o
@@ -130,7 +131,7 @@ BEAMO = src/beaming.o
 PREDICTO = src/predictions.o
 FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(LENSINGO) $(ISWO) $(FFTLOGO) $(PREDICTO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(CSTMO) $(KAPPAO) $(LENSINGO) $(ISWO) $(FFTLOGO) $(PREDICTO)
 #OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe
