@@ -1127,11 +1127,12 @@ void compute_physical_density_field(ParamCoLoRe *par)
 
 static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,double idz,double *zarr,
 						    unsigned long long *narr,
-						    double **norm_srcs_arr,double **norm_imap_arr)
+						    double **norm_srcs_arr,double **norm_imap_arr,
+						    double **norm_cstm_arr)
 {
 #ifdef _HAVE_OMP
-#pragma omp parallel default(none)				\
-  shared(par,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr)
+#pragma omp parallel default(none)					\
+  shared(par,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr,norm_cstm_arr)
 #endif //_HAVE_OMP
   {
     int iz,ipop;
@@ -1140,10 +1141,13 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
     unsigned long long *narr_thr=my_calloc(nz,sizeof(unsigned long long));
     double **norm_srcs_arr_thr=my_malloc(par->n_srcs*sizeof(double *));
     double **norm_imap_arr_thr=my_malloc(par->n_imap*sizeof(double *));
+    double **norm_cstm_arr_thr=my_malloc(par->n_cstm*sizeof(double *));
     for(ipop=0;ipop<par->n_srcs;ipop++)
       norm_srcs_arr_thr[ipop]=my_calloc(nz,sizeof(double));
     for(ipop=0;ipop<par->n_imap;ipop++)
       norm_imap_arr_thr[ipop]=my_calloc(nz,sizeof(double));
+    for(ipop=0;ipop<par->n_cstm;ipop++)
+      norm_cstm_arr_thr[ipop]=my_calloc(nz,sizeof(double));
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -1170,6 +1174,8 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop));
 	    for(ipop=0;ipop<par->n_imap;ipop++)
 	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop));
+	    for(ipop=0;ipop<par->n_cstm;ipop++)
+	      norm_cstm_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_CSTM,ipop));
 	  }
 	}
       }
@@ -1185,6 +1191,8 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	  norm_srcs_arr[ipop][iz]+=norm_srcs_arr_thr[ipop][iz];
 	for(ipop=0;ipop<par->n_imap;ipop++)
 	  norm_imap_arr[ipop][iz]+=norm_imap_arr_thr[ipop][iz];
+	for(ipop=0;ipop<par->n_cstm;ipop++)
+	  norm_cstm_arr[ipop][iz]+=norm_cstm_arr_thr[ipop][iz];
       }
     } //end omp critical
 
@@ -1196,18 +1204,23 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
     for(ipop=0;ipop<par->n_imap;ipop++)
       free(norm_imap_arr_thr[ipop]);
     free(norm_imap_arr_thr);
+    for(ipop=0;ipop<par->n_cstm;ipop++)
+      free(norm_cstm_arr_thr[ipop]);
+    free(norm_cstm_arr_thr);
   } //end omp parallel
 }
 
 static void collect_density_normalization(ParamCoLoRe *par,int nz,double idz,double *zarr,
 					  unsigned long long *narr,
-					  double **norm_srcs_arr,double **norm_imap_arr)
+					  double **norm_srcs_arr,double **norm_imap_arr,
+					  double **norm_cstm_arr)
 {
   //  if(par->need_onions)
   //    collect_density_normalization_from_pixels(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
   //  else 
   //    collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
-  collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
+  collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,
+					  norm_imap_arr,norm_cstm_arr);
 }
 
 //Computes sigma2(z) for physical density field
@@ -1215,13 +1228,15 @@ void compute_density_normalization(ParamCoLoRe *par)
 {
   int nz,iz,ii,ipop;
   double idz;
-  double *zarr,**norm_imap_arr,**norm_srcs_arr;
+  double *zarr,**norm_imap_arr,**norm_srcs_arr,**norm_cstm_arr;
   unsigned long long *narr;
   double zmax=get_bg(par,par->l_box*0.5,BG_Z,0);
   gsl_spline *spline_norm_srcs[NPOP_MAX];
   gsl_interp_accel *intacc_srcs=gsl_interp_accel_alloc(); 
   gsl_spline *spline_norm_imap[NPOP_MAX];
   gsl_interp_accel *intacc_imap=gsl_interp_accel_alloc();
+  gsl_spline *spline_norm_cstm[NPOP_MAX];
+  gsl_interp_accel *intacc_cstm=gsl_interp_accel_alloc();
 
   print_info("*** Computing normalization of density field\n");
   if(NodeThis==0) timer(0);
@@ -1233,12 +1248,15 @@ void compute_density_normalization(ParamCoLoRe *par)
   narr=my_calloc(nz,sizeof(unsigned long long));
   norm_srcs_arr=my_malloc(par->n_srcs*sizeof(double *));
   norm_imap_arr=my_malloc(par->n_imap*sizeof(double *));
+  norm_cstm_arr=my_malloc(par->n_cstm*sizeof(double *));
   for(ipop=0;ipop<par->n_srcs;ipop++)
     norm_srcs_arr[ipop]=my_calloc(nz,sizeof(double));
   for(ipop=0;ipop<par->n_imap;ipop++)
     norm_imap_arr[ipop]=my_calloc(nz,sizeof(double));
+  for(ipop=0;ipop<par->n_cstm;ipop++)
+    norm_cstm_arr[ipop]=my_calloc(nz,sizeof(double));
 
-  collect_density_normalization(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
+  collect_density_normalization(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr,norm_cstm_arr);
 
 #ifdef _HAVE_MPI
   MPI_Allreduce(MPI_IN_PLACE,narr,nz,MPI_UNSIGNED_LONG_LONG,MPI_SUM,MPI_COMM_WORLD);
@@ -1246,6 +1264,8 @@ void compute_density_normalization(ParamCoLoRe *par)
     MPI_Allreduce(MPI_IN_PLACE,norm_srcs_arr[ipop],nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
   for(ipop=0;ipop<par->n_imap;ipop++)
     MPI_Allreduce(MPI_IN_PLACE,norm_imap_arr[ipop],nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  for(ipop=0;ipop<par->n_cstm;ipop++)
+    MPI_Allreduce(MPI_IN_PLACE,norm_cstm_arr[ipop],nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
   MPI_Allreduce(MPI_IN_PLACE,zarr,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
 
@@ -1256,6 +1276,8 @@ void compute_density_normalization(ParamCoLoRe *par)
 	norm_srcs_arr[ipop][iz]=narr[iz]/norm_srcs_arr[ipop][iz];
       for(ipop=0;ipop<par->n_imap;ipop++)
 	norm_imap_arr[ipop][iz]=narr[iz]/norm_imap_arr[ipop][iz];
+      for(ipop=0;ipop<par->n_cstm;ipop++)
+	norm_cstm_arr[ipop][iz]=narr[iz]/norm_cstm_arr[ipop][iz];
     }
   }
 
@@ -1268,6 +1290,10 @@ void compute_density_normalization(ParamCoLoRe *par)
   for(ipop=0;ipop<par->n_imap;ipop++) {
     norm_imap_arr[ipop][0]=norm_imap_arr[ipop][1];
     norm_imap_arr[ipop][nz-1]=norm_imap_arr[ipop][nz-2];
+  }
+  for(ipop=0;ipop<par->n_cstm;ipop++) {
+    norm_cstm_arr[ipop][0]=norm_cstm_arr[ipop][1];
+    norm_cstm_arr[ipop][nz-1]=norm_cstm_arr[ipop][nz-2];
   }
 
   par->z0_norm=zarr[0];
@@ -1285,6 +1311,13 @@ void compute_density_normalization(ParamCoLoRe *par)
     spline_norm_imap[ipop]=gsl_spline_alloc(gsl_interp_linear,nz);
     gsl_spline_init(spline_norm_imap[ipop],zarr,norm_imap_arr[ipop],nz);
     par->imap_norm_arr[ipop]=my_malloc(NA*sizeof(double));
+  }
+  for(ipop=0;ipop<par->n_cstm;ipop++) {
+    par->norm_cstm_0[ipop]=norm_cstm_arr[ipop][0];
+    par->norm_cstm_f[ipop]=norm_cstm_arr[ipop][nz-1];
+    spline_norm_cstm[ipop]=gsl_spline_alloc(gsl_interp_linear,nz);
+    gsl_spline_init(spline_norm_cstm[ipop],zarr,norm_cstm_arr[ipop],nz);
+    par->cstm_norm_arr[ipop]=my_malloc(NA*sizeof(double));
   }
 
   for(ii=0;ii<NA;ii++) {
@@ -1309,6 +1342,16 @@ void compute_density_normalization(ParamCoLoRe *par)
 	nm=gsl_spline_eval(spline_norm_imap[ipop],z,intacc_imap);
       par->imap_norm_arr[ipop][ii]=nm;
     }
+    for(ipop=0;ipop<par->n_cstm;ipop++) {
+      double nm;
+      if(z<par->z0_norm)
+	nm=par->norm_cstm_0[ipop];
+      else if(z>=par->zf_norm)
+	nm=par->norm_cstm_f[ipop];
+      else
+	nm=gsl_spline_eval(spline_norm_cstm[ipop],z,intacc_cstm);
+      par->cstm_norm_arr[ipop][ii]=nm;
+    }
   }
 
 #ifdef _DEBUG
@@ -1319,6 +1362,8 @@ void compute_density_normalization(ParamCoLoRe *par)
       print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_SRCS,ipop));
     for(ipop=0;ipop<par->n_imap;ipop++)
       print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_IMAP,ipop));
+    for(ipop=0;ipop<par->n_cstm;ipop++)
+      print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_CSTM,ipop));
     print_info("%011llu\n",narr[iz]);
   }
 #endif //_DEBUG
@@ -1339,4 +1384,10 @@ void compute_density_normalization(ParamCoLoRe *par)
   }
   free(norm_imap_arr);
   gsl_interp_accel_free(intacc_imap);
+  for(ipop=0;ipop<par->n_cstm;ipop++) {
+    free(norm_cstm_arr[ipop]);
+    gsl_spline_free(spline_norm_cstm[ipop]);
+  }
+  free(norm_cstm_arr);
+  gsl_interp_accel_free(intacc_cstm);
 }

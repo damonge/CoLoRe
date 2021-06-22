@@ -644,6 +644,15 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
     }
   }
 
+  unsigned long long total_GB_cstm=0;
+  if(par->do_cstm) {
+    int ipop;
+    for(ipop=0;ipop<par->n_cstm;ipop++) {
+      unsigned long long size_map=he_nside2npix(par->nside_cstm[ipop]);
+      total_GB_cstm+=size_map*(sizeof(flouble)+sizeof(int));
+    }
+  }
+
   unsigned long long total_GB_kappa=0;
   if(par->do_kappa) {
     int ib;
@@ -699,6 +708,7 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
     total_GB_lpt+
     total_GB_srcs+
     total_GB_imap+
+    total_GB_cstm+
     total_GB_kappa+
     total_GB_lensing+
     total_GB_isw;
@@ -721,6 +731,8 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test)
 	printf(", %.3lf MB (lensing)",(double)(total_GB_lensing/pow(1024.,2)));
       if(par->do_isw)
 	printf(", %.3lf MB (isw)",(double)(total_GB_isw/pow(1024.,2)));
+      if(par->do_cstm)
+	printf(", %.3lf MB (custom)",(double)(total_GB_cstm/pow(1024.,2)));
       printf("]\n");
     }
 #ifdef _HAVE_MPI

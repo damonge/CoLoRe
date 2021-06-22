@@ -95,6 +95,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->do_srcs=0;
   par->do_skewers=0;
   par->do_srcs_lensing=0;
+  par->do_cstm=0;
   par->do_isw=0;
   par->do_imap=0;
   par->do_kappa=0;
@@ -102,6 +103,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->lensing_spacing_type=SPACING_R;
   par->do_isw=0;
   par->n_srcs=-1;
+  par->n_cstm=-1;
   par->n_imap=-1;
   par->n_kappa=-1;
   par->n_lensing=-1;
@@ -111,6 +113,11 @@ static ParamCoLoRe *param_colore_new(void)
   par->nside_isw=-1;
   par->write_lensing=0;
   for(ii=0;ii<NPOP_MAX;ii++) {
+    sprintf(par->fnameBzCstm[ii],"default");
+    sprintf(par->fnameKzCstm[ii],"default");
+    par->cstm_bz_arr[ii]=NULL;
+    par->cstm_kz_arr[ii]=NULL;
+    par->cstm_norm_arr[ii]=NULL;
     sprintf(par->fnameBzSrcs[ii],"default");
     sprintf(par->fnameNzSrcs[ii],"default");
     par->srcs_bz_arr[ii]=NULL;
@@ -127,6 +134,7 @@ static ParamCoLoRe *param_colore_new(void)
     par->imap_norm_arr[ii]=NULL;
     par->nside_imap[ii]=-1;
     par->nu0_imap[ii]=-1;
+    par->nside_cstm[ii]=-1;
   }
   for(ii=0;ii<NPLANES_MAX;ii++) {
     par->z_kappa_out[ii]=-1;
@@ -333,6 +341,28 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   if(par->n_srcs>0)
     par->do_srcs=1;
 
+  //Get number of custom maps
+  par->n_cstm=0;
+  found=1;
+  while(found) {
+    sprintf(c_dum, "custom%d", par->n_cstm+1);
+    cset=config_lookup(conf,c_dum);
+    if(cset==NULL)
+      found=0;
+    else
+      par->n_cstm++;
+  }
+  if(par->n_cstm>NPOP_MAX)
+    report_error(1,"You're asking for too many populations %d! Enlarge NPOP_MAX\n",par->n_cstm);
+  for(ii=0;ii<par->n_cstm;ii++) {
+    sprintf(c_dum,"custom%d",ii+1);
+    conf_read_string(conf,c_dum,"kz_filename",par->fnameKzCstm[ii]);
+    conf_read_string(conf,c_dum,"bias_filename",par->fnameBzCstm[ii]);
+    conf_read_int(conf,c_dum,"nside",&(par->nside_cstm[ii]));
+  }
+  if(par->n_cstm>0)
+    par->do_cstm=1;
+
   //Get number of intensity mapping species
   par->n_imap=0;
   found=1;
@@ -427,7 +457,8 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   else
     par->do_smoothing=0;
 
-  par->need_beaming=par->do_srcs_lensing+par->do_kappa+par->do_lensing+par->do_isw+par->do_skewers;
+  par->need_beaming=(par->do_srcs_lensing+par->do_kappa+par->do_lensing+
+		     par->do_isw+par->do_skewers+par->do_cstm);
   init_fftw(par);
 
   cosmo_set(par);
@@ -454,6 +485,8 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     print_info("  Some populations will include LoS skewers\n");
   if(par->do_imap)
     print_info("  %d intensity mapping species\n",par->n_imap);
+  if(par->do_cstm)
+    print_info("  %d custom maps\n",par->n_cstm);
   if(par->do_kappa)
     print_info("  %d lensing source planes\n",par->n_kappa);
   if(par->do_lensing)
@@ -498,6 +531,12 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
       par->imap[ii]=hp_shell_alloc(1,par->nside_imap[ii],par->nside_base,linecount(fnu));
       fclose(fnu);
     }
+  }
+
+  if(par->do_cstm) {
+    par->cstm=my_malloc(par->n_cstm*sizeof(HealpixShells *));
+    for(ii=0;ii<par->n_cstm;ii++)
+      par->cstm[ii]=hp_shell_alloc(1,par->nside_cstm[ii],par->nside_base,1);
   }
 
   if(par->do_kappa)
@@ -705,6 +744,60 @@ void write_imap(ParamCoLoRe *par)
       if(NodeThis==0)
 	he_write_healpix_map(&map_write,1,imap->nside,fname,0);
     }
+    free(map_write);
+    free(map_nadd);
+  }
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+void write_cstm(ParamCoLoRe *par)
+{
+  int ipop;
+  char fname[256];
+
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing custom maps\n");
+  for(ipop=0;ipop<par->n_cstm;ipop++) {
+    long ip;
+    HealpixShells *cmap=par->cstm[ipop];
+    long npx=he_nside2npix(cmap->nside);
+    flouble *map_write=my_malloc(npx*sizeof(flouble));
+    int *map_nadd=my_malloc(npx*sizeof(int));
+    print_info(" %d-th species\n",ipop);
+
+    //Write local pixels to dummy map
+    for(ip=0;ip<npx;ip++) {
+      map_write[ip]=0;
+      map_nadd[ip]=0;
+    }
+    sprintf(fname,"!%s_custom_s%d.fits",par->prefixOut,ipop+1);
+    for(ip=0;ip<npx;ip++) {
+      map_write[ip]+=cmap->data[ip];
+      map_nadd[ip]+=cmap->nadd[ip];
+    }
+
+    //Collect all dummy maps
+#ifdef _HAVE_MPI
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_write,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_write   ,NULL     ,npx,FLOUBLE_MPI,MPI_SUM,0,MPI_COMM_WORLD);
+    if(NodeThis==0)
+      MPI_Reduce(MPI_IN_PLACE,map_nadd,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+    else
+      MPI_Reduce(map_nadd    ,NULL    ,npx,MPI_INT,MPI_SUM,0,MPI_COMM_WORLD);
+#endif //_HAVE_MPI
+
+    for(ip=0;ip<npx;ip++) {
+      if(map_nadd[ip]>0)
+	map_write[ip]/=map_nadd[ip];
+    }
+
+    //Write dummy map
+    if(NodeThis==0)
+      he_write_healpix_map(&map_write,1,cmap->nside,fname,1);
+
     free(map_write);
     free(map_nadd);
   }
@@ -1194,6 +1287,18 @@ void param_colore_free(ParamCoLoRe *par)
     }
     if(par->imap!=NULL)
       free(par->imap);
+  }
+
+  if(par->do_cstm) {
+    for(ii=0;ii<par->n_cstm;ii++) {
+      free(par->cstm_bz_arr[ii]);
+      free(par->cstm_kz_arr[ii]);
+      free(par->cstm_norm_arr[ii]);
+      if(par->cstm!=NULL)
+	hp_shell_free(par->cstm[ii]);
+    }
+    if(par->cstm!=NULL)
+      free(par->cstm);
   }
 
   if(par->do_kappa) {

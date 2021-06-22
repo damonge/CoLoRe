@@ -84,6 +84,8 @@ int main(int argc,char **argv)
       srcs_set_cartesian(par);
     if(par->do_imap)
       imap_set_cartesian(par);
+    if(par->do_cstm)
+      cstm_set_cartesian(par);
     
     //Distribute information across
     if(par->do_kappa)
@@ -98,7 +100,9 @@ int main(int argc,char **argv)
       srcs_distribute(par);
     if(par->do_imap)
       imap_distribute(par);
-    
+    if(par->do_cstm)
+      cstm_distribute(par);
+
     //Postprocess after 
     if(par->do_kappa)
       kappa_get_local_properties(par);
@@ -112,6 +116,8 @@ int main(int argc,char **argv)
       srcs_get_local_properties(par);
     if(par->do_imap)
       imap_get_local_properties(par);
+    if(par->do_cstm)
+      cstm_get_local_properties(par);
 
     //All-to-all communication of density field
     //and computation of all required quantities
@@ -131,6 +137,8 @@ int main(int argc,char **argv)
       write_srcs(par);
     if(par->do_imap)
       write_imap(par);
+    if(par->do_cstm)
+      write_cstm(par);
   }
 
   print_info("\n");

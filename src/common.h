@@ -106,6 +106,9 @@
 #define BG_TZ_IMAP 1009
 #define BG_BZ_IMAP 1010
 #define BG_NORM_IMAP 1011
+#define BG_KZ_CSTM 1012
+#define BG_BZ_CSTM 1013
+#define BG_NORM_CSTM 1014
 
 //Density field parameters
 #define DZ_SIGMA 0.05
@@ -291,6 +294,18 @@ typedef struct {
   double pos_obs[3]; //Observer position
 
   //Tracers
+  // Custom
+  int do_cstm; //Do we include custom maps?
+  int n_cstm; //Number of custom maps
+  char fnameBzCstm[NPOP_MAX][256]; //Files containing b(z) for each source type
+  char fnameKzCstm[NPOP_MAX][256]; //Files containing K(z)
+  double *cstm_kz_arr[NPOP_MAX];
+  double *cstm_bz_arr[NPOP_MAX];
+  double *cstm_norm_arr[NPOP_MAX];
+  double norm_cstm_0[NPOP_MAX]; //Bottom edge of spline for density normalization
+  double norm_cstm_f[NPOP_MAX]; //Top edge of spline for density normalization
+  int nside_cstm[NPOP_MAX]; //Output angular resolution for each IM species
+  HealpixShells **cstm; //Maps for each custom map tracer
   // Sources
   int do_srcs; //Do we include sources?
   int do_skewers; //Do we include skewer information?
@@ -401,7 +416,10 @@ static inline double bias_model(double d,double b)
   if(d<=-1)
     return 0;
 #ifdef _BIAS_MODEL_2
-  return pow(1+d,b)/pow(1+d*d,0.5*(b-1));
+  if(d < 0)
+    return exp(b*d/(1+d));
+  else
+    return 1+b*d;
 #elif defined _BIAS_MODEL_3
   if(1+b*d>0)
     return 1+b*d;
@@ -429,6 +447,7 @@ void write_density_grid(ParamCoLoRe *par,char *prefix_dens);
 void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z);
 void write_srcs(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
+void write_cstm(ParamCoLoRe *par);
 void write_kappa(ParamCoLoRe *par);
 void write_lensing(ParamCoLoRe *par);
 void write_isw(ParamCoLoRe *par);
@@ -482,6 +501,16 @@ void imap_get_local_properties(ParamCoLoRe *par);
 void imap_beams_preproc(ParamCoLoRe *par);
 void imap_get_beam_properties(ParamCoLoRe *par);
 void imap_beams_postproc(ParamCoLoRe *par);
+
+
+//////
+// Functions defined in cstm.c
+void cstm_set_cartesian(ParamCoLoRe *par);
+void cstm_distribute(ParamCoLoRe *par);
+void cstm_get_local_properties(ParamCoLoRe *par);
+void cstm_beams_preproc(ParamCoLoRe *par);
+void cstm_get_beam_properties(ParamCoLoRe *par);
+void cstm_beams_postproc(ParamCoLoRe *par);
 
 
 //////

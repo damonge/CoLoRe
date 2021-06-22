@@ -310,6 +310,8 @@ void get_beam_properties(ParamCoLoRe *par)
     srcs_beams_preproc(par);
   if(par->do_imap)
     imap_beams_preproc(par);
+  if(par->do_cstm)
+    cstm_beams_preproc(par);
 
   if(NodeThis==0) timer(0);
 
@@ -345,6 +347,8 @@ void get_beam_properties(ParamCoLoRe *par)
       srcs_get_beam_properties(par);
     if(par->do_imap)
       imap_get_beam_properties(par);
+    if(par->do_cstm)
+      cstm_get_beam_properties(par);
   }
 #ifdef _HAVE_MPI
   free(buffer_sr);
@@ -362,6 +366,8 @@ void get_beam_properties(ParamCoLoRe *par)
     srcs_beams_postproc(par);
   if(par->do_imap)
     imap_beams_postproc(par);
+  if(par->do_cstm)
+    cstm_beams_postproc(par);
 
   if(NodeThis==0) timer(2);
   print_info("\n");
