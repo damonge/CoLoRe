@@ -33,8 +33,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/users/damonge/include
-GSL_LIB = -L/users/damonge/lib
+GSL_INC = -I/home/alonso/include
+GSL_LIB = -L/home/alonso/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
@@ -101,8 +101,8 @@ OPTIONS += $(DEFINEFLAGS)
 INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC) $(SHT_INC) $(HPIX_INC)
 LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) $(SHT_LIB) $(HPIX_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW) -lcfitsio -lchealpix
 ifeq ($(strip $(ADD_EXTRA_KAPPA)),yes)
-DEFINEFLAGS += -D_ADD_EXTRA_KAPPA -D_WITH_SHT
-LIB_ALL += -lsharp -lfftpack -lc_utils
+#DEFINEFLAGS += -D_ADD_EXTRA_KAPPA -D_WITH_SHT
+#LIB_ALL += -lsharp -lfftpack -lc_utils
 endif #EXTRA_KAPPA
 ifeq ($(strip $(USE_HDF5)),yes)
 DEFINEFLAGS += -D_HAVE_HDF5
