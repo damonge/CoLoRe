@@ -138,7 +138,7 @@ void write_predictions(ParamCoLoRe *par)
 #ifdef _DEBUG
 	print_info ("       Population %i, bias %g. \n",ipop,bias);
 #endif //_DEBUG
-	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2_gg*ka[i]*ka[i]);
+	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2_mm*ka[i]*ka[i]);
 	pk2xi(Nk,ka,pk,ra,xi);
 	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
 	xi2pk(Nk,ra,xi,ka,pk);

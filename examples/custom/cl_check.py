@@ -43,6 +43,6 @@ for i in range(1,3):
     plt.figure()
     plt.errorbar(ls, cld, yerr=cld/np.sqrt(ls+0.5), fmt='k.')
     plt.plot(ls, clt, 'r-')
-    plt.xlim([2, nside])
+    #plt.xlim([2, nside])
     plt.loglog()
 plt.show()
