@@ -46,9 +46,9 @@ void write_predictions(ParamCoLoRe *par)
   for (int i=0; i<Nk; i++) ka[i]=kmin*pow((kmax/kmin),i*1.0/(Nk-1));
   FILE *fpk, *fxi, *fg;
   char fnamepk[256], fnamexi[256], gbiasfn[256];
-  double rsm2_gg=par->r2_smooth+1.1*pow(par->l_box/par->n_grid,2)/12.;
-  double rsm2_gm=par->r2_smooth+2.1*pow(par->l_box/par->n_grid,2)/6.;
-  double rsm2_mm=par->r2_smooth+2.0*pow(par->l_box/par->n_grid,2)/6.;
+  double rsm2_gg=par->r2_smooth+0.9*pow(par->l_box/par->n_grid,2)/12.;
+  double rsm2_gm=par->r2_smooth+2.0*pow(par->l_box/par->n_grid,2)/6.;
+  double rsm2_mm=par->r2_smooth+1.88*pow(par->l_box/par->n_grid,2)/6.;
   sprintf(gbiasfn,"%s_gbias.txt",par->prefixOut);
   fg=fopen(gbiasfn,"w");
   fprintf (fg,"#1-z 2-r(z) 3-g(z) ");
