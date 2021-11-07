@@ -71,6 +71,14 @@ double get_bg(ParamCoLoRe *par,double r,int tag,int ipop)
     return f_of_r_linear(par,r,par->imap_norm_arr[ipop],par->norm_imap_0[ipop],
 			 par->norm_imap_f[ipop]);
   }
+  else if(tag==BG_KZ_CSTM)
+    return f_of_r_linear(par,r,par->cstm_kz_arr[ipop],0,0);
+  else if(tag==BG_BZ_CSTM)
+    return f_of_r_linear(par,r,par->cstm_bz_arr[ipop],par->cstm_bz_arr[ipop][0],1);
+  else if(tag==BG_NORM_CSTM) {
+    return f_of_r_linear(par,r,par->cstm_norm_arr[ipop],par->norm_cstm_0[ipop],
+			 par->norm_cstm_f[ipop]);
+  }
   else {
     report_error(1,"Unknown background quantity tag %d\n",tag);
     return -1;
@@ -518,6 +526,8 @@ void cosmo_set(ParamCoLoRe *par)
   gsl_spline *spline_srcs_nz[NPOP_MAX];
   gsl_spline *spline_imap_bz[NPOP_MAX];
   gsl_spline *spline_imap_tz[NPOP_MAX];
+  gsl_spline *spline_cstm_bz[NPOP_MAX];
+  gsl_spline *spline_cstm_kz[NPOP_MAX];
 
   Csm_params *pars=csm_params_new();
   csm_unset_gsl_eh();
@@ -618,6 +628,43 @@ void cosmo_set(ParamCoLoRe *par)
     par->imap_bz_arr[ipop]=my_malloc(NA*sizeof(double));
   }
 
+  for(ipop=0;ipop<par->n_cstm;ipop++) {
+    fi=fopen(par->fnameBzCstm[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameBzCstm[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameBzCstm[ipop],ii+1);
+    }
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"Bias z-range is too small\n");
+    spline_cstm_bz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(spline_cstm_bz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
+
+    fi=fopen(par->fnameKzCstm[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameKzCstm[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameKzCstm[ipop],ii+1);
+    }
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"K(z) z-range is too small\n");
+    spline_cstm_kz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(spline_cstm_kz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
+
+    par->cstm_kz_arr[ipop]=my_malloc(NA*sizeof(double));
+    par->cstm_bz_arr[ipop]=my_malloc(NA*sizeof(double));
+  }
+
   //Set z-dependent functions
   for(ii=0;ii<NA;ii++) {
     double a=((double)ii)/(NA-1);
@@ -659,8 +706,20 @@ void cosmo_set(ParamCoLoRe *par)
       par->imap_tz_arr[ipop][ii]=gsl_spline_eval(spline_imap_tz[ipop],z,NULL);
       par->imap_bz_arr[ipop][ii]=gsl_spline_eval(spline_imap_bz[ipop],z,NULL);
     }
+    for(ipop=0;ipop<par->n_cstm;ipop++) {
+      if((z<par->z_min) || (z>par->z_max)) {
+	par->cstm_kz_arr[ipop][ii]=0;
+	par->cstm_bz_arr[ipop][ii]=1.;
+      }
+      par->cstm_kz_arr[ipop][ii]=gsl_spline_eval(spline_cstm_kz[ipop],z,NULL);
+      par->cstm_bz_arr[ipop][ii]=gsl_spline_eval(spline_cstm_bz[ipop],z,NULL);
+    }
   }
 
+  for(ipop=0;ipop<par->n_cstm;ipop++) {
+    gsl_spline_free(spline_cstm_kz[ipop]);
+    gsl_spline_free(spline_cstm_bz[ipop]);
+  }
   for(ipop=0;ipop<par->n_imap;ipop++) {
     gsl_spline_free(spline_imap_tz[ipop]);
     gsl_spline_free(spline_imap_bz[ipop]);
@@ -789,17 +848,17 @@ void compute_tracer_cosmo(ParamCoLoRe *par)
   csm_params_free(pars);
 }
 
-flouble *compute_shear_spacing(ParamCoLoRe *par)
+flouble *compute_lensing_spacing(ParamCoLoRe *par)
 {
   flouble *rarr;
-  int ir,nr=par->n_shear;
+  int ir,nr=par->n_lensing;
   rarr=my_malloc(nr*sizeof(flouble));
-  if(par->shear_spacing_type==SPACING_R) {
+  if(par->lensing_spacing_type==SPACING_R) {
     flouble dr=par->r_max/nr;
     for(ir=0;ir<nr;ir++)
       rarr[ir]=(ir+1)*dr;
   }
-  else if(par->shear_spacing_type==SPACING_LOGZ) {
+  else if(par->lensing_spacing_type==SPACING_LOGZ) {
     flouble dlogz=log(1+par->z_max)/nr;
     for(ir=0;ir<nr;ir++)
       rarr[ir]=r_of_z(par, exp((ir+1)*dlogz)-1);

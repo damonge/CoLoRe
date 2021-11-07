@@ -25,7 +25,7 @@
 
 void write_predictions(ParamCoLoRe *par)
 {
-  if ((!par->do_srcs) && (!par->do_imap)) return;
+  if ((!par->do_srcs) && (!par->do_imap) && (!par->do_cstm)) return;
   if (NodeThis!=0) return;
   print_info("*** Writing predictions\n");
   // first generate k array, sufficiently finely spaced
@@ -46,9 +46,9 @@ void write_predictions(ParamCoLoRe *par)
   for (int i=0; i<Nk; i++) ka[i]=kmin*pow((kmax/kmin),i*1.0/(Nk-1));
   FILE *fpk, *fxi, *fg;
   char fnamepk[256], fnamexi[256], gbiasfn[256];
-  double rsm2_gg=par->r2_smooth+pow(par->l_box/par->n_grid,2)/12.;
-  double rsm2_gm=par->r2_smooth+1.9*pow(par->l_box/par->n_grid,2)/6.;
-  double rsm2_mm=par->r2_smooth+1.5*pow(par->l_box/par->n_grid,2)/6.;
+  double rsm2_gg=par->r2_smooth+0.9*pow(par->l_box/par->n_grid,2)/12.;
+  double rsm2_gm=par->r2_smooth+2.0*pow(par->l_box/par->n_grid,2)/6.;
+  double rsm2_mm=par->r2_smooth+1.88*pow(par->l_box/par->n_grid,2)/6.;
   sprintf(gbiasfn,"%s_gbias.txt",par->prefixOut);
   fg=fopen(gbiasfn,"w");
   fprintf (fg,"#1-z 2-r(z) 3-g(z) ");
@@ -56,6 +56,8 @@ void write_predictions(ParamCoLoRe *par)
     fprintf(fg,"%d-bg_%d(z) ",ipop+4,ipop+1);	
   for (int ipop=0; ipop<par->n_imap; ipop++)
     fprintf(fg,"%d-bi_%d(z) ",ipop+4+par->n_srcs,ipop+1);
+  for (int ipop=0; ipop<par->n_cstm; ipop++)
+    fprintf(fg,"%d-bc_%d(z) ",ipop+4+par->n_srcs+par->n_imap,ipop+1);
   fprintf(fg,"\n");
 
   // outter loop is over redshifts
@@ -90,9 +92,7 @@ void write_predictions(ParamCoLoRe *par)
 	fprintf (fxi, "# r[Mpc/h] xi_tt xi_ll*b^2 xi_ll\n");
 	for (int i=0; i<Nk; i++) {
 	  if ((ka[i]>=kminout) && (ka[i]<=kmaxout))
-	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i],
-                     pklin[i]*bias*exp(-rsm2_gm*ka[i]*ka[i]),
-                     pklin[i]*exp(-rsm2_mm*ka[i]*ka[i]));
+	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i], pklin[i]*bias*exp(-rsm2_gm*ka[i]*ka[i]), pklin[i]*exp(-rsm2_mm*ka[i]*ka[i]));
 	  if ((ra[i]>=rminout) && (ra[i]<=rmaxout))
 	    fprintf (fxi,"%g %g %g %g\n",ra[i], xi[i],
                      xilin[i]*bias, xilin[i]);
@@ -115,6 +115,36 @@ void write_predictions(ParamCoLoRe *par)
 	// now open the files
 	sprintf(fnamepk,"%s_pk_imap_pop%i_z%.3lf.txt",par->prefixOut,ipop,z);
 	sprintf(fnamexi,"%s_xi_imap_pop%i_z%.3lf.txt",par->prefixOut,ipop,z);
+	fpk=fopen(fnamepk,"w");
+	fprintf (fpk, "# k[h/Mpc] P_tt P_tl P_ll\n");
+	fxi=fopen(fnamexi,"w");
+	fprintf (fxi, "# k[Mpc/h] xi_tt xi_ll*b^2 xi_ll\n");
+	for (int i=0; i<Nk; i++) {
+	  if ((ka[i]>=kminout) && (ka[i]<=kmaxout))
+	    fprintf (fpk,"%g %g %g %g\n",ka[i],pk[i],
+                     pklin[i]*bias*exp(-rsm2_gm*ka[i]*ka[i]),
+                     pklin[i]*exp(-rsm2_mm*ka[i]*ka[i]));
+	  if ((ra[i]>=rminout) && (ra[i]<=rmaxout))
+	    fprintf (fxi,"%g %g %g %g\n",ra[i],xi[i], xilin[i]*bias, xilin[i]);
+	}
+	fclose(fpk);
+	fclose(fxi);
+      }
+    }
+    if(par->do_cstm) {
+      for (int ipop=0; ipop<par->n_cstm; ipop++) {
+	double bias=get_bg(par,r,BG_BZ_CSTM,ipop);
+	fprintf(fg,"%g ",bias);
+#ifdef _DEBUG
+	print_info ("       Population %i, bias %g. \n",ipop,bias);
+#endif //_DEBUG
+	for (int i=0; i<Nk; i++) pk[i]=pklin[i]*bias*bias*exp(-rsm2_mm*ka[i]*ka[i]);
+	pk2xi(Nk,ka,pk,ra,xi);
+	for (int i=0; i<Nk; i++) xi[i]=exp(xi[i])-1;
+	xi2pk(Nk,ra,xi,ka,pk);
+	// now open the files
+	sprintf(fnamepk,"%s_pk_custom_pop%i_z%.3lf.txt",par->prefixOut,ipop,z);
+	sprintf(fnamexi,"%s_xi_custom_pop%i_z%.3lf.txt",par->prefixOut,ipop,z);
 	fpk=fopen(fnamepk,"w");
 	fprintf (fpk, "# k[h/Mpc] P_tt P_tl P_ll\n");
 	fxi=fopen(fnamexi,"w");

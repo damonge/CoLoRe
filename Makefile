@@ -9,11 +9,11 @@ OPTIONS = -Wall -Wno-format-overflow -O3 -std=c99
 #Use double precision integer (enable in general)
 DEFINEFLAGS += -D_LONGIDS
 #Use normalized bias model
-#DEFINEFLAGS += -D_BIAS_MODEL_2
+DEFINEFLAGS += -D_BIAS_MODEL_2
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
-#Use new shear method
-DEFINEFLAGS += -D_USE_NEW_LENSING
+#Use new lensing method
+#DEFINEFLAGS += -D_USE_NEW_LENSING
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
@@ -101,8 +101,8 @@ OPTIONS += $(DEFINEFLAGS)
 INC_ALL = -I./src $(GSL_INC) $(FFTW_INC) $(FITS_INC) $(HDF5_INC) $(CONF_INC) $(SHT_INC) $(HPIX_INC)
 LIB_ALL = $(GSL_LIB) $(FFTW_LIB) $(FITS_LIB) $(HDF5_LIB) $(CONF_LIB) $(SHT_LIB) $(HPIX_LIB) -lconfig -lgsl -lgslcblas $(LIB_FFTW) -lcfitsio -lchealpix
 ifeq ($(strip $(ADD_EXTRA_KAPPA)),yes)
-DEFINEFLAGS += -D_ADD_EXTRA_KAPPA -D_WITH_SHT
-LIB_ALL += -lsharp -lfftpack -lc_utils
+#DEFINEFLAGS += -D_ADD_EXTRA_KAPPA -D_WITH_SHT
+#LIB_ALL += -lsharp -lfftpack -lc_utils
 endif #EXTRA_KAPPA
 ifeq ($(strip $(USE_HDF5)),yes)
 DEFINEFLAGS += -D_HAVE_HDF5
@@ -121,8 +121,9 @@ FOURIERO = src/fourier.o
 DENSO = src/density.o
 SRCSO = src/srcs.o
 IMAPO = src/imap.o
+CSTMO = src/cstm.o
 KAPPAO = src/kappa.o
-SHEARO = src/shear.o
+LENSINGO = src/lensing.o
 ISWO = src/isw.o
 IOO = src/io.o
 HPIXO = src/healpix_extra.o
@@ -130,7 +131,7 @@ BEAMO = src/beaming.o
 PREDICTO = src/predictions.o
 FFTLOGO = src/fftlog.o
 MAIN = src/main.c
-OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(KAPPAO) $(SHEARO) $(ISWO) $(FFTLOGO) $(PREDICTO)
+OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(BEAMO) $(IOO) $(HPIXO) $(SRCSO) $(IMAPO) $(CSTMO) $(KAPPAO) $(LENSINGO) $(ISWO) $(FFTLOGO) $(PREDICTO)
 #OFILES = $(COMMONO) $(COSMOMADO) $(COSMOO) $(FOURIERO) $(DENSO) $(LCO) $(IOO) $(HPIXO) $(PIXO) $(PREDICTO) $(FFTLOGO)
 
 EXEC = CoLoRe

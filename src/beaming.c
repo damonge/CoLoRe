@@ -118,8 +118,8 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 
 //WARNING!!!! !: x should go from 0 to ngrid-1!!!!! Remove this when taken care of
 int interpolate_from_grid(ParamCoLoRe *par,double *x,
-        flouble *d,flouble v[3],flouble t[6],flouble *pd,flouble *g,
-        int flag_return,int interp_type)
+                          flouble *d,flouble v[3],flouble t[6],flouble *pd,flouble *g,
+                          int flag_return,int interp_type)
 {
   long ix0[3];
   double h0x[3];
@@ -301,8 +301,8 @@ void get_beam_properties(ParamCoLoRe *par)
   if(par->do_kappa)
     kappa_beams_preproc(par);
 #ifdef _USE_NEW_LENSING
-  if(par->do_shear)
-    shear_beams_preproc(par);
+  if(par->do_lensing)
+    lensing_beams_preproc(par);
 #endif //_USE_NEW_LENSING
   if(par->do_isw)
     isw_beams_preproc(par);
@@ -310,6 +310,8 @@ void get_beam_properties(ParamCoLoRe *par)
     srcs_beams_preproc(par);
   if(par->do_imap)
     imap_beams_preproc(par);
+  if(par->do_cstm)
+    cstm_beams_preproc(par);
 
   if(NodeThis==0) timer(0);
 
@@ -336,8 +338,8 @@ void get_beam_properties(ParamCoLoRe *par)
     if(par->do_kappa)
       kappa_get_beam_properties(par);
 #ifdef _USE_NEW_LENSING
-    if(par->do_shear)
-      shear_get_beam_properties(par);
+    if(par->do_lensing)
+      lensing_get_beam_properties(par);
 #endif //_USE_NEW_LENSING
     if(par->do_isw)
       isw_get_beam_properties(par);
@@ -345,6 +347,8 @@ void get_beam_properties(ParamCoLoRe *par)
       srcs_get_beam_properties(par);
     if(par->do_imap)
       imap_get_beam_properties(par);
+    if(par->do_cstm)
+      cstm_get_beam_properties(par);
   }
 #ifdef _HAVE_MPI
   free(buffer_sr);
@@ -353,8 +357,8 @@ void get_beam_properties(ParamCoLoRe *par)
   if(par->do_kappa)
     kappa_beams_postproc(par);
 #ifdef _USE_NEW_LENSING
-  if(par->do_shear)
-    shear_beams_postproc(par); 
+  if(par->do_lensing)
+    lensing_beams_postproc(par); 
 #endif //_USE_NEW_LENSING
   if(par->do_isw)
     isw_beams_postproc(par);
@@ -362,6 +366,8 @@ void get_beam_properties(ParamCoLoRe *par)
     srcs_beams_postproc(par);
   if(par->do_imap)
     imap_beams_postproc(par);
+  if(par->do_cstm)
+    cstm_beams_postproc(par);
 
   if(NodeThis==0) timer(2);
   print_info("\n");
