@@ -13,13 +13,13 @@ DEFINEFLAGS += -D_BIAS_MODEL_2
 #Use linear bias model
 #DEFINEFLAGS += -D_BIAS_MODEL_3
 #Use new lensing method
-#DEFINEFLAGS += -D_USE_NEW_LENSING
+#DEFINEFLAGS += -D_USE_FAST_LENSING
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
 USE_SINGLE_PRECISION = yes
 #Add random perturbations to kappa from redshifts outside the box
-ADD_EXTRA_KAPPA = yes
+#ADD_EXTRA_KAPPA = yes
 #Compile with HDF5 capability? Set to "yes" or "no"
 USE_HDF5 = no
 #Use OMP parallelization? Set to "yes" or "no"

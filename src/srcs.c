@@ -21,7 +21,7 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-#ifdef _USE_NEW_LENSING
+#ifdef _USE_FAST_LENSING
 static int get_r_index_lensing(HealpixShellsAdaptive *sh,double r,int ir_start)
 {
   int gotit=0;
@@ -62,7 +62,7 @@ static int get_r_index_lensing(HealpixShellsAdaptive *sh,double r,int ir_start)
 
   return ir0;
 }
-#endif //_USE_NEW_LENSING
+#endif //_USE_FAST_LENSING
 
 
 static inline void cart2sph(double x,double y,double z,double *r,double *cth,double *phi)
@@ -463,7 +463,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
     double idx=par->n_grid/par->l_box;
 
     //Kernels for the LOS integrals
-#ifndef _USE_NEW_LENSING
+#ifndef _USE_FAST_LENSING
     double *fac_r_0=NULL,*fac_r_1=NULL,*fac_r_2=NULL;
     if(cat->has_lensing) {
       fac_r_0=my_malloc(cat->nr*sizeof(double));
@@ -478,7 +478,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	fac_r_2[ip]=rm*rm*pg*cat->dr;
       }
     }
-#endif //_USE_NEW_LENSING
+#endif //_USE_FAST_LENSING
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -528,7 +528,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       	}
       }
 
-#ifndef _USE_NEW_LENSING
+#ifndef _USE_FAST_LENSING
       //Compute lensing
       if(cat->has_lensing) {
 	//Compute linear transformations needed for lensing
@@ -612,15 +612,15 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
         cat->srcs[ip].dra+=dty;
         cat->srcs[ip].ddec+=dtx;
       }
-#endif //_USE_NEW_LENSING
+#endif //_USE_FAST_LENSING
     }//end omp for
-#ifndef _USE_NEW_LENSING
+#ifndef _USE_FAST_LENSING
     if(cat->has_lensing) {
       free(fac_r_0);
       free(fac_r_1);
       free(fac_r_2);
     }
-#endif //_USE_NEW_LENSING
+#endif //_USE_FAST_LENSING
   }//end omp parallel
 }
 
@@ -643,12 +643,12 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
   {
     int ii;
     double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
-#ifdef _USE_NEW_LENSING
+#ifdef _USE_FAST_LENSING
     int ir_s=0;
     HealpixShellsAdaptive *smap=NULL;
     if(cat->has_lensing)
       smap = par->smap;
-#endif //_USE_NEW_LENSING
+#endif //_USE_FAST_LENSING
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -663,7 +663,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
 
       //Lensing
       if(cat->has_lensing) {
-#ifdef _USE_NEW_LENSING
+#ifdef _USE_FAST_LENSING
         int ax;
         long ipix_up,ipix_lo,ibase,ibase_here;
         double u[3];
@@ -718,7 +718,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
         cat->srcs[ii].kappa=kp_lo*(1-h)+kp_up*h;
         cat->srcs[ii].dra=dy_lo*(1-h)+dy_up*h;
         cat->srcs[ii].ddec=dx_lo*(1-h)+dx_up*h;
-#endif //_USE_NEW_LENSING
+#endif //_USE_FAST_LENSING
         cat->srcs[ii].dra*=RTOD;
         cat->srcs[ii].ddec*=RTOD;
       }
