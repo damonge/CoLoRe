@@ -4,7 +4,7 @@ CoLoRe is a parallelized code to generate fast 3D realization of a wide variety 
 
 ## 1 Methods
 
-The methods used by CoLoRe are described in [Ramirez-Perez et al. 2021](TBD).
+The methods used by CoLoRe are described in [Ramirez-Perez et al. 2021](https://arxiv.org/abs/2111.05069).
 
 When in doubt, bear in mind that by default CoLoRe uses the following units:
  - Lenghts: Mpc/h
