@@ -117,8 +117,8 @@ static void get_rvel(ParamCoLoRe *par,int ix,int iy,int iz,
 
   *rvel = 0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
 #ifdef TVEL
-  *vtheta = 0.5*idx*(v[0]*(u[0]*u[2]/sqrt(1-u[2]*u[2])) + v[1]*(u[1]*u[2]/sqrt(1-u[2]*u[2])) + v[2]*(-sqrt(1-u[2]*u[2])));
-  *vphi = 0.5*idx*(v[0]*(-u[1]/sqrt(1-u[2]*u[2])) + v[1]*(u[0]/sqrt(1-u[2]*u[2])));
+  *vtheta = 0.5*idx*(v[0]*(u[0]*u[2]/sqrt(1-u[2]*u[2]))+v[1]*(u[1]*u[2]/sqrt(1-u[2]*u[2]))+v[2]*(-sqrt(1-u[2]*u[2])));
+  *vphi = 0.5*idx*(v[0]*(-u[1]/sqrt(1-u[2]*u[2]))+v[1]*(u[0]/sqrt(1-u[2]*u[2])));
 #endif
 
 }

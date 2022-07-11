@@ -1,0 +1,113 @@
+MPI task 0, OMP thread count starts at 0
+ MPIThreadsOK = 1
+
+|-------------------------------------------------|
+|                      CoLoRe                     |
+|-------------------------------------------------|
+
+The cosmological model is:
+ O_M=0.300 O_L=0.700 O_K=0.000
+ O_B=0.300 w=-1.000 h=0.700
+ Flat universe, standard cosmological constant
+
+ Time of equality: a_eq=0.75416
+ Particle horizon: chi_H(0)=9.908E+03 Mpc/h
+ Present growth factor: D_0=0.779
+
+Reading P_k from file: output/pk.txt
+  Original sigma8=0.799990
+  Sigma_Gauss should be 0.875326
+Node 0 will allocate 0.597 GB [0.190 GB (Gaussian), 0.302 GB (1LPT), 0.102 GB (srcs), 0.002 GB (imap), 0.375 MB (kappa), 0.375 MB (isw), 0.375 MB (custom)]
+
+Run parameters: 
+  0.000 < z < 0.150
+  0.300 < r/(Mpc/h) < 434.105
+  L_box = 874.993 Mpc/h, N_grid = 256 
+  Scales resolved: 7.181E-03 < k < 9.156E-01 h/Mpc
+  Fourier-space resolution: dk = 7.181E-03 h/Mpc
+  Real-space resolution: dx = 3.418E+00 Mpc/h
+  Density field pre-smoothed on scales: x_s = 1.000E+00 Mpc/h
+  1 galaxy populations
+  Some populations will include LoS skewers
+  1 intensity mapping species
+  1 custom maps
+  1 lensing source planes
+  1 ISW source planes
+  Will include lensing in source catalog
+
+Seed : 1000
+*** Creating Gaussian density field 
+Creating Fourier-space density and Newtonian potential 
+>    Relative time ellapsed 2257.6 ms
+Transforming density and Newtonian potential
+>    Relative time ellapsed 480.6 ms
+Normalizing density and Newtonian potential 
+>    Relative time ellapsed 19.6 ms
+ <d>=-2.325E-10, <d^2>=8.941E-01
+
+*** Writing density field (native format)
+>    Relative time ellapsed 241.5 ms
+
+*** Creating physical matter density
+ 1LPT
+ - Transforming density field
+ - Computing displacement field
+ - Transform displacement field
+ - Computing particle positions
+ 1st-order displacement : [1.738749E-10,4.895681E-10,4.054534E-13] 2.882436E+01
+ - Undoing padding
+ - Interpolating positions into density field
+ - Normalizing density field
+ Total density : -3.546011E-04
+>    Relative time ellapsed 2258.7 ms
+
+*** Writing density field (native format)
+>    Relative time ellapsed 189.3 ms
+
+*** Computing normalization of density field
+z=0.000E+00, <d^2_0>=1.004E+00, <d^2_0>=1.004E+00, <d^2_0>=1.004E+00, 00000000000
+z=3.771E-02, <d^2_0>=1.004E+00, <d^2_0>=1.004E+00, <d^2_0>=1.004E+00, 00000349448
+z=8.083E-02, <d^2_0>=1.026E+00, <d^2_0>=1.026E+00, <d^2_0>=1.026E+00, 00002350328
+z=1.291E-01, <d^2_0>=1.121E+00, <d^2_0>=1.121E+00, <d^2_0>=1.121E+00, 00006084072
+z=1.512E-01, <d^2_0>=1.121E+00, <d^2_0>=1.121E+00, <d^2_0>=1.121E+00, 00006469528
+>    Relative time ellapsed 1501.3 ms
+
+*** Getting point sources
+ 0-th galaxy population
+   Poisson-sampling
+   There will be 97421 objects in total 
+   Assigning coordinates
+>    Relative time ellapsed 892.7 ms
+
+*** Filling up intensity maps
+ 0-th intensity mapping species
+>    Relative time ellapsed 6312.8 ms
+
+*** Re-distributing sources across nodes
+>    Relative time ellapsed 3.0 ms
+
+*** Getting LOS information
+>    Relative time ellapsed 1958.9 ms
+
+*** Writing kappa source maps
+>    Relative time ellapsed 13.1 ms
+
+*** Writing isw source maps
+>    Relative time ellapsed 5.1 ms
+
+*** Writing source catalogs
+ 0-th population (FITS)
+>    Relative time ellapsed 421.3 ms
+
+*** Writing intensity maps
+ 0-th species
+>    Relative time ellapsed 20.4 ms
+
+*** Writing custom maps
+ 0-th species
+>    Relative time ellapsed 5.2 ms
+
+
+|-------------------------------------------------|
+
+>    Total time ellapsed 16702.8 ms
