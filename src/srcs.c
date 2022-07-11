@@ -84,8 +84,9 @@ static inline void cart2sph(double x,double y,double z,double *r,double *cth,dou
   }
 }
 
-static double get_rvel(ParamCoLoRe *par,int ix,int iy,int iz,
-		       double x0,double y0,double z0,double rr)
+static void get_rvel(ParamCoLoRe *par,int ix,int iy,int iz,
+		       double x0,double y0,double z0,double rr,
+		       double* rvel, double* vtheta, double* vphi)
 {
   double v[3],u[3];
   double idx=par->n_grid/par->l_box;
@@ -114,7 +115,12 @@ static double get_rvel(ParamCoLoRe *par,int ix,int iy,int iz,
   else
     v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
 
-  return 0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+  *rvel = 0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+#ifdef TVEL
+  *vtheta = 0.5*idx*(v[0]*(u[0]*u[2]/sqrt(1-u[2]*u[2])) + v[1]*(u[1]*u[2]/sqrt(1-u[2]*u[2])) + v[2]*(-sqrt(1-u[2]*u[2])));
+  *vphi = 0.5*idx*(v[0]*(-u[1]/sqrt(1-u[2]*u[2])) + v[1]*(u[0]/sqrt(1-u[2]*u[2])));
+#endif
+
 }
 
 static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
@@ -250,7 +256,9 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	  if(npp>0) {
 	    int ip;
 	    double rr=sqrt(x0*x0+y0*y0+z0*z0);
-	    double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
+	    double rvel, vtheta, vphi;
+	    get_rvel(par,ix,iy,iz,x0,y0,z0,rr, &rvel, &vtheta, &vphi);
+	    rvel *=factor_vel;
 	    double dz_rsd=rvel*get_bg(par,rr,BG_V1,0);
 	    for(ip=0;ip<npp;ip++) {
 	      int ax;
@@ -262,6 +270,12 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+1]=y0+dx*(rng_01(rng_thr)-0.5);
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+2]=z0+dx*(rng_01(rng_thr)-0.5);
 	      par->cats_c[ipop]->pos[NPOS_CC*pid+3]=dz_rsd;
+	      #ifdef TVEL
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+4]=vtheta;
+	      par->cats_c[ipop]->pos[NPOS_CC*pid+5]=vphi;
+	      #endif
+	      
+
 	      for(ax=0;ax<3;ax++)
 		pos[ax]=par->cats_c[ipop]->pos[NPOS_CC*pid+ax];
 
@@ -409,6 +423,11 @@ static void srcs_get_local_properties_single(ParamCoLoRe *par,int ipop)
       par->cats[ipop]->srcs[ii].dec=90-RTOD*acos(cth);
       par->cats[ipop]->srcs[ii].z0=get_bg(par,r,BG_Z,0);
       par->cats[ipop]->srcs[ii].dz_rsd=pos[3];
+      #ifdef TVEL
+      par->cats[ipop]->srcs[ii].vtheta=pos[4];
+      par->cats[ipop]->srcs[ii].vphi=pos[5];
+      #endif
+
       par->cats[ipop]->srcs[ii].e1=-1;
       par->cats[ipop]->srcs[ii].e2=-1;
     }//end omp for
@@ -634,11 +653,11 @@ void srcs_get_beam_properties(ParamCoLoRe *par)
 static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
 {
   Catalog *cat=par->cats[ipop];
-  CatalogCartesian *catc=par->cats_c[ipop];
+  //CatalogCartesian *catc=par->cats_c[ipop];
 
 #ifdef _HAVE_OMP
 #pragma omp parallel default(none)              \
-  shared(par,cat,catc,NNodes,NodeThis)
+  shared(par,cat,NNodes,NodeThis)
 #endif //_HAVE_OMP
   {
     int ii;

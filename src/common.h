@@ -159,7 +159,12 @@ extern int NNodes;
 extern int IThread0;
 extern int MPIThreadsOK;
 
+#ifdef TVEL
+#define NPOS_CC 6
+#else
 #define NPOS_CC 4
+#endif
+
 typedef struct {
   int nsrc;
   float *pos;
@@ -171,6 +176,10 @@ typedef struct {
   float dec;    //Declination
   float z0;     //Cosmological redshift
   float dz_rsd; //RSD contribution
+#ifdef TVEL
+  float vtheta;
+  float vphi;
+#endif
   float e1;
   float e2;
   float kappa;

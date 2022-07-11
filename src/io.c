@@ -1025,10 +1025,10 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 #ifdef _HAVE_HDF5
     hid_t file_id,gal_types[6];
     hsize_t chunk_size=128;
-    size_t dst_offset[9]={HOFFSET(Src,ra),HOFFSET(Src,dec),HOFFSET(Src,z0),HOFFSET(Src,dz_rsd),HOFFSET(Src,e1),
+    size_t dst_offset[11]={HOFFSET(Src,ra),HOFFSET(Src,dec),HOFFSET(Src,z0),HOFFSET(Src,dz_rsd),HOFFSET(Src,vtheta),HOFFSET(Src,vphi),HOFFSET(Src,e1),
                           HOFFSET(Src,e2),HOFFSET(Src,kappa),HOFFSET(Src,dra),HOFFSET(Src,ddec)};
-    const char *names[9]={"RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2","K" ,"DRA","DDEC"};
-    char *tunit[9]=      {"DEG","DEG","NA"     ,"NA"    ,"NA","NA","NA","DEG","DEG"};
+    const char *names[11]={"RA" ,"DEC","Z_COSMO","DZ_RSD","VTHETA","VPHI","E1","E2","K" ,"DRA","DDEC"};
+    char *tunit[11]=      {"DEG","DEG","NA"     ,"NA"    ,"NA","NA","NA","NA","NA","DEG","DEG"};
     gal_types[0]=H5T_NATIVE_FLOAT;
     gal_types[1]=H5T_NATIVE_FLOAT;
     gal_types[2]=H5T_NATIVE_FLOAT;
@@ -1038,6 +1038,8 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     gal_types[6]=H5T_NATIVE_FLOAT;
     gal_types[7]=H5T_NATIVE_FLOAT;
     gal_types[8]=H5T_NATIVE_FLOAT;
+    gal_types[9]=H5T_NATIVE_FLOAT;
+    gal_types[10]=H5T_NATIVE_FLOAT;
 
     print_info(" %d-th population (HDF5)\n",ipop);
     sprintf(fname,"%s_srcs_s%d_%d.h5",par->prefixOut,ipop+1,NodeThis);
@@ -1072,13 +1074,21 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     int status=0;
     fitsfile *fptr;
     int *type_arr;
-    float *ra_arr,*dec_arr,*z0_arr,*rsd_arr,*e1_arr,*e2_arr,*k_arr,*dra_arr,*ddec_arr;
+    float *ra_arr,*dec_arr,*z0_arr,*rsd_arr,*vtheta_arr,*vphi_arr,*e1_arr,*e2_arr,*k_arr,*dra_arr,*ddec_arr;
     int nfields=5;
+#ifdef TVEL
+    char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD", "VTHETA", "VPHI", "E1","E2","KAPPA","DRA","DDEC"};
+    char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    , "1E",     "1E",   "1E","1E","1E"   ,"1E!","1E"};
+    char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    , "NA",     "NA",   "NA","NA","NA"   ,"DEG","DEG"};
+    //char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2","KAPPA","DRA","DDEC"};
+    nfields+=2;
+#else
     char *ttype[]={"TYPE","RA" ,"DEC","Z_COSMO","DZ_RSD","E1","E2","KAPPA","DRA","DDEC"};
     char *tform[]={"1J"  ,"1E" ,"1E" ,"1E"     ,"1E"    ,"1E","1E","1E"   ,"1E!","1E"};
     char *tunit[]={"NA"  ,"DEG","DEG","NA"     ,"NA"    ,"NA","NA","NA"   ,"DEG","DEG"};
+#endif
     if(par->cats[ipop]->has_lensing)
-      nfields=10;
+      nfields+=5;
 
     print_info(" %d-th population (FITS)\n",ipop);
     sprintf(fname,"!%s_srcs_s%d_%d.fits",par->prefixOut,ipop+1,NodeThis);
@@ -1093,6 +1103,10 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
     dec_arr=my_malloc(nrw*sizeof(float));
     z0_arr=my_malloc(nrw*sizeof(float));
     rsd_arr=my_malloc(nrw*sizeof(float));
+#ifdef TVEL
+    vtheta_arr=my_malloc(nrw*sizeof(float));
+    vphi_arr=my_malloc(nrw*sizeof(float));
+#endif
     e1_arr=my_malloc(nrw*sizeof(float));
     e2_arr=my_malloc(nrw*sizeof(float));
     k_arr=my_malloc(nrw*sizeof(float));
@@ -1113,6 +1127,10 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
 	dec_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dec;
 	z0_arr[ii]=par->cats[ipop]->srcs[row_here+ii].z0;
 	rsd_arr[ii]=par->cats[ipop]->srcs[row_here+ii].dz_rsd;
+#ifdef TVEL
+    vtheta_arr[ii]=par->cats[ipop]->srcs[row_here+ii].vtheta;
+    vphi_arr[ii]=par->cats[ipop]->srcs[row_here+ii].vphi;
+#endif
         if(par->cats[ipop]->has_lensing) {
 	  e1_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e1;
 	  e2_arr[ii]=par->cats[ipop]->srcs[row_here+ii].e2;
@@ -1126,12 +1144,20 @@ static void write_catalog(ParamCoLoRe *par,int ipop)
       fits_write_col(fptr,TFLOAT,3,row_here+1,1,nrw_here,dec_arr,&status);
       fits_write_col(fptr,TFLOAT,4,row_here+1,1,nrw_here,z0_arr,&status);
       fits_write_col(fptr,TFLOAT,5,row_here+1,1,nrw_here,rsd_arr,&status);
+#ifdef TVEL
+        fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,vtheta_arr,&status);
+        fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,vphi_arr,&status);
+        int offset = 2;
+        //int offset = 0;
+#else
+        int offset = 0;
+#endif
       if(par->cats[ipop]->has_lensing) {
-	fits_write_col(fptr,TFLOAT,6,row_here+1,1,nrw_here,e1_arr,&status);
-	fits_write_col(fptr,TFLOAT,7,row_here+1,1,nrw_here,e2_arr,&status);
-	fits_write_col(fptr,TFLOAT,8,row_here+1,1,nrw_here,k_arr,&status);
-	fits_write_col(fptr,TFLOAT,9,row_here+1,1,nrw_here,dra_arr,&status);
-	fits_write_col(fptr,TFLOAT,10,row_here+1,1,nrw_here,ddec_arr,&status);
+	fits_write_col(fptr,TFLOAT,6+offset,row_here+1,1,nrw_here,e1_arr,&status);
+	fits_write_col(fptr,TFLOAT,7+offset,row_here+1,1,nrw_here,e2_arr,&status);
+	fits_write_col(fptr,TFLOAT,8+offset,row_here+1,1,nrw_here,k_arr,&status);
+	fits_write_col(fptr,TFLOAT,9+offset,row_here+1,1,nrw_here,dra_arr,&status);
+	fits_write_col(fptr,TFLOAT,10+offset,row_here+1,1,nrw_here,ddec_arr,&status);
       }
 
       row_here+=nrw_here;
