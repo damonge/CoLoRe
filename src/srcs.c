@@ -156,15 +156,15 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long indexz=iz*((long)(ngx*par->n_grid));
-      double z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      double z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long indexy=iy*ngx;
-	double y0=(iy+0.5)*dx-par->pos_obs[1];
+	double y0=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int npp=0;
 	  long index=ix+indexy+indexz;
-	  double x0=(ix+0.5)*dx-par->pos_obs[0];
+	  double x0=(ix+0.0)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  if(r<par->l_box/2+20.) {
 	    double ndens=get_bg(par,r,BG_NZ_SRCS,ipop);
@@ -238,13 +238,13 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long indexz=iz*((long)(ngx*par->n_grid));
-      double z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      double z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long indexy=iy*ngx;
-	double y0=(iy+0.5)*dx-par->pos_obs[1];
+	double y0=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
-	  double x0=(ix+0.5)*dx-par->pos_obs[0];
+	  double x0=(ix+0.0)*dx-par->pos_obs[0];
 	  long index=ix+indexy+indexz;
 	  int npp=nsources[index];
 	  if(npp>0) {

@@ -1048,14 +1048,14 @@ static void densclip(ParamCoLoRe *par)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long indexz=iz*((long)(ngx*par->n_grid));
-      flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      flouble z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long indexy=iy*ngx;
-	flouble y0=(iy+0.5)*dx-par->pos_obs[1];
+	flouble y0=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  long index=ix+indexy+indexz;
-	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
+	  flouble x0=(ix+0.0)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double dg=get_bg(par,r,BG_D1,0);
 	  double delta=par->grid_dens[index];
@@ -1084,14 +1084,14 @@ static void lognormalize(ParamCoLoRe *par)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long indexz=iz*((long)(ngx*par->n_grid));
-      flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      flouble z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long indexy=iy*ngx;
-	flouble y0=(iy+0.5)*dx-par->pos_obs[1];
+	flouble y0=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  long index=ix+indexy+indexz;
-	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
+	  flouble x0=(ix+0.0)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double dg=get_bg(par,r,BG_D1,0);
 	  double delta=par->grid_dens[index];
@@ -1155,14 +1155,14 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long iz0=iz*((long)(2*(par->n_grid/2+1)*par->n_grid));
-      flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
+      flouble z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long iy0=iy*2*(par->n_grid/2+1);
-	flouble y0=(iy+0.5)*dx-par->pos_obs[1];
+	flouble y0=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  long index=ix+iy0+iz0;
-	  flouble x0=(ix+0.5)*dx-par->pos_obs[0];
+	  flouble x0=(ix+0.0)*dx-par->pos_obs[0];
 	  double r=sqrt(x0*x0+y0*y0+z0*z0);
 	  double redshift=get_bg(par,r,BG_Z,0);
 	  int ind_z=(int)(redshift*idz)+1;
