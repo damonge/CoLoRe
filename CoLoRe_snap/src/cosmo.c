@@ -317,6 +317,9 @@ void cosmo_set(ParamCoLoRe *par)
   par->growth_d1=d1;
   par->growth_d2=d2;
   par->growth_dv=(d1*hz*fz)/(fgrowth0*h0); //This is for the comoving velocity
+  par->ihub=1/hz;
+  par->fgrowth_0=fgrowth0;
+  par->hubble_0=h0;
 
   pk_linear_set(par);
 

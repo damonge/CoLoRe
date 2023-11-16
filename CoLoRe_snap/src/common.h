@@ -176,6 +176,9 @@ typedef struct {
   flouble growth_d1; //Growth factor at z_snap
   flouble growth_d2; //2nd-orther growth at z_snap
   flouble growth_dv; //Velocity growth at z_snap
+  flouble ihub; //Hubble scale (in Mpc/h)
+  flouble fgrowth_0; //f(z=0)
+  flouble hubble_0; //inverse hubble scale at z=0
   int nz_here; //Number of cells in the z-direction stored in this node
   int iz0_here; //index of the first cell in the z-direction stored in this node
   int nz_max;

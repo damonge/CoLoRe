@@ -21,40 +21,21 @@
 ///////////////////////////////////////////////////////////////////////
 #include "common.h"
 
-/*
-static double get_rvel(ParamCoLoRe *par,int ix,int iy,int iz,
-		       double x0,double y0,double z0,double rr)
+static double get_rvel(ParamCoLoRe *par,int ix,int iy,int iz)
 {
-  double v[3],u[3];
+  double v;
   double idx=par->n_grid/par->l_box;
   long ngx=2*(par->n_grid/2+1);
-  long iz_hi=iz+1,iz_lo=iz-1,iz_0=iz;
-  long iy_hi=iy+1,iy_lo=iy-1,iy_0=iy;
-  long ix_hi=ix+1,ix_lo=ix-1,ix_0=ix;
-  if(iy==0) iy_lo=par->n_grid-1;
-  if(iy==par->n_grid-1) iy_hi=0;
+  long iz_0=iz, iy_0=iy;
+  long ix_hi=ix+1,ix_lo=ix-1;
   if(ix==0) ix_lo=par->n_grid-1;
   if(ix==par->n_grid-1) ix_hi=0;
   iz_0*=ngx*par->n_grid;
-  iz_lo*=ngx*par->n_grid;
-  iz_hi*=ngx*par->n_grid;
   iy_0*=ngx;
-  iy_lo*=ngx;
-  iy_hi*=ngx;
 
-  u[0]=x0/rr; u[1]=y0/rr; u[2]=z0/rr;
-  v[0]=par->grid_npot[ix_hi+iy_0+iz_0]-par->grid_npot[ix_lo+iy_0+iz_0];
-  v[1]=par->grid_npot[ix_0+iy_hi+iz_0]-par->grid_npot[ix_0+iy_lo+iz_0];
-  if(iz==0)
-    v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->slice_left[ix_0+iy_0];
-  else if(iz==par->nz_here-1)
-    v[2]=par->slice_right[ix_0+iy_0]-par->grid_npot[ix_0+iy_0+iz_lo];
-  else
-    v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
-
-  return 0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+  v=0.5*idx*(par->grid_npot[ix_hi+iy_0+iz_0]-par->grid_npot[ix_lo+iy_0+iz_0]);
+  return v;
 }
-*/
 
 static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 {
@@ -158,7 +139,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
     int ngx=2*(par->n_grid/2+1);
     unsigned int seed_thr=par->seed_rng+ithr+nthr*(ipop+par->n_srcs*IThread0);
     gsl_rng *rng_thr=init_rng(seed_thr);
-    //double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
+    double factor_vel=-par->fgrowth_0/(1.5*par->hubble_0*par->OmegaM);
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static)
@@ -177,15 +158,15 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	  int npp=nsources[index];
 	  if(npp>0) {
 	    int ip;
-	    //double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
-	    double dz_rsd=0;//rvel*get_bg(par,rr,BG_V1,0);
+	    double rvel=factor_vel*get_rvel(par,ix,iy,iz);
+	    double dx_rsd=rvel*par->growth_dv*par->ihub;
 	    for(ip=0;ip<npp;ip++) {
 	      long pid=np_tot_thr[ithr];
 
 	      par->cats[ipop]->pos[NPOS_CC*pid+0]=x0+dx*rng_01(rng_thr);
 	      par->cats[ipop]->pos[NPOS_CC*pid+1]=y0+dx*rng_01(rng_thr);
 	      par->cats[ipop]->pos[NPOS_CC*pid+2]=z0+dx*rng_01(rng_thr);
-	      par->cats[ipop]->pos[NPOS_CC*pid+3]=dz_rsd;
+	      par->cats[ipop]->pos[NPOS_CC*pid+3]=dx_rsd;
 	      np_tot_thr[ithr]++;
 	    }
 	  }
