@@ -71,6 +71,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
     gsl_rng *rng_thr=init_rng(seed_thr);
     double ndens=par->ndens[ipop];
     double bias=par->bias[ipop];
+    double threshold=par->threshold[ipop];
     double dnorm=par->dens_norm[ipop];
 
 #ifdef _HAVE_OMP
@@ -85,7 +86,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int npp=0;
 	  long index=ix+indexy+indexz;
-	  double lambda=ndens*cell_vol*bias_model(par->grid_dens[index],bias)*dnorm;
+	  double lambda=ndens*cell_vol*bias_model(par->grid_dens[index],bias, threshold)*dnorm;
 	  npp=rng_poisson(lambda,rng_thr);
 	  nsources[index]=npp;
 	  np_tot_thr[ithr]+=npp;

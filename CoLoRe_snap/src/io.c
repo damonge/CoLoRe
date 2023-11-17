@@ -88,6 +88,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->do_srcs=0;
   par->n_srcs=-1;
   par->bias=NULL;
+  par->threshold=NULL;
   par->ndens=NULL;
   par->dens_norm=NULL;
   par->nsources_this=NULL;
@@ -236,6 +237,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   if(par->n_srcs>0) {
     par->do_srcs=1;
     par->bias=my_malloc(par->n_srcs*sizeof(double));
+    par->threshold=my_malloc(par->n_srcs*sizeof(double));
     par->ndens=my_malloc(par->n_srcs*sizeof(double));
     par->dens_norm=my_malloc(par->n_srcs*sizeof(double));
     par->nsources_this=my_calloc(par->n_srcs,sizeof(long));
@@ -243,6 +245,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     for(ii=0;ii<par->n_srcs;ii++) {
       sprintf(c_dum,"srcs%d",ii+1);
       conf_read_double(conf,c_dum,"bias",&(par->bias[ii]));
+      conf_read_double(conf,c_dum,"threshold",&(par->threshold[ii]));
       conf_read_double(conf,c_dum,"ndens",&(par->ndens[ii]));
     }
   }
@@ -518,6 +521,7 @@ void param_colore_free(ParamCoLoRe *par)
 
   if(par->do_srcs) {
     free(par->bias);
+    free(par->threshold);
     free(par->ndens);
     free(par->dens_norm);
     if(par->cats!=NULL) {

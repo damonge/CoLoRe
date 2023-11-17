@@ -206,6 +206,7 @@ typedef struct {
   long *nsources_this; //Number of sources initially found in this node
   CatalogCartesian **cats; //Galaxy positions initially stored in this node
   double *bias;
+  double *threshold;
   double *ndens;
   double *dens_norm;
 } ParamCoLoRe;
@@ -232,9 +233,9 @@ unsigned long long get_max_memory(ParamCoLoRe *par,int just_test);
 CatalogCartesian *catalog_cartesian_alloc(int nsrcs);
 void catalog_cartesian_free(CatalogCartesian *cat);
 
-static inline double bias_model(double d,double b)
+static inline double bias_model(double d,double b, double t)
 {
-  if(d<=-1)
+  if(d<=-1 || d < t)
     return 0;
 #ifdef _BIAS_MODEL_2
   if(d < 0)

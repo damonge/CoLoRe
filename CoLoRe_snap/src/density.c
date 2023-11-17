@@ -1139,7 +1139,7 @@ void compute_density_normalization(ParamCoLoRe *par)
 	  long index=ix+iy0+iz0;
 	  double d=par->grid_dens[index];
 	  for(ipop=0;ipop<par->n_srcs;ipop++)
-	    norm_thr[ipop]+=bias_model(d,par->bias[ipop]);
+	    norm_thr[ipop]+=bias_model(d,par->bias[ipop], par->threshold[ipop]);
 	}
       }
     } //end omp for
