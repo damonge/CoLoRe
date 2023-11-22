@@ -57,9 +57,9 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
       report_error(1,"Cannot write Gaussian skewers with density type %d\n",par->dens_type);	    
     //Get D and r
     flouble dx=par->l_box/par->n_grid;
-    flouble z0=(iz+par->iz0_here+0.5)*dx-par->pos_obs[2];
-    flouble y0=(iy+0.5)*dx-par->pos_obs[1];
-    flouble x0=(ix+0.5)*dx-par->pos_obs[0];
+    flouble z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
+    flouble y0=(iy+0.0)*dx-par->pos_obs[1];
+    flouble x0=(ix+0.0)*dx-par->pos_obs[0];
     double r=sqrt(x0*x0+y0*y0+z0*z0);
     double dg=get_bg(par,r,BG_D1,0);
     *g=(log(1+par->grid_dens[ix_0+iy_0+iz_0]))/dg+dg*(par->sigma2_gauss)*0.5;
