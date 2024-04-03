@@ -232,6 +232,15 @@ void allocate_fftw(ParamCoLoRe *par)
     report_error(1,"Ran out of memory\n");
   par->grid_npot=(flouble *)(par->grid_npot_f);
 
+#ifdef _SPREC
+  par->grid_eta_f=fftwf_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
+#else //_SPREC
+  par->grid_eta_f= fftw_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
+#endif //_SPREC
+  if(par->grid_eta_f==NULL)
+    report_error(1,"Ran out of memory\n");
+  par->grid_eta=(flouble *)(par->grid_eta_f);
+
 #ifdef _HAVE_MPI
   par->slice_left =&(par->grid_npot[2*dsize]);
   par->slice_right=&(par->grid_npot[2*(dsize+par->n_grid*(par->n_grid/2+1))]);
@@ -245,11 +254,15 @@ void end_fftw(ParamCoLoRe *par)
     fftwf_free(par->grid_dens_f);
   if(par->grid_npot_f!=NULL)
     fftwf_free(par->grid_npot_f);
+  if(par->grid_eta_f!=NULL)
+    fftwf_free(par->grid_eta_f);
 #else //_SPREC
   if(par->grid_dens_f!=NULL)
     fftw_free(par->grid_dens_f);
   if(par->grid_npot_f!=NULL)
     fftw_free(par->grid_npot_f);
+  if(par->grid_eta_f!=NULL)
+    fftw_free(par->grid_eta_f);
 #endif //_SPREC
 
 #ifdef _HAVE_MPI
@@ -297,6 +310,7 @@ static void create_grids_fourier(ParamCoLoRe *par)
     int ii;
     double dk=2*M_PI/par->l_box;
     double idk3=1./(dk*dk*dk);
+    double vgrowth=par->growth_d1*par->growth_fz;
 #ifdef _HAVE_OMP
     int ithr=omp_get_thread_num();
 #else //_HAVE_OMP
@@ -345,11 +359,14 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
 	    par->grid_npot_f[index]=-par->prefac_lensing*par->grid_dens_f[index]/k_mod2;
+	    par->grid_eta_f[index]=par->grid_dens_f[index]*vgrowth*kx*kx/k_mod2;
 	    if(par->do_smoothing) {
 	      double sm=exp(-0.5*par->r2_smooth*k_mod2);
 	      par->grid_dens_f[index]*=sm;
-	      if(par->smooth_potential)
+	      if(par->smooth_potential) {
 		par->grid_npot_f[index]*=sm;
+		par->grid_eta_f[index]*=sm;
+	      }
 	    }
 	  }
 	}
@@ -377,6 +394,7 @@ void create_cartesian_fields(ParamCoLoRe *par)
   if(NodeThis==0) timer(0);
   fftw_wrap_c2r(par->n_grid,par->grid_dens_f,par->grid_dens);
   fftw_wrap_c2r(par->n_grid,par->grid_npot_f,par->grid_npot);
+  fftw_wrap_c2r(par->n_grid,par->grid_eta_f,par->grid_eta);
   if(NodeThis==0) timer(2);
 
   print_info("Normalizing density and Newtonian potential \n");
@@ -395,6 +413,7 @@ void create_cartesian_fields(ParamCoLoRe *par)
     for(ii=0;ii<n_grid_tot;ii++) {
       par->grid_dens[ii]*=norm;
       par->grid_npot[ii]*=norm;
+      par->grid_eta[ii]*=norm;
     }
   }//end omp parallel
   if(NodeThis==0) timer(2);
@@ -419,6 +438,8 @@ void create_cartesian_fields(ParamCoLoRe *par)
   print_info("\n");
 
   //Output density field if necessary
-  if(par->output_density)
+  if(par->output_density) {
     write_density_grid(par,"gaussian");
+    write_eta_grid(par);
+  }
 }

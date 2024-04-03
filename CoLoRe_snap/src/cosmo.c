@@ -315,6 +315,7 @@ void cosmo_set(ParamCoLoRe *par)
   double fz=csm_f_growth(pars,a);
   double hz=csm_hubble(pars,a);
   par->growth_d1=d1;
+  par->growth_fz=fz;
   par->growth_d2=d2;
   par->growth_dv=(d1*hz*fz)/(fgrowth0*h0); //This is for the comoving velocity
   par->ihub=1/hz;

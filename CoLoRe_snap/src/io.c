@@ -68,6 +68,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->growth_d1=-1;
   par->growth_d2=-1;
   par->growth_dv=-1;
+  par->growth_fz=-1;
   par->nz_here=512;
   par->iz0_here=0;
   par->nz_max=512;
@@ -78,6 +79,8 @@ static ParamCoLoRe *param_colore_new(void)
   par->grid_dens=NULL;
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
+  par->grid_eta_f=NULL;
+  par->grid_eta=NULL;
   par->sigma2_gauss=0;
 
   //IO parameters
@@ -331,6 +334,38 @@ void write_density_grid(ParamCoLoRe *par,char *prefix_dens)
     for(iy=0;iy<par->n_grid;iy++) {
       long index0=ngx*((long)(iy+iz*par->n_grid));
       my_fwrite(&(par->grid_dens[index0]),sizeof(flouble),par->n_grid,fo);
+    }
+  }
+  fclose(fo);
+  if(NodeThis==0) timer(2);
+  print_info("\n");
+}
+
+void write_eta_grid(ParamCoLoRe *par)
+{
+  FILE *fo;
+  char fname[256];
+  int iz;
+  int ngx=2*(par->n_grid/2+1);
+  int size_flouble=sizeof(flouble);
+  double lb=par->l_box;
+
+  if(NodeThis==0) timer(0);
+  print_info("*** Writing density field (native format)\n");
+  sprintf(fname,"%s_eta_%d.dat",par->prefixOut,NodeThis);
+  fo=fopen(fname,"wb");
+  if(fo==NULL) error_open_file(fname);
+  my_fwrite(&NNodes,sizeof(int),1,fo);
+  my_fwrite(&size_flouble,sizeof(int),1,fo);
+  my_fwrite(&lb,sizeof(double),1,fo);
+  my_fwrite(&(par->n_grid),sizeof(int),1,fo);
+  my_fwrite(&(par->nz_here),sizeof(int),1,fo);
+  my_fwrite(&(par->iz0_here),sizeof(int),1,fo);
+  for(iz=0;iz<par->nz_here;iz++) {
+    int iy;
+    for(iy=0;iy<par->n_grid;iy++) {
+      long index0=ngx*((long)(iy+iz*par->n_grid));
+      my_fwrite(&(par->grid_eta[index0]),sizeof(flouble),par->n_grid,fo);
     }
   }
   fclose(fo);
