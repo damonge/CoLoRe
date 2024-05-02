@@ -131,7 +131,7 @@ static void cstm_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
 	added=interpolate_from_grid(par,xn,&d,NULL,NULL,NULL,NULL,RETURN_DENS,INTERP_CIC);
 	if(added)
-	  cval+=kz[irr]*(bias_model(d,bz[irr])*normz[irr]-1);
+	  cval+=kz[irr]*(bias_model(d,bz[irr], -1)*normz[irr]-1);
       }
       cmap->data[ip]+=cval*dr;
     } //end omp for
