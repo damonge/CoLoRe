@@ -461,6 +461,7 @@ static void lpt_1(ParamCoLoRe *par)
     int ngx=2*(par->n_grid/2+1);
     flouble dx=par->l_box/par->n_grid;
     flouble xv[3];
+    flouble dg=par->growth_d1;
 
 #ifdef _DEBUG
     double d_sigma2_1_thr=0;
@@ -473,24 +474,21 @@ static void lpt_1(ParamCoLoRe *par)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long indexz=iz*((long)(ngx*par->n_grid));
-      xv[2]=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
+      xv[2]=(iz+par->iz0_here)*dx;
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long indexy=iy*ngx;
-	xv[1]=(iy+0.0)*dx-par->pos_obs[1];
+	xv[1]=iy*dx;
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int ax;
-	  double r,dg;
 	  long index=ix+indexy+indexz;
-	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
-	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
-	  dg=get_bg(par,r,BG_D1,0);
+	  xv[0]=ix*dx;
 	  for(ax=0;ax<3;ax++) {
 #ifdef _DEBUG
 	    d_mean_1_thr[ax]+=disp[ax][index];
 	    d_sigma2_1_thr+=disp[ax][index]*disp[ax][index];
 #endif //_DEBUG
-	    flouble p=xv[ax]+dg*disp[ax][index]+par->pos_obs[ax];
+	    flouble p=xv[ax]+dg*disp[ax][index];
 	    if(p<0) p+=par->l_box;
 	    if(p>=par->l_box) p-=par->l_box;
 	    disp[ax][index]=p;
@@ -836,6 +834,8 @@ static void lpt_2(ParamCoLoRe *par)
     int ngx=2*(par->n_grid/2+1);
     flouble dx=par->l_box/par->n_grid;
     flouble xv[3];
+    flouble dg=par->growth_d1;
+    flouble d2g=par->growth_d2;
 
 #ifdef _DEBUG
     double d_sigma2_1_thr=0;
@@ -850,20 +850,16 @@ static void lpt_2(ParamCoLoRe *par)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long indexz=iz*((long)(ngx*par->n_grid));
-      xv[2]=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
+      xv[2]=(iz+par->iz0_here)*dx;
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long indexy=iy*ngx;
-	xv[1]=(iy+0.0)*dx-par->pos_obs[1];
+	xv[1]=iy*dx;
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int ax;
-	  double r,dg,d2g;
 	  long index=ix+indexy+indexz;
 	  long index_nopad=ix+par->n_grid*((long)(iy+par->n_grid*iz));
-	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
-	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
-	  dg=get_bg(par,r,BG_D1,0);
-	  d2g=get_bg(par,r,BG_D2,0);
+	  xv[0]=ix*dx;
 	  for(ax=0;ax<3;ax++) {
 #ifdef _DEBUG
 	    d_mean_1_thr[ax]+=disp[ax][index];
@@ -871,7 +867,7 @@ static void lpt_2(ParamCoLoRe *par)
 	    d_sigma2_1_thr+=disp[ax][index]*disp[ax][index];
 	    d_sigma2_2_thr+=digrad[ax][index]*digrad[ax][index];
 #endif //_DEBUG
-	    flouble p=xv[ax]+dg*disp[ax][index]+d2g*digrad[ax][index]+par->pos_obs[ax];
+	    flouble p=xv[ax]+dg*disp[ax][index]+d2g*digrad[ax][index];
 	    if(p<0) p+=par->l_box;
 	    if(p>=par->l_box) p-=par->l_box;
 	    digrad[3+ax][index_nopad]=p;
@@ -1040,7 +1036,7 @@ static void densclip(ParamCoLoRe *par)
   {
     long iz;
     int ngx=2*(par->n_grid/2+1);
-    flouble dx=par->l_box/par->n_grid;
+    flouble dg=par->growth_d1;
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static)
@@ -1048,16 +1044,11 @@ static void densclip(ParamCoLoRe *par)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long indexz=iz*((long)(ngx*par->n_grid));
-      flouble z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long indexy=iy*ngx;
-	flouble y0=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  long index=ix+indexy+indexz;
-	  flouble x0=(ix+0.0)*dx-par->pos_obs[0];
-	  double r=sqrt(x0*x0+y0*y0+z0*z0);
-	  double dg=get_bg(par,r,BG_D1,0);
 	  double delta=par->grid_dens[index];
 	  par->grid_dens[index]=fmax(1+dg*delta,0)-1;
 	}
@@ -1076,7 +1067,7 @@ static void lognormalize(ParamCoLoRe *par)
   {
     long iz;
     int ngx=2*(par->n_grid/2+1);
-    flouble dx=par->l_box/par->n_grid;
+    flouble dg=par->growth_d1;
 
 #ifdef _HAVE_OMP
 #pragma omp for schedule(static)
@@ -1084,16 +1075,11 @@ static void lognormalize(ParamCoLoRe *par)
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long indexz=iz*((long)(ngx*par->n_grid));
-      flouble z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long indexy=iy*ngx;
-	flouble y0=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  long index=ix+indexy+indexz;
-	  flouble x0=(ix+0.0)*dx-par->pos_obs[0];
-	  double r=sqrt(x0*x0+y0*y0+z0*z0);
-	  double dg=get_bg(par,r,BG_D1,0);
 	  double delta=par->grid_dens[index];
 	  par->grid_dens[index]=exp(dg*(delta-0.5*dg*par->sigma2_gauss))-1;
 	}
@@ -1122,32 +1108,23 @@ void compute_physical_density_field(ParamCoLoRe *par)
   print_info("\n");
 
   if(par->output_density)
-    write_density_grid(par,"lightcone");
+    write_density_grid(par,"nonlinear");
 }
 
-static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,double idz,double *zarr,
-						    unsigned long long *narr,
-						    double **norm_srcs_arr,double **norm_imap_arr,
-						    double **norm_cstm_arr)
+void compute_density_normalization(ParamCoLoRe *par)
 {
+  int ii;
+  for(ii=0;ii<par->n_srcs;ii++)
+    par->dens_norm[ii]=0;
+  // 1. Compute sum of B(delta) in this node
+
 #ifdef _HAVE_OMP
-#pragma omp parallel default(none)					\
-  shared(par,idz,nz,zarr,narr,norm_srcs_arr,norm_imap_arr,norm_cstm_arr)
+#pragma omp parallel default(none) \
+  shared(par)
 #endif //_HAVE_OMP
   {
     int iz,ipop;
-    flouble dx=par->l_box/par->n_grid;
-    double *zarr_thr=my_calloc(nz,sizeof(double));
-    unsigned long long *narr_thr=my_calloc(nz,sizeof(unsigned long long));
-    double **norm_srcs_arr_thr=my_malloc(par->n_srcs*sizeof(double *));
-    double **norm_imap_arr_thr=my_malloc(par->n_imap*sizeof(double *));
-    double **norm_cstm_arr_thr=my_malloc(par->n_cstm*sizeof(double *));
-    for(ipop=0;ipop<par->n_srcs;ipop++)
-      norm_srcs_arr_thr[ipop]=my_calloc(nz,sizeof(double));
-    for(ipop=0;ipop<par->n_imap;ipop++)
-      norm_imap_arr_thr[ipop]=my_calloc(nz,sizeof(double));
-    for(ipop=0;ipop<par->n_cstm;ipop++)
-      norm_cstm_arr_thr[ipop]=my_calloc(nz,sizeof(double));
+    double *norm_thr=my_calloc(par->n_srcs,sizeof(double));
 
 #ifdef _HAVE_OMP
 #pragma omp for
@@ -1155,28 +1132,14 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
     for(iz=0;iz<par->nz_here;iz++) {
       int iy;
       long iz0=iz*((long)(2*(par->n_grid/2+1)*par->n_grid));
-      flouble z0=(iz+par->iz0_here+0.0)*dx-par->pos_obs[2];
       for(iy=0;iy<par->n_grid;iy++) {
 	int ix;
 	long iy0=iy*2*(par->n_grid/2+1);
-	flouble y0=(iy+0.0)*dx-par->pos_obs[1];
 	for(ix=0;ix<par->n_grid;ix++) {
 	  long index=ix+iy0+iz0;
-	  flouble x0=(ix+0.0)*dx-par->pos_obs[0];
-	  double r=sqrt(x0*x0+y0*y0+z0*z0);
-	  double redshift=get_bg(par,r,BG_Z,0);
-	  int ind_z=(int)(redshift*idz)+1;
-	  if((ind_z>=0) && (ind_z<nz)) {
-	    double d=par->grid_dens[index];
-	    narr_thr[ind_z]++;
-	    zarr_thr[ind_z]+=redshift;
-	    for(ipop=0;ipop<par->n_srcs;ipop++)
-	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop), get_bg(par, r, BG_TZ_SRCS, ipop));
-	    for(ipop=0;ipop<par->n_imap;ipop++)
-	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop), -1);
-	    for(ipop=0;ipop<par->n_cstm;ipop++)
-	      norm_cstm_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_CSTM,ipop), -1);
-	  }
+	  double d=par->grid_dens[index];
+	  for(ipop=0;ipop<par->n_srcs;ipop++)
+	    norm_thr[ipop]+=bias_model(d,par->bias[ipop], par->threshold[ipop]);
 	}
       }
     } //end omp for
@@ -1184,210 +1147,18 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 #pragma omp critical
 #endif //_HAVE_OMP
     {
-      for(iz=0;iz<nz;iz++) {
-	narr[iz]+=narr_thr[iz];
-	zarr[iz]+=zarr_thr[iz];
-	for(ipop=0;ipop<par->n_srcs;ipop++)
-	  norm_srcs_arr[ipop][iz]+=norm_srcs_arr_thr[ipop][iz];
-	for(ipop=0;ipop<par->n_imap;ipop++)
-	  norm_imap_arr[ipop][iz]+=norm_imap_arr_thr[ipop][iz];
-	for(ipop=0;ipop<par->n_cstm;ipop++)
-	  norm_cstm_arr[ipop][iz]+=norm_cstm_arr_thr[ipop][iz];
-      }
+      for(ipop=0;ipop<par->n_srcs;ipop++)
+	par->dens_norm[ipop]+=norm_thr[ipop];
     } //end omp critical
-
-    free(narr_thr);
-    free(zarr_thr);
-    for(ipop=0;ipop<par->n_srcs;ipop++)
-      free(norm_srcs_arr_thr[ipop]);
-    free(norm_srcs_arr_thr);
-    for(ipop=0;ipop<par->n_imap;ipop++)
-      free(norm_imap_arr_thr[ipop]);
-    free(norm_imap_arr_thr);
-    for(ipop=0;ipop<par->n_cstm;ipop++)
-      free(norm_cstm_arr_thr[ipop]);
-    free(norm_cstm_arr_thr);
+    free(norm_thr);
   } //end omp parallel
-}
 
-static void collect_density_normalization(ParamCoLoRe *par,int nz,double idz,double *zarr,
-					  unsigned long long *narr,
-					  double **norm_srcs_arr,double **norm_imap_arr,
-					  double **norm_cstm_arr)
-{
-  //  if(par->need_onions)
-  //    collect_density_normalization_from_pixels(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
-  //  else 
-  //    collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr);
-  collect_density_normalization_from_grid(par,nz,idz,zarr,narr,norm_srcs_arr,
-					  norm_imap_arr,norm_cstm_arr);
-}
-
-//Computes sigma2(z) for physical density field
-void compute_density_normalization(ParamCoLoRe *par)
-{
-  int nz,iz,ii,ipop;
-  double idz;
-  double *zarr,**norm_imap_arr,**norm_srcs_arr,**norm_cstm_arr;
-  unsigned long long *narr;
-  double zmax=get_bg(par,par->l_box*0.5,BG_Z,0);
-  gsl_spline *spline_norm_srcs[NPOP_MAX];
-  gsl_interp_accel *intacc_srcs=gsl_interp_accel_alloc(); 
-  gsl_spline *spline_norm_imap[NPOP_MAX];
-  gsl_interp_accel *intacc_imap=gsl_interp_accel_alloc();
-  gsl_spline *spline_norm_cstm[NPOP_MAX];
-  gsl_interp_accel *intacc_cstm=gsl_interp_accel_alloc();
-
-  print_info("*** Computing normalization of density field\n");
-  if(NodeThis==0) timer(0);
-
-  nz=(int)(zmax/DZ_SIGMA)+2;
-  idz=(nz-2)/zmax;
-
-  zarr=my_calloc(nz,sizeof(double));
-  narr=my_calloc(nz,sizeof(unsigned long long));
-  norm_srcs_arr=my_malloc(par->n_srcs*sizeof(double *));
-  norm_imap_arr=my_malloc(par->n_imap*sizeof(double *));
-  norm_cstm_arr=my_malloc(par->n_cstm*sizeof(double *));
-  for(ipop=0;ipop<par->n_srcs;ipop++)
-    norm_srcs_arr[ipop]=my_calloc(nz,sizeof(double));
-  for(ipop=0;ipop<par->n_imap;ipop++)
-    norm_imap_arr[ipop]=my_calloc(nz,sizeof(double));
-  for(ipop=0;ipop<par->n_cstm;ipop++)
-    norm_cstm_arr[ipop]=my_calloc(nz,sizeof(double));
-
-  collect_density_normalization(par,nz,idz,zarr,narr,norm_srcs_arr,norm_imap_arr,norm_cstm_arr);
-
+  // 2. Add to all other nodes and compute <B(delta)>
 #ifdef _HAVE_MPI
-  MPI_Allreduce(MPI_IN_PLACE,narr,nz,MPI_UNSIGNED_LONG_LONG,MPI_SUM,MPI_COMM_WORLD);
-  for(ipop=0;ipop<par->n_srcs;ipop++)
-    MPI_Allreduce(MPI_IN_PLACE,norm_srcs_arr[ipop],nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-  for(ipop=0;ipop<par->n_imap;ipop++)
-    MPI_Allreduce(MPI_IN_PLACE,norm_imap_arr[ipop],nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-  for(ipop=0;ipop<par->n_cstm;ipop++)
-    MPI_Allreduce(MPI_IN_PLACE,norm_cstm_arr[ipop],nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
-  MPI_Allreduce(MPI_IN_PLACE,zarr,nz,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+  MPI_Allreduce(MPI_IN_PLACE,par->dens_norm,par->n_srcs,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
 #endif //_HAVE_MPI
 
-  for(iz=0;iz<nz;iz++) {
-    if(narr[iz]>0) {
-      zarr[iz]/=narr[iz];
-      for(ipop=0;ipop<par->n_srcs;ipop++)
-	norm_srcs_arr[ipop][iz]=narr[iz]/norm_srcs_arr[ipop][iz];
-      for(ipop=0;ipop<par->n_imap;ipop++)
-	norm_imap_arr[ipop][iz]=narr[iz]/norm_imap_arr[ipop][iz];
-      for(ipop=0;ipop<par->n_cstm;ipop++)
-	norm_cstm_arr[ipop][iz]=narr[iz]/norm_cstm_arr[ipop][iz];
-    }
-  }
-
-  zarr[0]=0;
-  zarr[nz-1]=get_bg(par,0.5*par->l_box,BG_Z,0);
-  for(ipop=0;ipop<par->n_srcs;ipop++) {
-    norm_srcs_arr[ipop][0]=norm_srcs_arr[ipop][1];
-    norm_srcs_arr[ipop][nz-1]=norm_srcs_arr[ipop][nz-2];
-  }
-  for(ipop=0;ipop<par->n_imap;ipop++) {
-    norm_imap_arr[ipop][0]=norm_imap_arr[ipop][1];
-    norm_imap_arr[ipop][nz-1]=norm_imap_arr[ipop][nz-2];
-  }
-  for(ipop=0;ipop<par->n_cstm;ipop++) {
-    norm_cstm_arr[ipop][0]=norm_cstm_arr[ipop][1];
-    norm_cstm_arr[ipop][nz-1]=norm_cstm_arr[ipop][nz-2];
-  }
-
-  par->z0_norm=zarr[0];
-  par->zf_norm=zarr[nz-1];
-  for(ipop=0;ipop<par->n_srcs;ipop++) {
-    par->norm_srcs_0[ipop]=norm_srcs_arr[ipop][0];
-    par->norm_srcs_f[ipop]=norm_srcs_arr[ipop][nz-1];
-    spline_norm_srcs[ipop]=gsl_spline_alloc(gsl_interp_linear,nz);
-    gsl_spline_init(spline_norm_srcs[ipop],zarr,norm_srcs_arr[ipop],nz);
-    par->srcs_norm_arr[ipop]=my_malloc(NA*sizeof(double));
-  }
-  for(ipop=0;ipop<par->n_imap;ipop++) {
-    par->norm_imap_0[ipop]=norm_imap_arr[ipop][0];
-    par->norm_imap_f[ipop]=norm_imap_arr[ipop][nz-1];
-    spline_norm_imap[ipop]=gsl_spline_alloc(gsl_interp_linear,nz);
-    gsl_spline_init(spline_norm_imap[ipop],zarr,norm_imap_arr[ipop],nz);
-    par->imap_norm_arr[ipop]=my_malloc(NA*sizeof(double));
-  }
-  for(ipop=0;ipop<par->n_cstm;ipop++) {
-    par->norm_cstm_0[ipop]=norm_cstm_arr[ipop][0];
-    par->norm_cstm_f[ipop]=norm_cstm_arr[ipop][nz-1];
-    spline_norm_cstm[ipop]=gsl_spline_alloc(gsl_interp_linear,nz);
-    gsl_spline_init(spline_norm_cstm[ipop],zarr,norm_cstm_arr[ipop],nz);
-    par->cstm_norm_arr[ipop]=my_malloc(NA*sizeof(double));
-  }
-
-  for(ii=0;ii<NA;ii++) {
-    double z=get_bg(par,par->r_arr_r2z[ii],BG_Z,0);
-    for(ipop=0;ipop<par->n_srcs;ipop++) {
-      double nm;
-      if(z<par->z0_norm)
-	nm=par->norm_srcs_0[ipop];
-      else if(z>=par->zf_norm)
-	nm=par->norm_srcs_f[ipop];
-      else
-	nm=gsl_spline_eval(spline_norm_srcs[ipop],z,intacc_srcs);
-      par->srcs_norm_arr[ipop][ii]=nm;
-    }
-    for(ipop=0;ipop<par->n_imap;ipop++) {
-      double nm;
-      if(z<par->z0_norm)
-	nm=par->norm_imap_0[ipop];
-      else if(z>=par->zf_norm)
-	nm=par->norm_imap_f[ipop];
-      else
-	nm=gsl_spline_eval(spline_norm_imap[ipop],z,intacc_imap);
-      par->imap_norm_arr[ipop][ii]=nm;
-    }
-    for(ipop=0;ipop<par->n_cstm;ipop++) {
-      double nm;
-      if(z<par->z0_norm)
-	nm=par->norm_cstm_0[ipop];
-      else if(z>=par->zf_norm)
-	nm=par->norm_cstm_f[ipop];
-      else
-	nm=gsl_spline_eval(spline_norm_cstm[ipop],z,intacc_cstm);
-      par->cstm_norm_arr[ipop][ii]=nm;
-    }
-  }
-
-#ifdef _DEBUG
-  for(iz=0;iz<nz;iz++) {
-    double rz=r_of_z(par,zarr[iz]);
-    print_info("z=%.3lE, ",zarr[iz]);
-    for(ipop=0;ipop<par->n_srcs;ipop++)
-      print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_SRCS,ipop));
-    for(ipop=0;ipop<par->n_imap;ipop++)
-      print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_IMAP,ipop));
-    for(ipop=0;ipop<par->n_cstm;ipop++)
-      print_info("<d^2_%d>=%.3lE, ",ipop,get_bg(par,rz,BG_NORM_CSTM,ipop));
-    print_info("%011llu\n",narr[iz]);
-  }
-#endif //_DEBUG
-  if(NodeThis==0) timer(2);
-  print_info("\n");
-
-  free(zarr);
-  free(narr);
-  for(ipop=0;ipop<par->n_srcs;ipop++) {
-    free(norm_srcs_arr[ipop]);
-    gsl_spline_free(spline_norm_srcs[ipop]);
-  }
-  free(norm_srcs_arr);
-  gsl_interp_accel_free(intacc_srcs);
-  for(ipop=0;ipop<par->n_imap;ipop++) {
-    free(norm_imap_arr[ipop]);
-    gsl_spline_free(spline_norm_imap[ipop]);
-  }
-  free(norm_imap_arr);
-  gsl_interp_accel_free(intacc_imap);
-  for(ipop=0;ipop<par->n_cstm;ipop++) {
-    free(norm_cstm_arr[ipop]);
-    gsl_spline_free(spline_norm_cstm[ipop]);
-  }
-  free(norm_cstm_arr);
-  gsl_interp_accel_free(intacc_cstm);
+  long ng_tot=par->n_grid*((long)(par->n_grid*par->n_grid));
+  for(ii=0;ii<par->n_srcs;ii++)
+    par->dens_norm[ii]=ng_tot/par->dens_norm[ii];
 }

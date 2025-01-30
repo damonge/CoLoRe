@@ -102,6 +102,7 @@
 #define BG_IH 1005
 #define BG_NZ_SRCS 1006
 #define BG_BZ_SRCS 1007
+#define BG_TZ_SRCS 1015
 #define BG_NORM_SRCS 1008
 #define BG_TZ_IMAP 1009
 #define BG_BZ_IMAP 1010
@@ -312,9 +313,11 @@ typedef struct {
   int do_srcs_lensing; //Do we need to compute the lensing potential?
   int n_srcs; //Number of source types
   char fnameBzSrcs[NPOP_MAX][256]; //Files containing b(z) for each source type
+  char fnameTzSrcs[NPOP_MAX][256]; //Files containing threshold(z) for each source type
   char fnameNzSrcs[NPOP_MAX][256]; //Files containing dN/dzdOmega (in deg^-2)
   double *srcs_nz_arr[NPOP_MAX];
   double *srcs_bz_arr[NPOP_MAX];
+  double *srcs_tz_arr[NPOP_MAX];
   double *srcs_norm_arr[NPOP_MAX];
   double norm_srcs_0[NPOP_MAX]; //Bottom edge of spline for density normalization
   double norm_srcs_f[NPOP_MAX]; //Top edge of spline for density normalization
@@ -411,9 +414,9 @@ void catalog_cartesian_free(CatalogCartesian *cat);
 Catalog *catalog_alloc(int nsrcs,int has_lensing,int has_skw,int skw_gauss,double rmax,int ng);
 void catalog_free(Catalog *cat);
 
-static inline double bias_model(double d,double b)
+static inline double bias_model(double d,double b, double t)
 {
-  if(d<=-1)
+  if(d<=-1 || d < t)
     return 0;
 #ifdef _BIAS_MODEL_2
   if(d < 0)
