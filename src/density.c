@@ -1171,11 +1171,11 @@ static void collect_density_normalization_from_grid(ParamCoLoRe *par,int nz,doub
 	    narr_thr[ind_z]++;
 	    zarr_thr[ind_z]+=redshift;
 	    for(ipop=0;ipop<par->n_srcs;ipop++)
-	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop));
+	      norm_srcs_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_SRCS,ipop), get_bg(par, r, BG_TZ_SRCS, ipop));
 	    for(ipop=0;ipop<par->n_imap;ipop++)
-	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop));
+	      norm_imap_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_IMAP,ipop), -1);
 	    for(ipop=0;ipop<par->n_cstm;ipop++)
-	      norm_cstm_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_CSTM,ipop));
+	      norm_cstm_arr_thr[ipop][ind_z]+=bias_model(d,get_bg(par,r,BG_BZ_CSTM,ipop), -1);
 	  }
 	}
       }

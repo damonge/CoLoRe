@@ -59,6 +59,8 @@ double get_bg(ParamCoLoRe *par,double r,int tag,int ipop)
     return f_of_r_linear(par,r,par->srcs_nz_arr[ipop],0,0);
   else if(tag==BG_BZ_SRCS)
     return f_of_r_linear(par,r,par->srcs_bz_arr[ipop],par->srcs_bz_arr[ipop][0],1);
+  else if(tag==BG_TZ_SRCS)
+    return f_of_r_linear(par,r,par->srcs_tz_arr[ipop],par->srcs_tz_arr[ipop][0],1);
   else if(tag==BG_NORM_SRCS) {
     return f_of_r_linear(par,r,par->srcs_norm_arr[ipop],par->norm_srcs_0[ipop],
 			 par->norm_srcs_f[ipop]);
@@ -523,6 +525,7 @@ void cosmo_set(ParamCoLoRe *par)
   double *zarr,*fzarr;
   FILE *fi;
   gsl_spline *spline_srcs_bz[NPOP_MAX];
+  gsl_spline *spline_srcs_tz[NPOP_MAX];
   gsl_spline *spline_srcs_nz[NPOP_MAX];
   gsl_spline *spline_imap_bz[NPOP_MAX];
   gsl_spline *spline_imap_tz[NPOP_MAX];
@@ -563,6 +566,22 @@ void cosmo_set(ParamCoLoRe *par)
     free(zarr); free(fzarr);
     fclose(fi);
 
+    fi=fopen(par->fnameTzSrcs[ipop],"r");
+    if(fi==NULL) error_open_file(par->fnameTzSrcs[ipop]);
+    nz=linecount(fi); rewind(fi);
+    zarr=my_malloc(nz*sizeof(double));
+    fzarr=my_malloc(nz*sizeof(double));
+    for(ii=0;ii<nz;ii++) {
+      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+      if(stat!=2) error_read_line(par->fnameTzSrcs[ipop],ii+1);
+    }
+    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
+      report_error(1,"Threshold z-range is too small\n");
+    spline_srcs_tz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
+    gsl_spline_init(spline_srcs_tz[ipop],zarr,fzarr,nz);
+    free(zarr); free(fzarr);
+    fclose(fi);
+
     fi=fopen(par->fnameNzSrcs[ipop],"r");
     if(fi==NULL) error_open_file(par->fnameNzSrcs[ipop]);
     nz=linecount(fi); rewind(fi);
@@ -589,6 +608,7 @@ void cosmo_set(ParamCoLoRe *par)
 
     par->srcs_nz_arr[ipop]=my_malloc(NA*sizeof(double));
     par->srcs_bz_arr[ipop]=my_malloc(NA*sizeof(double));
+    par->srcs_tz_arr[ipop]=my_malloc(NA*sizeof(double));
   }
 
   for(ipop=0;ipop<par->n_imap;ipop++) {
@@ -694,9 +714,11 @@ void cosmo_set(ParamCoLoRe *par)
       if((z<par->z_min) || (z>par->z_max)) {
 	par->srcs_nz_arr[ipop][ii]=0;
 	par->srcs_bz_arr[ipop][ii]=1.;
+	par->srcs_tz_arr[ipop][ii]=-1.;
       }
       par->srcs_nz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_nz[ipop],z,NULL);
       par->srcs_bz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_bz[ipop],z,NULL);
+      par->srcs_tz_arr[ipop][ii]=gsl_spline_eval(spline_srcs_tz[ipop],z,NULL);
     }
     for(ipop=0;ipop<par->n_imap;ipop++) {
       if((z<par->z_min) || (z>par->z_max)) {
@@ -717,8 +739,8 @@ void cosmo_set(ParamCoLoRe *par)
   }
 
   for(ipop=0;ipop<par->n_cstm;ipop++) {
-    gsl_spline_free(spline_cstm_kz[ipop]);
-    gsl_spline_free(spline_cstm_bz[ipop]);
+      gsl_spline_free(spline_cstm_kz[ipop]);
+      gsl_spline_free(spline_cstm_bz[ipop]);
   }
   for(ipop=0;ipop<par->n_imap;ipop++) {
     gsl_spline_free(spline_imap_tz[ipop]);
@@ -727,6 +749,7 @@ void cosmo_set(ParamCoLoRe *par)
   for(ipop=0;ipop<par->n_srcs;ipop++) {
     gsl_spline_free(spline_srcs_nz[ipop]);
     gsl_spline_free(spline_srcs_bz[ipop]);
+    gsl_spline_free(spline_srcs_tz[ipop]);
   }
 
   pk_linear_set(par);
