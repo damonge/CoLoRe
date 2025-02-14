@@ -198,7 +198,7 @@ static void imap_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	      double dnorm=get_bg(par,r0,BG_NORM_IMAP,ipop);
 	      double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,r0);
 	      double dr_rsd=rvel*get_bg(par,r0,BG_V1,0)*get_bg(par,r0,BG_IH,0);
-	      double temp=tmean*bias_model(par->grid_dens[index],bias)*dnorm;
+	      double temp=tmean*bias_model(par->grid_dens[index],bias, -1)*dnorm;
 	      irad=get_r_index_imap(imap,r0,irad);
 	      if(irad<0)
 		nsub_here=nsub_lo;

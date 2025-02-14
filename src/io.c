@@ -119,8 +119,10 @@ static ParamCoLoRe *param_colore_new(void)
     par->cstm_kz_arr[ii]=NULL;
     par->cstm_norm_arr[ii]=NULL;
     sprintf(par->fnameBzSrcs[ii],"default");
+    sprintf(par->fnameTzSrcs[ii],"default");
     sprintf(par->fnameNzSrcs[ii],"default");
     par->srcs_bz_arr[ii]=NULL;
+    par->srcs_tz_arr[ii]=NULL;
     par->srcs_nz_arr[ii]=NULL;
     par->srcs_norm_arr[ii]=NULL;
     par->lensing_srcs[ii]=0;
@@ -168,6 +170,19 @@ static void conf_read_string(config_t *conf,char *secname,char *varname,char *ou
     report_error(1,"Couldn't read variable %s\n",fullpath);
   sprintf(out,"%s",str);
 }
+
+static int conf_read_string_optional(config_t *conf, char *secname, char *varname, char **out)
+  {
+    int stat;
+    char fullpath[256];
+    const char *str;
+    sprintf(fullpath,"%s.%s",secname,varname);
+    stat=config_lookup_string(conf,fullpath,&str);
+    if(stat==CONFIG_FALSE)
+      *out = NULL;
+    else
+      sprintf(out,"%s",str);
+  }
 
 static void conf_read_double(config_t *conf,char *secname,char *varname,double *out)
 {
@@ -328,6 +343,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     sprintf(c_dum,"srcs%d",ii+1);
     conf_read_string(conf,c_dum,"nz_filename",par->fnameNzSrcs[ii]);
     conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
+    conf_read_string_optional(conf,c_dum,"threshold_filename",par->fnameTzSrcs[ii]);
     conf_read_bool(conf,c_dum,"include_lensing",&(par->lensing_srcs[ii]));
     if(par->lensing_srcs[ii])
       par->do_srcs_lensing=1;
@@ -1256,6 +1272,7 @@ void param_colore_free(ParamCoLoRe *par)
   if(par->do_srcs) {
     for(ii=0;ii<par->n_srcs;ii++) {
       free(par->srcs_bz_arr[ii]);
+      free(par->srcs_tz_arr[ii]);
       free(par->srcs_nz_arr[ii]);
       free(par->srcs_norm_arr[ii]);
       if(par->cats_c!=NULL) {

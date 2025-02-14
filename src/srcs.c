@@ -171,7 +171,7 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	    if(ndens>0) {
 	      double bias=get_bg(par,r,BG_BZ_SRCS,ipop);
 	      double dnorm=get_bg(par,r,BG_NORM_SRCS,ipop);
-	      double lambda=ndens*cell_vol*bias_model(par->grid_dens[index],bias)*dnorm;
+	      double lambda=ndens*cell_vol*bias_model(par->grid_dens[index],bias, get_bg(par, r, BG_TZ_SRCS, ipop))*dnorm;
 	      //double lambda=ndens*cell_vol*dnorm;
 	      npp=rng_poisson(lambda,rng_thr);
 	    }
