@@ -566,21 +566,36 @@ void cosmo_set(ParamCoLoRe *par)
     free(zarr); free(fzarr);
     fclose(fi);
 
-    fi=fopen(par->fnameTzSrcs[ipop],"r");
-    if(fi==NULL) error_open_file(par->fnameTzSrcs[ipop]);
-    nz=linecount(fi); rewind(fi);
-    zarr=my_malloc(nz*sizeof(double));
-    fzarr=my_malloc(nz*sizeof(double));
-    for(ii=0;ii<nz;ii++) {
-      int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
-      if(stat!=2) error_read_line(par->fnameTzSrcs[ipop],ii+1);
+    if (par->fnameTzSrcs[ipop] && strlen(par->fnameTzSrcs[ipop]) > 0) {
+      fi = fopen(par->fnameTzSrcs[ipop], "r");
+      nz=linecount(fi); rewind(fi);
+      zarr=my_malloc(nz*sizeof(double));
+      fzarr=my_malloc(nz*sizeof(double));
+      for(ii=0;ii<nz;ii++) {
+        int stat=fscanf(fi,"%lf %lf",&(zarr[ii]),&(fzarr[ii]));
+        if(stat!=2) error_read_line(par->fnameTzSrcs[ipop],ii+1);
+      }
+      fclose(fi);
+    
+      if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max)){
+        report_error(1,"Threshold z-range is too small\n");
+      }
+    } else { 
+      nz = 100;
+      zarr = my_malloc(nz * sizeof(double));
+      fzarr = my_malloc(nz * sizeof(double));
+
+      double z_step = (par->z_max) / (nz - 1);
+      for (ii=0;ii<nz;ii++){
+        zarr[ii]=ii*z_step;
+        fzarr[ii] = -1.0;
+      }
     }
-    if((zarr[0]>par->z_min) || (zarr[nz-1]<par->z_max))
-      report_error(1,"Threshold z-range is too small\n");
-    spline_srcs_tz[ipop]=gsl_spline_alloc(gsl_interp_cspline,nz);
-    gsl_spline_init(spline_srcs_tz[ipop],zarr,fzarr,nz);
-    free(zarr); free(fzarr);
-    fclose(fi);
+
+    spline_srcs_tz[ipop]=gsl_spline_alloc(gsl_interp_cspline, nz);
+    gsl_spline_init(spline_srcs_tz[ipop], zarr, fzarr, nz);
+    free(zarr);
+    free(fzarr); 
 
     fi=fopen(par->fnameNzSrcs[ipop],"r");
     if(fi==NULL) error_open_file(par->fnameNzSrcs[ipop]);

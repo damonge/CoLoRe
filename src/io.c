@@ -171,6 +171,19 @@ static void conf_read_string(config_t *conf,char *secname,char *varname,char *ou
   sprintf(out,"%s",str);
 }
 
+static int conf_read_string_optional(config_t *conf, char *secname, char *varname, char **out)
+  {
+    int stat;
+    char fullpath[256];
+    const char *str;
+    sprintf(fullpath,"%s.%s",secname,varname);
+    stat=config_lookup_string(conf,fullpath,&str);
+    if(stat==CONFIG_FALSE)
+      *out = NULL;
+    else
+      sprintf(out,"%s",str);
+  }
+
 static void conf_read_double(config_t *conf,char *secname,char *varname,double *out)
 {
   int stat;
@@ -330,7 +343,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     sprintf(c_dum,"srcs%d",ii+1);
     conf_read_string(conf,c_dum,"nz_filename",par->fnameNzSrcs[ii]);
     conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
-    conf_read_string(conf,c_dum,"threshold_filename",par->fnameTzSrcs[ii]);
+    conf_read_string_optional(conf,c_dum,"threshold_filename",par->fnameTzSrcs[ii]);
     conf_read_bool(conf,c_dum,"include_lensing",&(par->lensing_srcs[ii]));
     if(par->lensing_srcs[ii])
       par->do_srcs_lensing=1;
