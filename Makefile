@@ -3,7 +3,7 @@
 ###Compiler and compilation options
 COMP_SER = gcc
 COMP_MPI = mpicc
-OPTIONS = -Wall -Wno-format-overflow -O3 -std=c99
+OPTIONS = -Wall -Wno-format-overflow -O3 -std=c99 
 #
 ### Behavioural flags
 #Use double precision integer (enable in general)
@@ -14,6 +14,8 @@ DEFINEFLAGS += -D_BIAS_MODEL_2
 #DEFINEFLAGS += -D_BIAS_MODEL_3
 #Use new lensing method
 #DEFINEFLAGS += -D_USE_FAST_LENSING
+#get transvers velocities
+DEFINEFLAGS += -DTVEL
 #Generate debug help. Only useful for development
 DEFINEFLAGS += -D_DEBUG
 #Use double precision floating point? Set to "yes" or "no"
@@ -25,7 +27,7 @@ USE_HDF5 = no
 #Use OMP parallelization? Set to "yes" or "no"
 USE_OMP = yes
 #Use MPI parallelization? Set to "yes" or "no"
-USE_MPI = yes
+USE_MPI = no
 #
 ###Path to libraries and headers
 ###If two or more of the dependencies reside in the same paths, only
@@ -33,8 +35,8 @@ USE_MPI = yes
 #GSL
 #GSL_INC = -I/add/path
 #GSL_LIB = -L/add/path
-GSL_INC = -I/home/alonso/include
-GSL_LIB = -L/home/alonso/lib
+GSL_INC = -I/astro/u/anze/local/include
+GSL_LIB = -L/astro/u/anze/local/lib
 #FFTW
 FFTW_INC =
 FFTW_LIB =
