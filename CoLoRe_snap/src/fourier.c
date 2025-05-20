@@ -231,6 +231,7 @@ void allocate_fftw(ParamCoLoRe *par)
   if(par->grid_npot_f==NULL)
     report_error(1,"Ran out of memory\n");
   par->grid_npot=(flouble *)(par->grid_npot_f);
+  par->grid_vel=(flouble *)(par->grid_npot_f);
 
 #ifdef _SPREC
   par->grid_eta_f=fftwf_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));

@@ -80,6 +80,7 @@ static ParamCoLoRe *param_colore_new(void)
   // Density grids
   par->grid_dens_f=NULL;
   par->grid_dens=NULL;
+  par->grid_vel=NULL;
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
   par->sigma2_gauss=0;

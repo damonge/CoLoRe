@@ -494,6 +494,7 @@ static void lpt_1(ParamCoLoRe *par)
 	    disp[ax][index]=p;
 	  }
 	  par->grid_dens[index]=0;
+    par->grid_vel[index]=0;
 	}
       }
     } //end omp for
@@ -836,6 +837,11 @@ static void lpt_2(ParamCoLoRe *par)
     flouble xv[3];
     flouble dg=par->growth_d1;
     flouble d2g=par->growth_d2;
+    flouble f1=par->f1;
+    flouble f2=par->f2;
+    flouble hub=1/par->ihub;
+    flouble fgrowth0=par->fgrowth_0;
+    flouble h0=par->hubble_0;
 
 #ifdef _DEBUG
     double d_sigma2_1_thr=0;
@@ -868,6 +874,10 @@ static void lpt_2(ParamCoLoRe *par)
 	    d_sigma2_2_thr+=digrad[ax][index]*digrad[ax][index];
 #endif //_DEBUG
 	    flouble p=xv[ax]+dg*disp[ax][index]+d2g*digrad[ax][index];
+      // Fill velocity if ax is x
+      if(ax==0) {
+        par->grid_vel[index]=dg*f1*disp[ax][index]+d2g*f2*digrad[ax][index];
+      }
 	    if(p<0) p+=par->l_box;
 	    if(p>=par->l_box) p-=par->l_box;
 	    digrad[3+ax][index_nopad]=p;

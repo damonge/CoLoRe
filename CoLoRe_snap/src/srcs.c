@@ -159,8 +159,9 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	  int npp=nsources[index];
 	  if(npp>0) {
 	    int ip;
-	    double rvel=factor_vel*get_rvel(par,ix,iy,iz);
-	    double dx_rsd=rvel*par->growth_dv*par->ihub;
+	    //double rvel=factor_vel*get_rvel(par,ix,iy,iz);
+	    //double dx_rsd=rvel*par->growth_dv*par->ihub;
+      double dx_rsd=par->grid_vel[index];
 	    for(ip=0;ip<npp;ip++) {
 	      long pid=np_tot_thr[ithr];
 

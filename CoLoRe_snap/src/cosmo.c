@@ -313,11 +313,15 @@ void cosmo_set(ParamCoLoRe *par)
   double d1=csm_growth_factor(pars,a)/growth0;
   double d2=-0.42857142857*d1*d1*pow(om,-0.00699300699);
   double fz=csm_f_growth(pars,a);
+  //double f2z=2*fz+0.00699300699*3*par->OmegaL*pow(a, 3)/(par->OmegaM+par->OmegaL*pow(a, 3));
+  double f2z=2*pow(om, 0.5454545455);
   double hz=csm_hubble(pars,a);
   par->growth_d1=d1;
   par->growth_fz=fz;
   par->growth_d2=d2;
   par->growth_dv=(d1*hz*fz)/(fgrowth0*h0); //This is for the comoving velocity
+  par->f1=fz;
+  par->f2=f2z;
   par->ihub=1/hz;
   par->fgrowth_0=fgrowth0;
   par->hubble_0=h0;
