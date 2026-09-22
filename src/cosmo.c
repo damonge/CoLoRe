@@ -811,7 +811,8 @@ void cosmo_set(ParamCoLoRe *par)
 	  fprintf(par->f_dbg,"\n");
 #endif //_DEBUG
 #else //_ADD_EXTRA_KAPPA
-	report_error(1,"Source plane %d outside redshift range\n",ii+1);
+	print_info("Lensing source plane %d outside redshift range. Will only fill up to z=%.3lf\n",
+		   ii+1,par->z_max);
 #endif //_ADD_EXTRA_KAPPA
       }
     }
@@ -851,7 +852,8 @@ void cosmo_set(ParamCoLoRe *par)
 	  fprintf(par->f_dbg,"\n");
 #endif //_DEBUG
 #else //_ADD_EXTRA_KAPPA
-	report_error(1,"Source plane %d outside redshift range\n",ii+1);
+	print_info("ISW source plane %d outside redshift range. Will only fill up to z=%.3lf\n",
+		   ii+1,par->z_max);
 #endif //_ADD_EXTRA_KAPPA
       }
     }
