@@ -347,6 +347,7 @@ void get_beam_properties(ParamCoLoRe *par)
 #endif //_HAVE_MPI
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
+    if(getenv("COLORE_TIMING")) print_info("  - slab %d exchanged\n",i);
 
     if(par->do_kappa)
       kappa_get_beam_properties(par);
@@ -362,6 +363,7 @@ void get_beam_properties(ParamCoLoRe *par)
       imap_get_beam_properties(par);
     if(par->do_cstm)
       cstm_get_beam_properties(par);
+    if(getenv("COLORE_TIMING")) print_info("  - slab %d processed\n",i);
   }
 #ifdef _HAVE_MPI
   free(buffer_sr);
