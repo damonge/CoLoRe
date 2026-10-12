@@ -19,6 +19,7 @@
 // along with CoLoRe.  If not, see <http://www.gnu.org/licenses/>.   //
 //                                                                   //
 ///////////////////////////////////////////////////////////////////////
+#include <time.h>
 #include "common.h"
 
 #ifdef _HAVE_OMP
@@ -283,6 +284,14 @@ void print_info(char *fmt,...)
     vsprintf(msg,fmt,args);
     va_end(args);
 
+    if(getenv("COLORE_TIMING")) { //Optional wall-clock stamp, for profiling
+      static double t_start=-1;
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC,&ts);
+      double t_now=ts.tv_sec+1E-9*ts.tv_nsec;
+      if(t_start<0) t_start=t_now;
+      printf("[%8.2f s] ",t_now-t_start);
+    }
     printf("%s",msg);
   }
 }

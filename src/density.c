@@ -186,81 +186,144 @@ static void pos_2_dens(ParamCoLoRe *par,unsigned long long np_here,
   else
     report_error(1,"Wrong interpolation type\n");
 }
-//Here I am using a CIC for the 2LPT case including the velocities. TO DO: have a pos_2_dens merged (including velocities) with NGP and TSC too. 
+//Here I am using a CIC for the 2LPT case including the velocities. TO DO: have a pos_2_dens merged (including velocities) with NGP and TSC too.
+//
+//The deposit is parallel over the OpenMP threads without atomics or reordering: the rows
+//(z plane, y) of the local grid are divided among the threads and each thread adds only the
+//contributions that fall in its rows, visiting the particles in index order. A cell therefore
+//gets its contributions in the same order as in a serial loop (the output is bit-identical).
+//To avoid every thread reading every particle, blocks of particles are first classified by the
+//range of local z planes that they touch, and a thread skips the blocks outside its planes.
+#define BLOCK_CIC 1048576ULL
+static inline void cic_planes(flouble zz,flouble i_agrid,int n_grid,int iz0_here,int *k0,int *k1)
+{
+  int a=(int)(zz*i_agrid);
+  int b=a+1;
+  if(a<0) a+=n_grid;
+  if(b<0) b+=n_grid;
+  if(a>=n_grid) a-=n_grid;
+  if(b>=n_grid) b-=n_grid;
+  *k0=a-iz0_here;
+  *k1=b-iz0_here;
+}
+
 static void pos_2_dens_2lpt(ParamCoLoRe *par,unsigned long long np_here,
                        flouble *x,flouble *y,flouble *z,flouble *dens,flouble *vx, flouble *vy,flouble *vz, flouble *velsx, flouble *velsy, flouble *velsz)
 {
   unsigned long long ii;
   flouble i_agrid=par->n_grid/par->l_box;
   long ngx=2*(par->n_grid/2+1);
+  int n_grid=par->n_grid;
+  int nz_here=par->nz_here;
+  int iz0_here=par->iz0_here;
+  unsigned long long nblk=(np_here+BLOCK_CIC-1)/BLOCK_CIC;
+  int *kmin=(int *)malloc(nblk*sizeof(int));
+  int *kmax=(int *)malloc(nblk*sizeof(int));
+  if((kmin==NULL) || (kmax==NULL))
+    report_error(1,"Out of memory\n");
 
-  for(ii=0;ii<np_here;ii++) {
-    int ax,i0[3],i1[3];
-    flouble a0[3],a1[3];
-
-    i0[0]=(int)(x[ii]*i_agrid);
-    i0[1]=(int)(y[ii]*i_agrid);
-    i0[2]=(int)(z[ii]*i_agrid);
-    a1[0]=x[ii]*i_agrid-i0[0];
-    a1[1]=y[ii]*i_agrid-i0[1];
-    a1[2]=z[ii]*i_agrid-i0[2];
-    for(ax=0;ax<3;ax++) {
-      a0[ax]=1-a1[ax];
-      i1[ax]=i0[ax]+1;
-      if(i0[ax]<0) i0[ax]+=par->n_grid;
-      if(i1[ax]<0) i1[ax]+=par->n_grid;
-      if(i0[ax]>=par->n_grid) i0[ax]-=par->n_grid;
-      if(i1[ax]>=par->n_grid) i1[ax]-=par->n_grid;
+  //Range of local z planes touched by each block of particles
+#ifdef _HAVE_OMP
+#pragma omp parallel for schedule(static)
+#endif //_HAVE_OMP
+  for(ii=0;ii<nblk;ii++) {
+    unsigned long long jj,jend=(ii+1)*BLOCK_CIC;
+    int lo=nz_here,hi=-1;
+    if(jend>np_here) jend=np_here;
+    for(jj=ii*BLOCK_CIC;jj<jend;jj++) {
+      int k0,k1;
+      cic_planes(z[jj],i_agrid,n_grid,iz0_here,&k0,&k1);
+      if((k0>=0) && (k0<nz_here)) {
+        if(k0<lo) lo=k0;
+        if(k0>hi) hi=k0;
+      }
+      if((k1>=0) && (k1<nz_here)) {
+        if(k1<lo) lo=k1;
+        if(k1>hi) hi=k1;
+      }
     }
-    i0[2]-=par->iz0_here;
-    i1[2]-=par->iz0_here;
+    kmin[ii]=lo;
+    kmax[ii]=hi;
+  }
 
-    if((i0[2]>=0) && (i0[2]<par->nz_here)) {
+#ifdef _HAVE_OMP
+#pragma omp parallel default(shared)
+#endif //_HAVE_OMP
+  {
+    int nth=1,tid=0;
+    long nrows=((long)nz_here)*n_grid;
+    long r_lo,r_hi;
+    int p_lo,p_hi;
+    unsigned long long ib;
+#ifdef _HAVE_OMP
+    nth=omp_get_num_threads();
+    tid=omp_get_thread_num();
+#endif //_HAVE_OMP
+    r_lo=(nrows*tid)/nth;
+    r_hi=(nrows*(tid+1))/nth;
+    p_lo=(int)(r_lo/n_grid);
+    p_hi=(int)((r_hi-1)/n_grid);
+    if(r_hi>r_lo) {
+      for(ib=0;ib<nblk;ib++) {
+        unsigned long long jend=(ib+1)*BLOCK_CIC;
+        if((kmax[ib]<p_lo) || (kmin[ib]>p_hi)) continue;
+        if(jend>np_here) jend=np_here;
+        for(ii=ib*BLOCK_CIC;ii<jend;ii++) {
+          int ax,i0[3],i1[3],ir,jy,kz;
+          flouble a0[3],a1[3];
 
-      dens[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2];
-      dens[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2];
-      dens[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2];
-      dens[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2];
-      // Get velocity field
-      velsx[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2]*vx[ii];
-      velsx[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2]*vx[ii];
-      velsx[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2]*vx[ii];
-      velsx[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2]*vx[ii];
+          cic_planes(z[ii],i_agrid,n_grid,iz0_here,&i0[2],&i1[2]);
+          if(!(((i0[2]>=p_lo) && (i0[2]<=p_hi)) || ((i1[2]>=p_lo) && (i1[2]<=p_hi))))
+            continue;
+          i0[0]=(int)(x[ii]*i_agrid);
+          i0[1]=(int)(y[ii]*i_agrid);
+          a1[0]=x[ii]*i_agrid-i0[0];
+          a1[1]=y[ii]*i_agrid-i0[1];
+          a1[2]=z[ii]*i_agrid-(int)(z[ii]*i_agrid);
+          for(ax=0;ax<2;ax++) {
+            a0[ax]=1-a1[ax];
+            i1[ax]=i0[ax]+1;
+            if(i0[ax]<0) i0[ax]+=n_grid;
+            if(i1[ax]<0) i1[ax]+=n_grid;
+            if(i0[ax]>=n_grid) i0[ax]-=n_grid;
+            if(i1[ax]>=n_grid) i1[ax]-=n_grid;
+          }
+          a0[2]=1-a1[2];
 
-      velsy[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2]*vy[ii];
-      velsy[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2]*vy[ii];
-      velsy[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2]*vy[ii];
-      velsy[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2]*vy[ii];
-
-      velsz[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2]*vz[ii];
-      velsz[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2]*vz[ii];
-      velsz[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2]*vz[ii];
-      velsz[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2]*vz[ii];
-    }
-    if((i1[2]>=0) && (i1[2]<par->nz_here)) {
-
-      dens[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2];
-      dens[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2];
-      dens[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2];
-      dens[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2];
-      // Get velocity field
-      velsx[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2]*vx[ii];
-      velsx[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2]*vx[ii];
-      velsx[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2]*vx[ii];
-      velsx[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2]*vx[ii];
-
-      velsy[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2]*vy[ii];
-      velsy[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2]*vy[ii];
-      velsy[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2]*vy[ii];
-      velsy[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2]*vy[ii];
-
-      velsz[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2]*vz[ii];
-      velsz[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2]*vz[ii];
-      velsz[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2]*vz[ii];
-      velsz[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2]*vz[ii];
+          //Two z planes (0: i0[2], 1: i1[2]) times two y rows (0: i0[1], 1: i1[1])
+          for(kz=0;kz<2;kz++) {
+            int k=(kz==0) ? i0[2] : i1[2];
+            flouble az0=(kz==0) ? a0[2] : a1[2];
+            if((k<0) || (k>=nz_here)) continue;
+            for(jy=0;jy<2;jy++) {
+              int j=(jy==0) ? i0[1] : i1[1];
+              flouble ay0=(jy==0) ? a0[1] : a1[1];
+              long row=((long)k)*n_grid+j;
+              long base;
+              if((row<r_lo) || (row>=r_hi)) continue;
+              base=ngx*(j+((long)n_grid)*k);
+              for(ir=0;ir<2;ir++) {
+                long cell=((ir==0) ? i0[0] : i1[0])+base;
+                flouble ax0=(ir==0) ? a0[0] : a1[0];
+                dens[cell]+=ax0*ay0*az0;
+                // Get velocity field
+                velsx[cell]+=ax0*ay0*az0*vx[ii];
+                velsy[cell]+=ax0*ay0*az0*vy[ii];
+                velsz[cell]+=ax0*ay0*az0*vz[ii];
+              }
+            }
+          }
+        }
+      }
     }
   }
-  // Normalize velocity by density 
+  free(kmin);
+  free(kmax);
+
+  // Normalize velocity by density
+#ifdef _HAVE_OMP
+#pragma omp parallel for schedule(static)
+#endif //_HAVE_OMP
   for(ii=0;ii<par->nz_here*par->n_grid*ngx;ii++) {
     if(dens[ii]!=0) {
       velsx[ii] /= dens[ii];
