@@ -329,6 +329,17 @@ void get_beam_properties(ParamCoLoRe *par)
   long size_slice_vely=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
   long size_slice_velz=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
   flouble *buffer_sr=my_malloc(size_slice_npot*sizeof(flouble));
+  //The Newtonian potential is only used along the line of sight for velocities when they are not
+  //provided by the LPT (lpt_vels=0), and for the tidal tensor (lensing, kappa) and the ISW term.
+  //Without any of them do not send it around the ring (one of the five fields exchanged).
+  int need_npot=!par->lpt_vels || par->do_kappa || par->do_isw || par->do_lensing;
+  if(par->do_srcs) {
+    int ipop;
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      if(par->cats[ipop]->has_lensing)
+        need_npot=1;
+    }
+  }
 #endif //_HAVE_MPI
 
   for(i=0;i<NNodes;i++) {
@@ -337,7 +348,8 @@ void get_beam_properties(ParamCoLoRe *par)
 #ifdef _DEBUG
     print_info("Communication %d, MPI task %d is now MPI task %d\n",i,NodeThis,node_i_am_now);
 #endif //_DEBUG
-    mpi_sendrecv_wrap(par->grid_npot,buffer_sr,size_slice_npot,i);
+    if(need_npot)
+      mpi_sendrecv_wrap(par->grid_npot,buffer_sr,size_slice_npot,i);
     mpi_sendrecv_wrap(par->grid_dens,buffer_sr,size_slice_dens,i);
     if (par->lpt_vels) {
         mpi_sendrecv_wrap(par->grid_velx,buffer_sr,size_slice_velx,i);
@@ -348,6 +360,9 @@ void get_beam_properties(ParamCoLoRe *par)
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
     if(getenv("COLORE_TIMING")) print_info("  - slab %d exchanged\n",i);
+#ifdef _HAVE_MPI
+    double t_proc0=MPI_Wtime();
+#endif //_HAVE_MPI
 
     if(par->do_kappa)
       kappa_get_beam_properties(par);
@@ -363,7 +378,16 @@ void get_beam_properties(ParamCoLoRe *par)
       imap_get_beam_properties(par);
     if(par->do_cstm)
       cstm_get_beam_properties(par);
-    if(getenv("COLORE_TIMING")) print_info("  - slab %d processed\n",i);
+    if(getenv("COLORE_TIMING")) {
+#ifdef _HAVE_MPI
+      double t_proc=MPI_Wtime()-t_proc0,t_max,t_sum;
+      MPI_Allreduce(&t_proc,&t_max,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
+      MPI_Allreduce(&t_proc,&t_sum,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+      print_info("  - slab %d processed (processing time over tasks: max %.2f s, mean %.2f s)\n",i,t_max,t_sum/NNodes);
+#else //_HAVE_MPI
+      print_info("  - slab %d processed\n",i);
+#endif //_HAVE_MPI
+    }
   }
 #ifdef _HAVE_MPI
   free(buffer_sr);
