@@ -321,6 +321,82 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 }
 #endif //_HAVE_MPI
 
+#ifdef _HAVE_MPI
+//Ring exchange of the density and velocity slabs in which the transfer of the next slab runs while the
+//current one is processed, and no copy back: two sets of buffers, swapped after every round.
+//Only used when the line of sight just fills the skewers of the sources (every skewer point gets
+//a contribution from at most two slabs, so the order of the slabs does not change the result).
+//The own slab is processed first, then the slab of the left neighbour, and so on.
+static void ring_overlapped(ParamCoLoRe *par,long size_slice)
+{
+  int i,k;
+  flouble *orig[4]={par->grid_dens,par->grid_velx,par->grid_vely,par->grid_velz};
+  flouble *cur[4],*alt[4];
+  long nbatch=(size_slice+SENDRECV_BATCH-1)/SENDRECV_BATCH;
+  MPI_Request *req=my_malloc(2*4*nbatch*sizeof(MPI_Request));
+  for(k=0;k<4;k++) {
+    cur[k]=orig[k];
+    alt[k]=my_malloc(size_slice*sizeof(flouble));
+  }
+  for(i=0;i<NNodes;i++) {
+    int node_i_am_now=(NodeThis-i+NNodes)%NNodes;
+    int nreq=0;
+    double t_proc0;
+    par->grid_dens=cur[0];
+    par->grid_velx=cur[1];
+    par->grid_vely=cur[2];
+    par->grid_velz=cur[3];
+    par->nz_here=par->nz_all[node_i_am_now];
+    par->iz0_here=par->iz0_all[node_i_am_now];
+    if(i<NNodes-1) {
+      int b;
+      for(k=0;k<4;k++) {
+        for(b=0;b<nbatch;b++) {
+          long lo=b*(long)SENDRECV_BATCH,n=size_slice-lo;
+          if(n>SENDRECV_BATCH) n=SENDRECV_BATCH;
+          MPI_Isend(&(cur[k][lo]),(int)n,FLOUBLE_MPI,NodeRight,(int)(k*nbatch+b),MPI_COMM_WORLD,&(req[nreq++]));
+          MPI_Irecv(&(alt[k][lo]),(int)n,FLOUBLE_MPI,NodeLeft ,(int)(k*nbatch+b),MPI_COMM_WORLD,&(req[nreq++]));
+        }
+      }
+    }
+    t_proc0=MPI_Wtime();
+    srcs_get_beam_properties(par);
+    if(getenv("COLORE_TIMING")) {
+      double t_proc=MPI_Wtime()-t_proc0,t_max,t_sum,t_w0=MPI_Wtime();
+      MPI_Allreduce(&t_proc,&t_max,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
+      MPI_Allreduce(&t_proc,&t_sum,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
+      print_info("  - slab %d processed (processing time over tasks: max %.2f s, mean %.2f s)\n",i,t_max,t_sum/NNodes);
+      (void)t_w0;
+    }
+    if(i<NNodes-1) {
+      double t_wait0=MPI_Wtime();
+      MPI_Waitall(nreq,req,MPI_STATUSES_IGNORE);
+      t_ring_mpi+=MPI_Wtime()-t_wait0; //time waiting for the transfer after the processing
+      for(k=0;k<4;k++) {
+        flouble *tmp=cur[k];
+        cur[k]=alt[k];
+        alt[k]=tmp;
+      }
+    }
+  }
+  //Back to the original buffers (the content of the fields is not needed after the line of sight)
+  par->grid_dens=orig[0];
+  par->grid_velx=orig[1];
+  par->grid_vely=orig[2];
+  par->grid_velz=orig[3];
+  par->nz_here=par->nz_all[NodeThis];
+  par->iz0_here=par->iz0_all[NodeThis];
+  for(k=0;k<4;k++) {
+    //whichever of the two buffers is not an original one was allocated here
+    if(cur[k]!=orig[k]) free(cur[k]);
+    else free(alt[k]);
+  }
+  free(req);
+  if(getenv("COLORE_TIMING"))
+    print_info("  - overlapped ring: task 0 waited %.2f s for the transfers after processing\n",t_ring_mpi);
+}
+#endif //_HAVE_MPI
+
 void get_beam_properties(ParamCoLoRe *par)
 {
   print_info("*** Getting LOS information\n");
@@ -367,7 +443,20 @@ void get_beam_properties(ParamCoLoRe *par)
   }
 #endif //_HAVE_MPI
 
-  for(i=0;i<NNodes;i++) {
+  int use_overlap=0;
+#ifdef _HAVE_MPI
+  use_overlap=(NNodes>1) && !need_npot && par->lpt_vels && par->do_srcs && !par->do_kappa &&
+    !par->do_isw && !par->do_lensing && !par->do_imap && !par->do_cstm && !getenv("COLORE_NO_OVERLAP");
+  if(use_overlap) {
+    if(size_slice_velx!=size_slice_dens || size_slice_vely!=size_slice_dens || size_slice_velz!=size_slice_dens)
+      use_overlap=0;
+  }
+  if(use_overlap) {
+    ring_overlapped(par,size_slice_dens);
+  }
+#endif //_HAVE_MPI
+
+  for(i=0;i<NNodes && !use_overlap;i++) {
     int node_i_am_now=(NodeThis-i-1+NNodes)%NNodes;
 #ifdef _HAVE_MPI
 #ifdef _DEBUG
