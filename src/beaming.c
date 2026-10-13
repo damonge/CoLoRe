@@ -274,12 +274,31 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
 }
 
 #ifdef _HAVE_MPI
+static double t_ring_mpi=0,t_ring_copy=0; //Time spent in the ring exchange (for COLORE_TIMING)
+
+//Copy of a slab after the exchange, shared among the OpenMP threads (it was a single memcpy, which
+//runs at the speed of one core and is done 5 times per round on slabs of GBs)
+static void copy_slab(flouble *dest,flouble *src,long count)
+{
+#define COPY_CHUNK 1048576
+  long nchunks=(count+COPY_CHUNK-1)/COPY_CHUNK,ic;
+#ifdef _HAVE_OMP
+#pragma omp parallel for schedule(static)
+#endif //_HAVE_OMP
+  for(ic=0;ic<nchunks;ic++) {
+    long lo=ic*COPY_CHUNK,hi=lo+COPY_CHUNK;
+    if(hi>count) hi=count;
+    memcpy(&(dest[lo]),&(src[lo]),(hi-lo)*sizeof(flouble));
+  }
+}
+
 static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 {
   // still need to compile even if never called
 #define SENDRECV_BATCH 1073741824
   int remainder;
   long i_sofar=0;
+  double t0=MPI_Wtime();
   while(i_sofar+SENDRECV_BATCH<count) {
     MPI_Sendrecv(&(data[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeRight,tag,
                 &(buff[i_sofar]),SENDRECV_BATCH,FLOUBLE_MPI,NodeLeft ,tag,
@@ -292,7 +311,13 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
                 &(buff[i_sofar]),remainder,FLOUBLE_MPI,NodeLeft ,tag,
                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
   }
-  memcpy(data,buff,count*sizeof(flouble));
+  double t1=MPI_Wtime();
+  if(getenv("COLORE_SERIAL_COPY"))
+    memcpy(data,buff,count*sizeof(flouble));
+  else
+    copy_slab(data,buff,count);
+  t_ring_mpi+=t1-t0;
+  t_ring_copy+=MPI_Wtime()-t1;
 }
 #endif //_HAVE_MPI
 
@@ -359,7 +384,7 @@ void get_beam_properties(ParamCoLoRe *par)
 #endif //_HAVE_MPI
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
-    if(getenv("COLORE_TIMING")) print_info("  - slab %d exchanged\n",i);
+    if(getenv("COLORE_TIMING")) print_info("  - slab %d exchanged (task 0, total so far: MPI %.2f s, copy %.2f s)\n",i,t_ring_mpi,t_ring_copy);
 #ifdef _HAVE_MPI
     double t_proc0=MPI_Wtime();
 #endif //_HAVE_MPI
