@@ -433,7 +433,8 @@ void get_beam_properties(ParamCoLoRe *par)
   //The Newtonian potential is only used along the line of sight for velocities when they are not
   //provided by the LPT (lpt_vels=0), and for the tidal tensor (lensing, kappa) and the ISW term.
   //Without any of them do not send it around the ring (one of the five fields exchanged).
-  int need_npot=!par->lpt_vels || par->do_kappa || par->do_isw || par->do_lensing;
+  int need_npot=!par->lpt_vels || par->do_kappa || par->do_isw || par->do_lensing ||
+    (getenv("COLORE_SEND_NPOT")!=NULL); //COLORE_SEND_NPOT: the original exchange, for comparisons
   if(par->do_srcs) {
     int ipop;
     for(ipop=0;ipop<par->n_srcs;ipop++) {
