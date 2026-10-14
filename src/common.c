@@ -339,6 +339,23 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th
 }
 */
 
+int need_newtonian_potential(ParamCoLoRe *par)
+{
+  //The Newtonian potential is only used along the line of sight for velocities when they are not
+  //provided by the LPT (lpt_vels=0), and for the tidal tensor (lensing, kappa) and the ISW term.
+  //COLORE_SEND_NPOT keeps it, for comparisons with the original code.
+  int need=!par->lpt_vels || par->do_kappa || par->do_isw || par->do_lensing ||
+    (getenv("COLORE_SEND_NPOT")!=NULL);
+  if(par->do_srcs) {
+    int ipop;
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      if(par->lensing_srcs[ipop])
+        need=1;
+    }
+  }
+  return need;
+}
+
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
 {
   *nr=NSAMP_RAD*ngrid/2;

@@ -430,18 +430,9 @@ void get_beam_properties(ParamCoLoRe *par)
   long size_slice_vely=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
   long size_slice_velz=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
   flouble *buffer_sr=my_malloc(size_slice_npot*sizeof(flouble));
-  //The Newtonian potential is only used along the line of sight for velocities when they are not
-  //provided by the LPT (lpt_vels=0), and for the tidal tensor (lensing, kappa) and the ISW term.
-  //Without any of them do not send it around the ring (one of the five fields exchanged).
-  int need_npot=!par->lpt_vels || par->do_kappa || par->do_isw || par->do_lensing ||
-    (getenv("COLORE_SEND_NPOT")!=NULL); //COLORE_SEND_NPOT: the original exchange, for comparisons
-  if(par->do_srcs) {
-    int ipop;
-    for(ipop=0;ipop<par->n_srcs;ipop++) {
-      if(par->cats[ipop]->has_lensing)
-        need_npot=1;
-    }
-  }
+  //Without a use for the Newtonian potential do not send it around the ring (one of the five fields
+  //exchanged); it is then not even allocated (see allocate_fftw).
+  int need_npot=need_newtonian_potential(par);
 #endif //_HAVE_MPI
 
   int use_overlap=0;

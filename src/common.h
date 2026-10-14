@@ -414,6 +414,7 @@ void rng_gauss(gsl_rng *rng,double *r1,double *r2);
 void end_rng(gsl_rng *rng);
 unsigned long long get_max_memory(ParamCoLoRe *par,int just_test);
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr);
+int need_newtonian_potential(ParamCoLoRe *par);
 //void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th,double *phi);
 HealpixShells *hp_shell_alloc(int nq,int nside,int nside_base,int nr);
 HealpixShellsAdaptive *hp_shell_adaptive_alloc(int nq, int nside_max, int nside_base,int nr,

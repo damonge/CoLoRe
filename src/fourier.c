@@ -223,14 +223,21 @@ void allocate_fftw(ParamCoLoRe *par)
   par->grid_dens=(flouble *)(par->grid_dens_f);
 
 // Intialize the needed memory for the 2LPT velocity arrays
+  //The Newtonian potential (and the two slices of its neighbours) is only allocated if used
+  if(need_newtonian_potential(par)) {
 #ifdef _SPREC
-  par->grid_npot_f=fftwf_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
+    par->grid_npot_f=fftwf_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
 #else //_SPREC
-  par->grid_npot_f= fftw_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
+    par->grid_npot_f= fftw_alloc_complex(dsize+2*par->n_grid*(par->n_grid/2+1));
 #endif //_SPREC
-  if(par->grid_npot_f==NULL)
-    report_error(1,"Ran out of memory\n");
-  par->grid_npot=(flouble *)(par->grid_npot_f);
+    if(par->grid_npot_f==NULL)
+      report_error(1,"Ran out of memory\n");
+    par->grid_npot=(flouble *)(par->grid_npot_f);
+  }
+  else {
+    par->grid_npot_f=NULL;
+    par->grid_npot=NULL;
+  }
 
 if (par->lpt_vels) {
 #ifdef _SPREC
@@ -263,8 +270,10 @@ if (par->lpt_vels) {
   }
 
 #ifdef _HAVE_MPI
-  par->slice_left =&(par->grid_npot[2*dsize]);
-  par->slice_right=&(par->grid_npot[2*(dsize+par->n_grid*(par->n_grid/2+1))]);
+  if(par->grid_npot!=NULL) {
+    par->slice_left =&(par->grid_npot[2*dsize]);
+    par->slice_right=&(par->grid_npot[2*(dsize+par->n_grid*(par->n_grid/2+1))]);
+  }
 #endif //_HAVE_MPI
 }
 
@@ -382,18 +391,20 @@ static void create_grids_fourier(ParamCoLoRe *par)
 	  
 	  if(k_mod2<=0) {
 	    par->grid_dens_f[index]=0;
-	    par->grid_npot_f[index]=0;
+	    if(par->grid_npot_f!=NULL)
+	      par->grid_npot_f[index]=0;
 	  }
 	  else {
 	    double lgk=0.5*log10(k_mod2);
 	    double sigma2=pk_linear0(par,lgk)*idk3;
 	    rng_delta_gauss(&delta_mod,&delta_phase,rng_thr,sigma2);
 	    par->grid_dens_f[index]=delta_mod*cexp(I*delta_phase);
-	    par->grid_npot_f[index]=-par->prefac_lensing*par->grid_dens_f[index]/k_mod2;
+	    if(par->grid_npot_f!=NULL)
+	      par->grid_npot_f[index]=-par->prefac_lensing*par->grid_dens_f[index]/k_mod2;
 	    if(par->do_smoothing) {
 	      double sm=exp(-0.5*par->r2_smooth*k_mod2);
 	      par->grid_dens_f[index]*=sm;
-	      if(par->smooth_potential)
+	      if(par->smooth_potential && par->grid_npot_f!=NULL)
 		par->grid_npot_f[index]*=sm;
 	    }
 	  }
@@ -421,7 +432,8 @@ void create_cartesian_fields(ParamCoLoRe *par)
   print_info("Transforming density and Newtonian potential\n");
   if(NodeThis==0) timer(0);
   fftw_wrap_c2r(par->n_grid,par->grid_dens_f,par->grid_dens);
-  fftw_wrap_c2r(par->n_grid,par->grid_npot_f,par->grid_npot);
+  if(par->grid_npot!=NULL)
+    fftw_wrap_c2r(par->n_grid,par->grid_npot_f,par->grid_npot);
   if(NodeThis==0) timer(2);
 
   print_info("Normalizing density and Newtonian potential \n");
@@ -434,30 +446,41 @@ void create_cartesian_fields(ParamCoLoRe *par)
     long ii;
     double norm=pow(sqrt(2*M_PI)/par->l_box,3);
     
+    if(par->grid_npot!=NULL) {
 #ifdef _HAVE_OMP
 #pragma omp for
 #endif //_HAVE_OMP
-    for(ii=0;ii<n_grid_tot;ii++) {
-      par->grid_dens[ii]*=norm;
-      par->grid_npot[ii]*=norm;
+      for(ii=0;ii<n_grid_tot;ii++) {
+        par->grid_dens[ii]*=norm;
+        par->grid_npot[ii]*=norm;
+      }
+    }
+    else {
+#ifdef _HAVE_OMP
+#pragma omp for
+#endif //_HAVE_OMP
+      for(ii=0;ii<n_grid_tot;ii++)
+        par->grid_dens[ii]*=norm;
     }
   }//end omp parallel
   if(NodeThis==0) timer(2);
 
   long slice_size=2*(par->n_grid/2+1)*par->n_grid;
+  if(par->grid_npot!=NULL) {
 #ifdef _HAVE_MPI
-  MPI_Status stat;
+    MPI_Status stat;
 
-  //Pass rightmost slice to right node and receive left slice from left node
-  MPI_Sendrecv(&(par->grid_npot[(par->nz_here-1)*slice_size]),slice_size,FLOUBLE_MPI,NodeRight,1,
-	       par->slice_left,slice_size,FLOUBLE_MPI,NodeLeft,1,MPI_COMM_WORLD,&stat);
-  //Pass leftmost slice to left node and receive right slice from right node
-  MPI_Sendrecv(par->grid_npot,slice_size,FLOUBLE_MPI,NodeLeft,2,
-	       par->slice_right,slice_size,FLOUBLE_MPI,NodeRight,2,MPI_COMM_WORLD,&stat);
+    //Pass rightmost slice to right node and receive left slice from left node
+    MPI_Sendrecv(&(par->grid_npot[(par->nz_here-1)*slice_size]),slice_size,FLOUBLE_MPI,NodeRight,1,
+	         par->slice_left,slice_size,FLOUBLE_MPI,NodeLeft,1,MPI_COMM_WORLD,&stat);
+    //Pass leftmost slice to left node and receive right slice from right node
+    MPI_Sendrecv(par->grid_npot,slice_size,FLOUBLE_MPI,NodeLeft,2,
+	         par->slice_right,slice_size,FLOUBLE_MPI,NodeRight,2,MPI_COMM_WORLD,&stat);
 #else //_HAVE_MPI
-  par->slice_left=&(par->grid_npot[(par->n_grid-1)*slice_size]);
-  par->slice_right=par->grid_npot;
+    par->slice_left=&(par->grid_npot[(par->n_grid-1)*slice_size]);
+    par->slice_right=par->grid_npot;
 #endif //_HAVE_MPI
+  }
 
   compute_sigma_dens(par);
 
