@@ -526,6 +526,157 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
 
 //This is essentially the same as above but including the velocities of the particles for the 2LPT case. TO DO: Merge with the above!
 #ifdef _HAVE_MPI
+static inline int sp_in(flouble zz,flouble a,flouble b,flouble c,flouble d,flouble e,flouble f)
+{
+  return ((zz>=a) && (zz<b)) || ((zz>=c) && (zz<d)) || ((zz>=e) && (zz<f));
+}
+
+//Selection step of share_particles_2lpt, in parallel but giving exactly the result of the serial loop:
+//particles keep their order. Those outside the true range of this task are copied to the buffer
+//(x_b...), and those inside the range or the borders (the particles it keeps, which can be used for the
+//interpolation) are packed to the start of the arrays. Counts per chunk of particles give the places of
+//the buffer entries; the packing is done block by block through a temporary copy, because a thread would
+//otherwise overwrite particles that another thread has not read yet.
+static void sp_select_2lpt(unsigned long long np_real,unsigned long long np_allocated,unsigned long long nbuffer,
+			   flouble *x,flouble *y,flouble *z,flouble *vx,flouble *vy,flouble *vz,
+			   flouble *x_b,flouble *y_b,flouble *z_b,flouble *vx_b,flouble *vy_b,flouble *vz_b,
+			   flouble zl,flouble zr,flouble bll,flouble blr,flouble brl,flouble brr,
+			   flouble ztl,flouble ztr,
+			   unsigned long long *n_inrange,unsigned long long *n_inbuffer)
+{
+  int c,nch=1,nt_max=1;
+#ifdef _HAVE_OMP
+  nt_max=omp_get_max_threads();
+  nch=4*nt_max;
+#endif //_HAVE_OMP
+  unsigned long long *off_inc=my_calloc(nch+1,sizeof(unsigned long long));
+  unsigned long long *off_snd=my_calloc(nch+1,sizeof(unsigned long long));
+  unsigned long long *first=my_calloc(nch,sizeof(unsigned long long));
+
+  //Count what each chunk keeps and sends, and where it finds the first particle it does not keep
+#ifdef _HAVE_OMP
+#pragma omp parallel for default(none) schedule(static) \
+  shared(nch,np_real,z,off_inc,off_snd,first,zl,zr,bll,blr,brl,brr,ztl,ztr)
+#endif //_HAVE_OMP
+  for(c=0;c<nch;c++) {
+    unsigned long long ip;
+    unsigned long long a=np_real*c/nch,b=np_real*(c+1)/nch;
+    unsigned long long ninc=0,nsnd=0,f=np_real;
+    for(ip=a;ip<b;ip++) {
+      int inc=sp_in(z[ip],zl,zr,bll,blr,brl,brr);
+      if(inc) ninc++;
+      else if(f==np_real) f=ip;
+      if((z[ip]<ztl) || (z[ip]>=ztr)) nsnd++;
+    }
+    off_inc[c+1]=ninc;
+    off_snd[c+1]=nsnd;
+    first[c]=f;
+  }
+  unsigned long long first_out=np_real;
+  for(c=0;c<nch;c++) {
+    off_inc[c+1]+=off_inc[c];
+    off_snd[c+1]+=off_snd[c];
+    if(first[c]<first_out) first_out=first[c];
+  }
+  if(off_snd[nch]>nbuffer)
+    report_error(1,"Out of memory, enlarge buffer %llu (%llu,%llu) %llu\n",
+		 np_allocated,off_snd[nch],nbuffer,off_inc[nch]);
+  if(off_inc[nch]>np_allocated)
+    report_error(1,"Out of memory, enlarge buffer %llu %llu %llu\n",np_allocated,off_snd[nch],off_inc[nch]);
+
+  //Particles to send, in order (nothing has been moved yet)
+#ifdef _HAVE_OMP
+#pragma omp parallel for default(none) schedule(static) \
+  shared(nch,np_real,x,y,z,vx,vy,vz,x_b,y_b,z_b,vx_b,vy_b,vz_b,off_snd,ztl,ztr)
+#endif //_HAVE_OMP
+  for(c=0;c<nch;c++) {
+    unsigned long long ip;
+    unsigned long long a=np_real*c/nch,b=np_real*(c+1)/nch;
+    unsigned long long kb=off_snd[c];
+    for(ip=a;ip<b;ip++) {
+      if((z[ip]<ztl) || (z[ip]>=ztr)) {
+	x_b[kb]=x[ip]; y_b[kb]=y[ip]; z_b[kb]=z[ip];
+	vx_b[kb]=vx[ip]; vy_b[kb]=vy[ip]; vz_b[kb]=vz[ip];
+	kb++;
+      }
+    }
+  }
+
+  //Pack the particles to keep. Those before the first one that is dropped do not move.
+  if(off_inc[nch]<np_real) {
+    flouble *arr[6]={x,y,z,vx,vy,vz};
+    flouble *tmp[6];
+    unsigned long long blk=((unsigned long long)1)<<22;
+    unsigned long long *tc=my_calloc(nt_max+1,sizeof(unsigned long long));
+    unsigned long long dest=first_out,s0,nblk_inc=0;
+    int q;
+    for(q=0;q<6;q++)
+      tmp[q]=my_malloc(blk*sizeof(flouble));
+    for(s0=first_out;s0<np_real;s0+=blk) {
+      unsigned long long e0=s0+blk;
+      if(e0>np_real) e0=np_real;
+#ifdef _HAVE_OMP
+#pragma omp parallel shared(arr,tmp,tc,s0,e0,dest,nblk_inc,z,zl,zr,bll,blr,brl,brr)
+#endif //_HAVE_OMP
+      {
+	int t=0,nt=1,qq;
+	unsigned long long ip,kk,cnt=0;
+	long k;
+#ifdef _HAVE_OMP
+	t=omp_get_thread_num();
+	nt=omp_get_num_threads();
+#endif //_HAVE_OMP
+	unsigned long long a=s0+(e0-s0)*t/nt,b=s0+(e0-s0)*(t+1)/nt;
+	for(ip=a;ip<b;ip++)
+	  cnt+=sp_in(z[ip],zl,zr,bll,blr,brl,brr);
+	tc[t]=cnt;
+#ifdef _HAVE_OMP
+#pragma omp barrier
+#pragma omp single
+#endif //_HAVE_OMP
+	{
+	  unsigned long long acc=0;
+	  int tt;
+	  for(tt=0;tt<nt;tt++) {
+	    unsigned long long cc=tc[tt];
+	    tc[tt]=acc;
+	    acc+=cc;
+	  }
+	  nblk_inc=acc;
+	}
+	kk=tc[t];
+	for(ip=a;ip<b;ip++) {
+	  if(sp_in(z[ip],zl,zr,bll,blr,brl,brr)) {
+	    for(qq=0;qq<6;qq++)
+	      tmp[qq][kk]=arr[qq][ip];
+	    kk++;
+	  }
+	}
+#ifdef _HAVE_OMP
+#pragma omp barrier
+#pragma omp for schedule(static)
+#endif //_HAVE_OMP
+	for(k=0;k<(long)nblk_inc;k++) {
+	  for(qq=0;qq<6;qq++)
+	    arr[qq][dest+k]=tmp[qq][k];
+	}
+      }
+      dest+=nblk_inc;
+    }
+    if(dest!=off_inc[nch])
+      report_error(1,"Error packing particles\n");
+    for(q=0;q<6;q++)
+      free(tmp[q]);
+    free(tc);
+  }
+
+  *n_inrange=off_inc[nch];
+  *n_inbuffer=off_snd[nch];
+  free(off_inc);
+  free(off_snd);
+  free(first);
+}
+
 static void share_particles_2lpt(ParamCoLoRe *par,unsigned long long np_allocated,unsigned long long np_real,
 			    flouble *x,flouble *y,flouble *z,
 			    flouble *vx,flouble *vy,flouble *vz,
@@ -572,47 +723,33 @@ static void share_particles_2lpt(ParamCoLoRe *par,unsigned long long np_allocate
 
   //Figure out which particles need to be moved and which stay
   unsigned long long n_inrange=0,n_inbuffer=0;
-  for(ip=0;ip<np_real;ip++) {
-    int include=0,send=0;
-    if(((z[ip]>=z_left[NodeThis]) && (z[ip]<z_right[NodeThis])) ||
-       ((z[ip]>=z_bleft_left[NodeThis]) && (z[ip]<z_bleft_right[NodeThis])) ||
-       ((z[ip]>=z_bright_left[NodeThis]) && (z[ip]<z_bright_right[NodeThis])))
-      include=1;
-    if((z[ip]<z_true_left[NodeThis]) || (z[ip]>=z_true_right[NodeThis]))
-      send=1;
-
-    if(send) {
-      if(n_inbuffer>=nbuffer)
-	report_error(1,"Out of memory, enlarge buffer %llu (%llu,%llu) %llu\n",
-		     np_allocated,n_inbuffer,nbuffer,n_inrange);
-      x_b[n_inbuffer]=x[ip];
-      y_b[n_inbuffer]=y[ip];
-      z_b[n_inbuffer]=z[ip];
-      vx_b[n_inbuffer]=vx[ip];
-      vy_b[n_inbuffer]=vy[ip];
-      vz_b[n_inbuffer]=vz[ip];
-      n_inbuffer++;
-    }
-
-    if(include) {
-      if(n_inrange>=np_allocated)
-	report_error(1,"Out of memory, enlarge buffer %llu %llu %llu\n",np_allocated,n_inbuffer,n_inrange);
-      x[n_inrange]=x[ip];
-      y[n_inrange]=y[ip];
-      z[n_inrange]=z[ip];
-      vx[n_inrange]=vx[ip];
-      vy[n_inrange]=vy[ip];
-      vz[n_inrange]=vz[ip];
-      n_inrange++;
-    }
-  }
+  sp_select_2lpt(np_real,np_allocated,nbuffer,x,y,z,vx,vy,vz,x_b,y_b,z_b,vx_b,vy_b,vz_b,
+		 z_left[NodeThis],z_right[NodeThis],z_bleft_left[NodeThis],z_bleft_right[NodeThis],
+		 z_bright_left[NodeThis],z_bright_right[NodeThis],
+		 z_true_left[NodeThis],z_true_right[NodeThis],&n_inrange,&n_inbuffer);
 
   for(inode=1;inode<NNodes;inode++) {
     int node_to=(NodeThis+inode+NNodes)%NNodes;
     int node_from=(NodeThis-inode+NNodes)%NNodes;
     int i=0,j=n_inbuffer-1;
 
-    while(1) {
+    //Count (in parallel) the particles of the buffer that go to this task. When there are none, the
+    //partition below would only scan the whole buffer and leave it as it is (i=n_inbuffer, j=n_inbuffer-1).
+    unsigned long long n_dest=0;
+    {
+      long ib;
+      flouble a1=z_left[node_to],a2=z_right[node_to],a3=z_bleft_left[node_to],a4=z_bleft_right[node_to];
+      flouble a5=z_bright_left[node_to],a6=z_bright_right[node_to];
+#ifdef _HAVE_OMP
+#pragma omp parallel for default(none) shared(n_inbuffer,z_b,a1,a2,a3,a4,a5,a6) reduction(+:n_dest) schedule(static)
+#endif //_HAVE_OMP
+      for(ib=0;ib<(long)n_inbuffer;ib++)
+	n_dest+=sp_in(z_b[ib],a1,a2,a3,a4,a5,a6);
+    }
+    if(n_dest==0)
+      i=n_inbuffer;
+
+    while(n_dest>0) {
       while(i<n_inbuffer && 
 	    !(((z_b[i]>=z_left[node_to]) && (z_b[i]<z_right[node_to])) ||
 	      ((z_b[i]>=z_bleft_left[node_to]) && (z_b[i]<z_bleft_right[node_to])) ||
