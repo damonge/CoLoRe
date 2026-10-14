@@ -987,6 +987,36 @@ static void lpt_1(ParamCoLoRe *par)
 #endif //_DEBUG
 }
 
+//Moves an array from the padded layout of the FFT grids (rows of 2*(n/2+1) floats) to rows of n floats,
+//in place. A row goes to a lower or equal address, but rows handled by different threads would overwrite
+//each other's unread data, so blocks of rows are copied to a buffer first and written back after all of
+//them have been read; later blocks are never overwritten by earlier ones.
+static void unpad_rows(ParamCoLoRe *par,flouble *arr)
+{
+  long n=par->n_grid;
+  long ngx=2*(par->n_grid/2+1);
+  long nrows=par->nz_here*n;
+  long block=4096;
+  flouble *tmp=my_malloc(block*n*sizeof(flouble));
+  long r0;
+  for(r0=0;r0<nrows;r0+=block) {
+    long r1=r0+block;
+    long r;
+    if(r1>nrows) r1=nrows;
+#ifdef _HAVE_OMP
+#pragma omp parallel for default(none) shared(arr,tmp,r0,r1,n,ngx) schedule(static)
+#endif //_HAVE_OMP
+    for(r=r0;r<r1;r++)
+      memcpy(&(tmp[(r-r0)*n]),&(arr[r*ngx]),n*sizeof(flouble));
+#ifdef _HAVE_OMP
+#pragma omp parallel for default(none) shared(arr,tmp,r0,r1,n) schedule(static)
+#endif //_HAVE_OMP
+    for(r=r0;r<r1;r++)
+      memcpy(&(arr[r*n]),&(tmp[(r-r0)*n]),n*sizeof(flouble));
+  }
+  free(tmp);
+}
+
 static void lpt_2(ParamCoLoRe *par)
 {
   int axis;
@@ -1006,16 +1036,11 @@ static void lpt_2(ParamCoLoRe *par)
     cdisp[axis]=dftw_alloc_complex(dsize_buff);
     disp[axis]=(flouble *)cdisp[axis];
   }
-  if (par->lpt_vels) {
-    for(axis=0; axis<9; axis++) {
-      cdigrad[axis] = dftw_alloc_complex(dsize_buff);
-      digrad[axis] = (flouble *)cdigrad[axis];
-    }
-  } else {
-    for(axis=0; axis<6; axis++) {
-      cdigrad[axis] = dftw_alloc_complex(dsize_buff);
-      digrad[axis] = (flouble *)cdigrad[axis];
-    }
+  //Six arrays are enough also with the velocities: the particle positions and velocities are written
+  //over the displacement arrays (see below), not into three more arrays
+  for(axis=0; axis<6; axis++) {
+    cdigrad[axis] = dftw_alloc_complex(dsize_buff);
+    digrad[axis] = (flouble *)cdigrad[axis];
   }
   
   cdisp[2]=par->grid_dens_f;
@@ -1173,6 +1198,17 @@ static void lpt_2(ParamCoLoRe *par)
   }
 
   print_info(" - Computing particle positions\n");
+  //Where the positions and velocities of the particles end up. With lpt_vels each one is written to the same
+  //grid point of the arrays its displacements come from (positions over disp[0], disp[1] and the free digrad[3];
+  //velocities over digrad[0..2]) and the arrays are packed afterwards; without them they go to digrad[3..5].
+  flouble *(pos_out[3]),*(vel_out[3]);
+  if (par->lpt_vels) {
+    pos_out[0]=disp[0]; pos_out[1]=disp[1]; pos_out[2]=digrad[3];
+    vel_out[0]=digrad[0]; vel_out[1]=digrad[1]; vel_out[2]=digrad[2];
+  } else {
+    pos_out[0]=digrad[3]; pos_out[1]=digrad[4]; pos_out[2]=digrad[5];
+    vel_out[0]=NULL; vel_out[1]=NULL; vel_out[2]=NULL;
+  }
 #ifdef _DEBUG
   double d_sigma2_1=0;
   double d_mean_1[3]={0,0,0};
@@ -1181,9 +1217,9 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_DEBUG
 #ifdef _HAVE_OMP
 #ifdef _DEBUG
-#pragma omp parallel default(none) shared(par,disp,digrad,d_mean_1,d_mean_2,d_sigma2_1,d_sigma2_2)
+#pragma omp parallel default(none) shared(par,disp,digrad,pos_out,vel_out,d_mean_1,d_mean_2,d_sigma2_1,d_sigma2_2)
 #else //_DEBUG
-#pragma omp parallel default(none) shared(par,disp,digrad)
+#pragma omp parallel default(none) shared(par,disp,digrad,pos_out,vel_out)
 #endif //_DEBUG
 #endif //_HAVE_OMP
   {
@@ -1235,13 +1271,17 @@ static void lpt_2(ParamCoLoRe *par)
 	    d_sigma2_2_thr+=digrad[ax][index]*digrad[ax][index];
 #endif //_DEBUG
 	    flouble p=xv[ax]+dg*disp[ax][index]+d2g*digrad[ax][index]+par->pos_obs[ax];
-	    if (par->lpt_vels) { //Get the particles 2LPT velocities!
-	       flouble vels = (dg*f1g*disp[ax][index]+d2g*f2g*digrad[ax][index])/invhz;
-	       digrad[6+ax][index_nopad]=vels;
-            }
+	    flouble vels=0;
+	    if (par->lpt_vels) //Get the particles 2LPT velocities!
+	       vels = (dg*f1g*disp[ax][index]+d2g*f2g*digrad[ax][index])/invhz;
 	    if(p<0) p+=par->l_box;
 	    if(p>=par->l_box) p-=par->l_box;
-	    digrad[3+ax][index_nopad]=p;
+	    if (par->lpt_vels) { //over the inputs of this grid point, which are not read again
+	       vel_out[ax][index]=vels;
+	       pos_out[ax][index]=p;
+	    }
+	    else
+	       pos_out[ax][index_nopad]=p;
 	  }
 	  par->grid_dens[index]=0;
 	  // Keep the grids to zero, we will fill them with interpolation scheme (only CIC now; see above)
@@ -1306,26 +1346,42 @@ static void lpt_2(ParamCoLoRe *par)
   }
 #endif //_DEBUG
 
+  if (par->lpt_vels) {
+    //Pack the six arrays, and free the two that were only used for the second derivatives
+    for(axis=0;axis<3;axis++) {
+      unpad_rows(par,pos_out[axis]);
+      unpad_rows(par,vel_out[axis]);
+    }
 #ifdef _SPREC
-  for(axis=0;axis<2;axis++)
-    fftwf_free(cdisp[axis]);
-  for(axis=0;axis<3;axis++)
-    fftwf_free(cdigrad[axis]);
+    fftwf_free(cdigrad[4]);
+    fftwf_free(cdigrad[5]);
 #else //_SPREC
-  for(axis=0;axis<2;axis++)
-    fftw_free(cdisp[axis]);
-  for(axis=0;axis<3;axis++)
-    fftw_free(cdigrad[axis]);
+    fftw_free(cdigrad[4]);
+    fftw_free(cdigrad[5]);
 #endif //_SPREC
+  }
+  else {
+#ifdef _SPREC
+    for(axis=0;axis<2;axis++)
+      fftwf_free(cdisp[axis]);
+    for(axis=0;axis<3;axis++)
+      fftwf_free(cdigrad[axis]);
+#else //_SPREC
+    for(axis=0;axis<2;axis++)
+      fftw_free(cdisp[axis]);
+    for(axis=0;axis<3;axis++)
+      fftw_free(cdigrad[axis]);
+#endif //_SPREC
+  }
 
   unsigned long long np_here;
   if (par->output_lpt) {
     np_here=par->nz_here*((long)(par->n_grid*par->n_grid));
     print_info(" - Writing LPT positions\n");
     if (par->lpt_vels) {
-       write_lpt_wvel(par,np_here,digrad[3],digrad[4],digrad[5], digrad[6], digrad[7], digrad[8]);
+       write_lpt_wvel(par,np_here,pos_out[0],pos_out[1],pos_out[2],vel_out[0],vel_out[1],vel_out[2]);
     } else {
-       write_lpt(par,np_here,digrad[3],digrad[4],digrad[5]);
+       write_lpt(par,np_here,pos_out[0],pos_out[1],pos_out[2]);
     }
   }
 
@@ -1334,11 +1390,11 @@ static void lpt_2(ParamCoLoRe *par)
   if (par->lpt_vels) {
      share_particles_2lpt(par,(unsigned long long)(2*dsize_buff),
                   (unsigned long long)(par->nz_here*((long)(par->n_grid*par->n_grid))),
-                  digrad[3],digrad[4],digrad[5],digrad[6],digrad[7],digrad[8],&np_here);
+                  pos_out[0],pos_out[1],pos_out[2],vel_out[0],vel_out[1],vel_out[2],&np_here);
   } else {
      share_particles(par,(unsigned long long)(2*dsize_buff),
 		  (unsigned long long)(par->nz_here*((long)(par->n_grid*par->n_grid))),
-		  digrad[3],digrad[4],digrad[5],&np_here);
+		  pos_out[0],pos_out[1],pos_out[2],&np_here);
   }
 #else //_HAVE_MPI
   np_here=par->nz_here*((long)(par->n_grid*par->n_grid));
@@ -1346,25 +1402,32 @@ static void lpt_2(ParamCoLoRe *par)
 
   print_info(" - Interpolating positions into density field\n");
   if (par->lpt_vels) {
-     pos_2_dens_2lpt(par,np_here,digrad[3],digrad[4],digrad[5],par->grid_dens,digrad[6], digrad[7], digrad[8], par->grid_velx, par->grid_vely, par->grid_velz);
+     pos_2_dens_2lpt(par,np_here,pos_out[0],pos_out[1],pos_out[2],par->grid_dens,vel_out[0],vel_out[1],vel_out[2],par->grid_velx,par->grid_vely,par->grid_velz);
   } else {
-     pos_2_dens(par,np_here,digrad[3],digrad[4],digrad[5],par->grid_dens);
+     pos_2_dens(par,np_here,pos_out[0],pos_out[1],pos_out[2],par->grid_dens);
   }
+  if (par->lpt_vels) { //the arrays that held the positions and velocities
 #ifdef _SPREC
-  for(axis=0;axis<3;axis++)
-    fftwf_free(cdigrad[3+axis]);
-  if(par->lpt_vels) { //the particle velocities were never freed and stayed allocated for the rest of the run
-    for(axis=0;axis<3;axis++)
-      fftwf_free(cdigrad[6+axis]);
-  }
+    for(axis=0;axis<2;axis++)
+      fftwf_free(cdisp[axis]);
+    for(axis=0;axis<4;axis++)
+      fftwf_free(cdigrad[axis]);
 #else //_SPREC
-  for(axis=0;axis<3;axis++)
-    fftw_free(cdigrad[3+axis]);
-  if(par->lpt_vels) {
-    for(axis=0;axis<3;axis++)
-      fftw_free(cdigrad[6+axis]);
-  }
+    for(axis=0;axis<2;axis++)
+      fftw_free(cdisp[axis]);
+    for(axis=0;axis<4;axis++)
+      fftw_free(cdigrad[axis]);
 #endif //_SPREC
+  }
+  else {
+#ifdef _SPREC
+    for(axis=0;axis<3;axis++)
+      fftwf_free(cdigrad[3+axis]);
+#else //_SPREC
+    for(axis=0;axis<3;axis++)
+      fftw_free(cdigrad[3+axis]);
+#endif //_SPREC
+  }
 
   print_info(" - Normalizing density field\n");
 #ifdef _DEBUG
