@@ -606,7 +606,10 @@ static void sp_select_2lpt(unsigned long long np_real,unsigned long long np_allo
   if(off_inc[nch]<np_real) {
     flouble *arr[6]={x,y,z,vx,vy,vz};
     flouble *tmp[6];
-    unsigned long long blk=((unsigned long long)1)<<22;
+    unsigned long long blk=((unsigned long long)1)<<22; //particles per block (COLORE_SHARE_BLOCK to change it)
+    if(getenv("COLORE_SHARE_BLOCK")!=NULL)
+      blk=strtoull(getenv("COLORE_SHARE_BLOCK"),NULL,10);
+    if(blk<1) blk=1;
     unsigned long long *tc=my_calloc(nt_max+1,sizeof(unsigned long long));
     unsigned long long dest=first_out,s0,nblk_inc=0;
     int q;
@@ -621,7 +624,6 @@ static void sp_select_2lpt(unsigned long long np_real,unsigned long long np_allo
       {
 	int t=0,nt=1,qq;
 	unsigned long long ip,kk,cnt=0;
-	long k;
 #ifdef _HAVE_OMP
 	t=omp_get_thread_num();
 	nt=omp_get_num_threads();
@@ -645,20 +647,29 @@ static void sp_select_2lpt(unsigned long long np_real,unsigned long long np_allo
 	  nblk_inc=acc;
 	}
 	kk=tc[t];
-	for(ip=a;ip<b;ip++) {
-	  if(sp_in(z[ip],zl,zr,bll,blr,brl,brr)) {
+	//the particles to keep come in long runs (nearly all of them are kept): copy run by run
+	ip=a;
+	while(ip<b) {
+	  unsigned long long rs,len;
+	  while(ip<b && !sp_in(z[ip],zl,zr,bll,blr,brl,brr))
+	    ip++;
+	  rs=ip;
+	  while(ip<b && sp_in(z[ip],zl,zr,bll,blr,brl,brr))
+	    ip++;
+	  len=ip-rs;
+	  if(len>0) {
 	    for(qq=0;qq<6;qq++)
-	      tmp[qq][kk]=arr[qq][ip];
-	    kk++;
+	      memcpy(&(tmp[qq][kk]),&(arr[qq][rs]),len*sizeof(flouble));
+	    kk+=len;
 	  }
 	}
 #ifdef _HAVE_OMP
 #pragma omp barrier
-#pragma omp for schedule(static)
 #endif //_HAVE_OMP
-	for(k=0;k<(long)nblk_inc;k++) {
+	{
+	  unsigned long long k0=nblk_inc*t/nt,k1=nblk_inc*(t+1)/nt;
 	  for(qq=0;qq<6;qq++)
-	    arr[qq][dest+k]=tmp[qq][k];
+	    memcpy(&(arr[qq][dest+k0]),&(tmp[qq][k0]),(k1-k0)*sizeof(flouble));
 	}
       }
       dest+=nblk_inc;
@@ -727,6 +738,8 @@ static void share_particles_2lpt(ParamCoLoRe *par,unsigned long long np_allocate
 		 z_left[NodeThis],z_right[NodeThis],z_bleft_left[NodeThis],z_bleft_right[NodeThis],
 		 z_bright_left[NodeThis],z_bright_right[NodeThis],
 		 z_true_left[NodeThis],z_true_right[NodeThis],&n_inrange,&n_inbuffer);
+  if(getenv("COLORE_TIMING")!=NULL)
+    print_info("   particles selected: %llu kept, %llu in the buffer (task 0)\n",n_inrange,n_inbuffer);
 
   for(inode=1;inode<NNodes;inode++) {
     int node_to=(NodeThis+inode+NNodes)%NNodes;
@@ -800,6 +813,8 @@ static void share_particles_2lpt(ParamCoLoRe *par,unsigned long long np_allocate
     flouble *vz_send=vz_b+nstay;
 #endif //_HAVE_MPI
     int tag=500+5*inode;
+    if(getenv("COLORE_TIMING")!=NULL)
+      print_info("   offset %d: %llu particles of the buffer go to that task (task 0), partition done\n",inode,n_dest);
 
 #ifdef _HAVE_MPI
     MPI_Status status;
@@ -827,6 +842,8 @@ static void share_particles_2lpt(ParamCoLoRe *par,unsigned long long np_allocate
 #endif //_HAVE_MPI
 
     n_inrange+=nrecv;
+    if(getenv("COLORE_TIMING")!=NULL)
+      print_info("   offset %d: exchanged (task 0 sent %d, received %d)\n",inode,nsend,nrecv);
   }
 
   *np_here=n_inrange;
@@ -1133,7 +1150,10 @@ static void unpad_rows(ParamCoLoRe *par,flouble *arr)
   long n=par->n_grid;
   long ngx=2*(par->n_grid/2+1);
   long nrows=par->nz_here*n;
-  long block=4096;
+  long block=(((long)1)<<27)/n; //rows per block: a 512 MB buffer (COLORE_UNPAD_BLOCK to change it)
+  if(getenv("COLORE_UNPAD_BLOCK")!=NULL)
+    block=atol(getenv("COLORE_UNPAD_BLOCK"));
+  if(block<1) block=1;
   flouble *tmp=my_malloc(block*n*sizeof(flouble));
   long r0;
   for(r0=0;r0<nrows;r0+=block) {
@@ -1484,6 +1504,7 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_DEBUG
 
   if (par->lpt_vels) {
+    print_info(" - Packing positions and velocities\n");
     //Pack the six arrays, and free the two that were only used for the second derivatives
     for(axis=0;axis<3;axis++) {
       unpad_rows(par,pos_out[axis]);
