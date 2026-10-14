@@ -1353,9 +1353,17 @@ static void lpt_2(ParamCoLoRe *par)
 #ifdef _SPREC
   for(axis=0;axis<3;axis++)
     fftwf_free(cdigrad[3+axis]);
+  if(par->lpt_vels) { //the particle velocities were never freed and stayed allocated for the rest of the run
+    for(axis=0;axis<3;axis++)
+      fftwf_free(cdigrad[6+axis]);
+  }
 #else //_SPREC
   for(axis=0;axis<3;axis++)
     fftw_free(cdigrad[3+axis]);
+  if(par->lpt_vels) {
+    for(axis=0;axis<3;axis++)
+      fftw_free(cdigrad[6+axis]);
+  }
 #endif //_SPREC
 
   print_info(" - Normalizing density field\n");
