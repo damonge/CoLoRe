@@ -388,12 +388,12 @@ Catalog *catalog_alloc(int nsrcs,int has_lensing,int has_skw,
     cat->idr=1./cat->dr;
     if(has_skw) {
       if(skw_gauss) {
-        cat->g_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+        cat->g_skw=my_calloc((size_t)cat->nsrc*cat->nr,sizeof(float));
       }
       else {
-        cat->d_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+        cat->d_skw=my_calloc((size_t)cat->nsrc*cat->nr,sizeof(float));
       }
-      cat->v_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+      cat->v_skw=my_calloc((size_t)cat->nsrc*cat->nr,sizeof(float));
     }
   }
   else {
