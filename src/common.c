@@ -293,6 +293,8 @@ void print_info(char *fmt,...)
       printf("[%8.2f s] ",t_now-t_start);
     }
     printf("%s",msg);
+    if(getenv("COLORE_TIMING")) //with timing on, show the progress at once (a killed job otherwise loses the buffered log)
+      fflush(stdout);
   }
 }
 
