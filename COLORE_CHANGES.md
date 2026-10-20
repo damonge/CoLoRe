@@ -65,8 +65,15 @@ At 1024^3 on one node (4 tasks x 32 threads) the whole run took 119.0 s and 85.9
   most two slabs (the two z planes of the trilinear interpolation) and a sum of two terms does not depend on the
   order. This holds only for the source skewers; the new ring is not used for kappa, lensing, ISW or intensity
   maps, which sum over many slabs.
-- Not done at the time of writing: a comparison of a new box with the production box 0 (same parameter file
-  `param_box-0.cfg`, seed 202600000, 24 tasks x 128 threads). It needs one more 24-node run.
+- Settings of the tests: the template parameters of the DR2 FS mocks with `lpt_vels = 1`, and the Makefile default
+  `-D_BIAS_MODEL_2`. Two further 512^3 comparisons on 4 nodes (original `fe5d40e` against this branch, 4 files each)
+  gave identical output: one built with `-D_BIAS_MODEL_3` (the linear bias model that the DR2 FS install note
+  uses) and `lpt_vels = 1`, and one with `lpt_vels = 0` (velocities from the Newtonian potential).
+- Not done: a comparison with the production box 0 (parameter file `param_box-0.cfg`, seed 202600000, 24 tasks x
+  128 threads). That parameter file has no `lpt_vels` line, and both `fe5d40e` and the version of 2026-02-20
+  (`ef2cf6b`, which asks for `lpt_vzty`) stop with "Couldn't read variable" on it, so production was built from a
+  different version of the code than the ones tested here. A byte comparison needs the exact production commit and
+  a build with `-D_BIAS_MODEL_3`.
 
 ## Known problems and limits
 
@@ -74,6 +81,10 @@ At 1024^3 on one node (4 tasks x 32 threads) the whole run took 119.0 s and 85.9
   interface failing to map memory), at about 204 GB per node, early in the run and before any line-of-sight output.
   My guess is that the large MPI buffers (23 GB per array at 12 tasks) exceed what the interface can map; I have not
   tried the original code at 12 nodes, so I do not know that it is new.
+- The speed-up of the line of sight depends on `lpt_vels`. With `lpt_vels = 0` the Newtonian potential is needed
+  for the velocities, so it is still sent around the ring and the overlapped ring (which needs `lpt_vels = 1`) is not
+  used. At 512^3 on 4 nodes the output is identical and the time is the same (24.9 s and 25.0 s); the 4096^3 results
+  above were measured with `lpt_vels = 1` only.
 - The overlapped ring needs four more slabs of memory per node (46 GB at 4096^3 on 24 nodes).
 - The FFTs are now the largest part of the 2LPT stage (about 60% of it). A GPU (cuFFTMp) version was considered and
   not started: it would need 13 to 25 GPU nodes for the memory, could save at most about 0.5 node-hours of the roughly 2 a box
