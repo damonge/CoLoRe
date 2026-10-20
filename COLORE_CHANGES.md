@@ -69,11 +69,16 @@ At 1024^3 on one node (4 tasks x 32 threads) the whole run took 119.0 s and 85.9
   `-D_BIAS_MODEL_2`. Two further 512^3 comparisons on 4 nodes (original `fe5d40e` against this branch, 4 files each)
   gave identical output: one built with `-D_BIAS_MODEL_3` (the linear bias model that the DR2 FS install note
   uses) and `lpt_vels = 1`, and one with `lpt_vels = 0` (velocities from the Newtonian potential).
-- Not done: a comparison with the production box 0 (parameter file `param_box-0.cfg`, seed 202600000, 24 tasks x
-  128 threads). That parameter file has no `lpt_vels` line, and both `fe5d40e` and the version of 2026-02-20
-  (`ef2cf6b`, which asks for `lpt_vzty`) stop with "Couldn't read variable" on it, so production was built from a
-  different version of the code than the ones tested here. A byte comparison needs the exact production commit and
-  a build with `-D_BIAS_MODEL_3`.
+- **Production box 0 reproduced byte for byte.** A 24-node run (24 tasks x 128 threads, 4096^3) of this branch built
+  with `-D_BIAS_MODEL_3`, with the production parameter file `param_box-0.cfg` (seed 202600000) plus the line
+  `lpt_vels = 1`, gives 24 `out_srcs_s1_*.fits` files that are identical with `cmp` to the 24 files of the production
+  box 0 (about 200 GB; the production files are from 2026-05-28). The run took 288.0 s and 136 GB per node (stage
+  times: Gaussian field 9.4 s, 2LPT 166.5 s, point sources 6.2 s, line of sight 86.3 s, writes 19.6 s), the same as
+  with the default bias model. So the production boxes correspond to `lpt_vels = 1` and the linear bias model
+  (`-D_BIAS_MODEL_3`): the production parameter file has no `lpt_vels` line because it was written for an earlier
+  version of the code, which did not have the option (current `master` and the version of 2026-02-20 stop with
+  "Couldn't read variable" on that file). The new code was not compared with the unmodified code at this size and
+  with this build; at 512^3 on 4 nodes they are identical with this build, and at 4096^3 with the default bias model.
 
 ## Known problems and limits
 
