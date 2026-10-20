@@ -77,7 +77,10 @@ At 1024^3 on one node (4 tasks x 32 threads) the whole run took 119.0 s and 85.9
   with the default bias model. So the production boxes correspond to `lpt_vels = 1` and the linear bias model
   (`-D_BIAS_MODEL_3`): the production parameter file has no `lpt_vels` line because it was written for an earlier
   version of the code, which did not have the option (current `master` and the version of 2026-02-20 stop with
-  "Couldn't read variable" on that file). The new code was not compared with the unmodified code at this size and
+  "Couldn't read variable" on that file). Manuel Ruiz-Herrera confirmed this: the production boxes were made with
+  `github.com/mruizherrerab/CoLoRe_2LPT`, a hardcoded version that could only run the 2LPT with 2LPT velocities (later
+  merged into the main code through the option `lpt_vels`, so it behaves like `lpt_vels = 1`), with the type 3 bias
+  model. The new code was not compared with the unmodified code at this size and
   with this build; at 512^3 on 4 nodes they are identical with this build, and at 4096^3 with the default bias model.
 
 ## Known problems and limits
