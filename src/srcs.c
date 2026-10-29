@@ -250,8 +250,17 @@ static void srcs_set_cartesian_single(ParamCoLoRe *par,int ipop)
 	  if(npp>0) {
 	    int ip;
 	    double rr=sqrt(x0*x0+y0*y0+z0*z0);
-	    double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
-	    double dz_rsd=rvel*get_bg(par,rr,BG_V1,0);
+	    double dz_rsd;
+	    if (par->lpt_vels) {
+	       double ir_cell = 1.0/MAX(rr,0.001);
+	       double ux = x0*ir_cell, uy = y0*ir_cell, uz = z0*ir_cell;
+	       dz_rsd = par->grid_velx[index]*ux
+	              + par->grid_vely[index]*uy
+	              + par->grid_velz[index]*uz;
+	    } else {
+           double rvel=factor_vel*get_rvel(par,ix,iy,iz,x0,y0,z0,rr);
+	       dz_rsd=rvel*get_bg(par,rr,BG_V1,0);
+            }
 	    for(ip=0;ip<npp;ip++) {
 	      int ax;
 	      long pix_id_ring,pix_id_nest;
@@ -435,7 +444,7 @@ static void srcs_beams_preproc_single(ParamCoLoRe *par,int ipop)
 #pragma omp for
 #endif //_HAVE_OMP
     for(ii=0;ii<par->cats[ipop]->nsrc;ii++) {
-      par->cats[ipop]->srcs[ii].dz_rsd=0;
+      par->cats[ipop]->srcs[ii].dz_rsd=0; //Here is were really dz_rsd is initialize since get_beam_properties calls this first and cleans!
       par->cats[ipop]->srcs[ii].e1=0;
       par->cats[ipop]->srcs[ii].e2=0;
     }//end omp for
@@ -499,7 +508,11 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       //Compute RSD
       added=interpolate_from_grid(par,xn,NULL,v,NULL,NULL,NULL,RETURN_VEL,INTERP_TYPE_SKW);
       if(added) {
-	vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+	if (par->lpt_vels) { //This is directly velocity
+           vr=(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+	} else {
+	   vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+        }
 	cat->srcs[ip].dz_rsd+=vr;
       }
 
@@ -518,7 +531,11 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
 	  }
       	  if(added) {
-      	    vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+	    if (par->lpt_vels) { //Same as above
+	      vr=(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+	    } else {
+      	      vr=0.5*idx*(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
+            }
             if(cat->skw_gauss)
               cat->g_skw[offp+i_r]+=gauss;
             else
@@ -658,9 +675,10 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       double r=r_of_z(par,z);
       double vg=get_bg(par,r,BG_V1,0);
 
-      //RSDs
-      cat->srcs[ii].dz_rsd*=vg*factor_vel;
-
+      //RSDs //2LPT velocities are already normalized!
+      if (!par->lpt_vels){
+         cat->srcs[ii].dz_rsd*=vg*factor_vel;
+      }
       //Lensing
       if(cat->has_lensing) {
 #ifdef _USE_FAST_LENSING
@@ -724,12 +742,15 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       }
 
       //Skewers
-      if(cat->has_skw) {
-	int i_r,i_r_max=MAX((int)(r*cat->idr+0.5),cat->nr-1);
-	long offp=ii*cat->nr;
-	for(i_r=0;i_r<=i_r_max;i_r++) {
-	  vg=get_bg(par,(i_r+0.5)*cat->dr,BG_V1,0);
-	  cat->v_skw[offp+i_r]*=vg*factor_vel;
+      //2LPT Velocities are already normalized!
+      if (!par->lpt_vels){
+         if(cat->has_skw) {
+	   int i_r,i_r_max=MAX((int)(r*cat->idr+0.5),cat->nr-1);
+	   long offp=ii*cat->nr;
+	   for(i_r=0;i_r<=i_r_max;i_r++) {
+	     vg=get_bg(par,(i_r+0.5)*cat->dr,BG_V1,0);
+	     cat->v_skw[offp+i_r]*=vg*factor_vel;
+	 }
 	}
       }
     }//end omp for

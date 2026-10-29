@@ -64,6 +64,7 @@ static ParamCoLoRe *param_colore_new(void)
   par->smooth_potential=0;
   par->dens_type=DENS_TYPE_LGNR;
   par->lpt_interp_type=INTERP_CIC;
+  par->lpt_vels=0;
   par->lpt_buffer_fraction=0.2;
   par->output_lpt=0;
   par->seed_rng=1234;
@@ -80,6 +81,14 @@ static ParamCoLoRe *param_colore_new(void)
   // Density grids
   par->grid_dens_f=NULL;
   par->grid_dens=NULL;
+  // 2LPT velocity grids
+  par->grid_velx_f=NULL;
+  par->grid_vely_f=NULL;
+  par->grid_velz_f=NULL;
+  par->grid_velx=NULL;
+  par->grid_vely=NULL;
+  par->grid_velz=NULL;
+  //Pot. grids
   par->grid_npot_f=NULL;
   par->grid_npot=NULL;
   par->sigma2_gauss=0;
@@ -170,6 +179,19 @@ static void conf_read_string(config_t *conf,char *secname,char *varname,char *ou
     report_error(1,"Couldn't read variable %s\n",fullpath);
   sprintf(out,"%s",str);
 }
+
+static int conf_read_string_optional(config_t *conf, char *secname, char *varname, char **out)
+  {
+    int stat;
+    char fullpath[256];
+    const char *str;
+    sprintf(fullpath,"%s.%s",secname,varname);
+    stat=config_lookup_string(conf,fullpath,&str);
+    if(stat==CONFIG_FALSE)
+      *out = NULL;
+    else
+      sprintf(out,"%s",str);
+  }
 
 static void conf_read_double(config_t *conf,char *secname,char *varname,double *out)
 {
@@ -282,6 +304,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
   conf_read_int(conf,"field_par","dens_type",&(par->dens_type));
   conf_read_double(conf,"field_par","lpt_buffer_fraction",&(par->lpt_buffer_fraction));
   conf_read_int(conf,"field_par","lpt_interp_type",&(par->lpt_interp_type));
+  conf_read_int(conf,"field_par","lpt_vels",&(par->lpt_vels));
   conf_read_int(conf,"field_par","output_lpt",&(par->output_lpt));
 
   par->seed_rng=i_dum;
@@ -330,7 +353,7 @@ ParamCoLoRe *read_run_params(char *fname,int test_memory)
     sprintf(c_dum,"srcs%d",ii+1);
     conf_read_string(conf,c_dum,"nz_filename",par->fnameNzSrcs[ii]);
     conf_read_string(conf,c_dum,"bias_filename",par->fnameBzSrcs[ii]);
-    conf_read_string(conf,c_dum,"threshold_filename",par->fnameTzSrcs[ii]);
+    conf_read_string_optional(conf,c_dum,"threshold_filename",par->fnameTzSrcs[ii]);
     conf_read_bool(conf,c_dum,"include_lensing",&(par->lensing_srcs[ii]));
     if(par->lensing_srcs[ii])
       par->do_srcs_lensing=1;
@@ -680,6 +703,87 @@ void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,f
   blklen=npart*sizeof(float)*3;
   my_fwrite(&blklen,sizeof(blklen),1,fo);
   for(ipart=0;ipart<npart;ipart++) {
+    my_fwrite(x0,sizeof(float),3,fo);
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  // id
+  blklen=npart*sizeof(unsigned long long);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  long long id0=(long long)(par->iz0_here*((long)(par->n_grid*par->n_grid)));
+  for(ipart=0;ipart<npart;ipart++) {
+    unsigned long long id_out=id0+ipart;
+    my_fwrite(&id_out,sizeof(unsigned long long),1,fo);
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  fclose(fo);
+}
+
+// TO DO: Merge the above and this
+void write_lpt_wvel(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z, flouble *vx, flouble *vy, flouble *vz)
+{
+  GadgetHeader header;
+  FILE *fo;
+  char fname[256];
+  unsigned long long ipart,np_total;
+  unsigned long long np_total_expected=par->n_grid*((long)(par->n_grid*par->n_grid));
+
+  sprintf(fname,"%s_lpt_out.%d",par->prefixOut,NodeThis);
+  fo=fopen(fname,"w");
+  if(fo==NULL) error_open_file(fname);
+
+#ifdef _HAVE_MPI
+  unsigned long long np_send=npart;
+  MPI_Reduce(&np_send,&np_total,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,0,MPI_COMM_WORLD);
+  MPI_Bcast(&np_total,1,MPI_UNSIGNED_LONG_LONG,0,MPI_COMM_WORLD);
+#else //_HAVE_MPI
+  np_total=npart;
+#endif //_HAVE_MPI
+
+  if(np_total!=np_total_expected)
+    report_error(1,"Only %llu particles found, but there should be %ull\n",np_total,np_total_expected);
+
+  double m=27.7455*par->OmegaM*pow(par->l_box,3.)/np_total;
+  memset(&header,0,sizeof(GadgetHeader));
+
+  header.np[1]=npart;
+  header.mass[1]=m;
+  header.time=1.;
+  header.redshift=0.;
+  header.np_total[1]=(unsigned int)np_total;
+  header.np_total_highword[1]=(unsigned int)(np_total >> 32);
+  header.num_files=NNodes;
+  header.boxsize=par->l_box;
+  header.omega0=par->OmegaM;
+  header.omega_lambda=par->OmegaL;
+  header.hubble_param=par->hhub;
+  header.flag_gadgetformat=1;
+
+  int blklen=sizeof(GadgetHeader);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  my_fwrite(&header,sizeof(GadgetHeader),1,fo);
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  float x0[3];
+  // position
+  blklen=npart*sizeof(float)*3;
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  for(ipart=0;ipart<npart;ipart++) {
+    x0[0]=x[ipart];
+    x0[1]=y[ipart];
+    x0[2]=z[ipart];
+    my_fwrite(x0,sizeof(float),3,fo);
+  }
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+
+  // velocity
+  blklen=npart*sizeof(float)*3;
+  my_fwrite(&blklen,sizeof(blklen),1,fo);
+  for(ipart=0;ipart<npart;ipart++) {
+    x0[0] = vx[ipart];
+    x0[1] = vy[ipart];
+    x0[2] = vz[ipart]; 
     my_fwrite(x0,sizeof(float),3,fo);
   }
   my_fwrite(&blklen,sizeof(blklen),1,fo);

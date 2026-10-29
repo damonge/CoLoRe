@@ -98,7 +98,7 @@ void kappa_get_beam_properties(ParamCoLoRe *par)
     double *inv_r_max=my_malloc(kmap->nr*sizeof(double));
     for(i_r=0;i_r<kmap->nr;i_r++) {
       int i_r_here=(int)(kmap->rf[i_r]*idr+0.5);
-      inv_r_max[i_r]=1./(i_r_here*dr);
+      inv_r_max[i_r]=1./kmap->rf[i_r];
       i_r_max_arr[i_r]=MIN(i_r_here,nr-1);
     }
     i_r_min_arr[0]=0;

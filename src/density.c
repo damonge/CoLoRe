@@ -186,6 +186,94 @@ static void pos_2_dens(ParamCoLoRe *par,unsigned long long np_here,
   else
     report_error(1,"Wrong interpolation type\n");
 }
+//Here I am using a CIC for the 2LPT case including the velocities. TO DO: have a pos_2_dens merged (including velocities) with NGP and TSC too. 
+static void pos_2_dens_2lpt(ParamCoLoRe *par,unsigned long long np_here,
+                       flouble *x,flouble *y,flouble *z,flouble *dens,flouble *vx, flouble *vy,flouble *vz, flouble *velsx, flouble *velsy, flouble *velsz)
+{
+  unsigned long long ii;
+  flouble i_agrid=par->n_grid/par->l_box;
+  long ngx=2*(par->n_grid/2+1);
+
+  for(ii=0;ii<np_here;ii++) {
+    int ax,i0[3],i1[3];
+    flouble a0[3],a1[3];
+
+    i0[0]=(int)(x[ii]*i_agrid);
+    i0[1]=(int)(y[ii]*i_agrid);
+    i0[2]=(int)(z[ii]*i_agrid);
+    a1[0]=x[ii]*i_agrid-i0[0];
+    a1[1]=y[ii]*i_agrid-i0[1];
+    a1[2]=z[ii]*i_agrid-i0[2];
+    for(ax=0;ax<3;ax++) {
+      a0[ax]=1-a1[ax];
+      i1[ax]=i0[ax]+1;
+      if(i0[ax]<0) i0[ax]+=par->n_grid;
+      if(i1[ax]<0) i1[ax]+=par->n_grid;
+      if(i0[ax]>=par->n_grid) i0[ax]-=par->n_grid;
+      if(i1[ax]>=par->n_grid) i1[ax]-=par->n_grid;
+    }
+    i0[2]-=par->iz0_here;
+    i1[2]-=par->iz0_here;
+
+    if((i0[2]>=0) && (i0[2]<par->nz_here)) {
+
+      dens[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2];
+      dens[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2];
+      dens[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2];
+      dens[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2];
+      // Get velocity field
+      velsx[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2]*vx[ii];
+      velsx[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2]*vx[ii];
+      velsx[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2]*vx[ii];
+      velsx[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2]*vx[ii];
+
+      velsy[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2]*vy[ii];
+      velsy[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2]*vy[ii];
+      velsy[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2]*vy[ii];
+      velsy[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2]*vy[ii];
+
+      velsz[i0[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a0[0]*a0[1]*a0[2]*vz[ii];
+      velsz[i1[0]+ngx*(i0[1]+par->n_grid*i0[2])]+=a1[0]*a0[1]*a0[2]*vz[ii];
+      velsz[i0[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a0[0]*a1[1]*a0[2]*vz[ii];
+      velsz[i1[0]+ngx*(i1[1]+par->n_grid*i0[2])]+=a1[0]*a1[1]*a0[2]*vz[ii];
+    }
+    if((i1[2]>=0) && (i1[2]<par->nz_here)) {
+
+      dens[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2];
+      dens[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2];
+      dens[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2];
+      dens[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2];
+      // Get velocity field
+      velsx[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2]*vx[ii];
+      velsx[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2]*vx[ii];
+      velsx[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2]*vx[ii];
+      velsx[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2]*vx[ii];
+
+      velsy[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2]*vy[ii];
+      velsy[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2]*vy[ii];
+      velsy[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2]*vy[ii];
+      velsy[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2]*vy[ii];
+
+      velsz[i0[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a0[0]*a0[1]*a1[2]*vz[ii];
+      velsz[i1[0]+ngx*(i0[1]+par->n_grid*i1[2])]+=a1[0]*a0[1]*a1[2]*vz[ii];
+      velsz[i0[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a0[0]*a1[1]*a1[2]*vz[ii];
+      velsz[i1[0]+ngx*(i1[1]+par->n_grid*i1[2])]+=a1[0]*a1[1]*a1[2]*vz[ii];
+    }
+  }
+  // Normalize velocity by density 
+  for(ii=0;ii<par->nz_here*par->n_grid*ngx;ii++) {
+    if(dens[ii]!=0) {
+      velsx[ii] /= dens[ii];
+      velsy[ii] /= dens[ii];
+      velsz[ii] /= dens[ii];
+   } else {
+      velsx[ii] = 0;
+      velsy[ii] = 0;
+      velsz[ii] = 0;
+   }
+  }
+
+}
 
 #ifdef _HAVE_MPI
 static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,unsigned long long np_real,
@@ -373,6 +461,193 @@ static void share_particles(ParamCoLoRe *par,unsigned long long np_allocated,uns
 }
 #endif //_HAVE_MPI
 
+//This is essentially the same as above but including the velocities of the particles for the 2LPT case. TO DO: Merge with the above!
+#ifdef _HAVE_MPI
+static void share_particles_2lpt(ParamCoLoRe *par,unsigned long long np_allocated,unsigned long long np_real,
+			    flouble *x,flouble *y,flouble *z,
+			    flouble *vx,flouble *vy,flouble *vz,
+			    unsigned long long *np_here)
+{
+  int inode;
+  unsigned long long ip;
+  flouble dx=par->l_box/par->n_grid;
+  flouble *z_left=my_malloc(NNodes*sizeof(flouble));
+  flouble *z_right=my_malloc(NNodes*sizeof(flouble));
+  flouble *z_true_left=my_malloc(NNodes*sizeof(flouble));
+  flouble *z_true_right=my_malloc(NNodes*sizeof(flouble));
+  flouble *z_bleft_left=my_malloc(NNodes*sizeof(flouble));
+  flouble *z_bleft_right=my_malloc(NNodes*sizeof(flouble));
+  flouble *z_bright_left=my_malloc(NNodes*sizeof(flouble));
+  flouble *z_bright_right=my_malloc(NNodes*sizeof(flouble));
+  unsigned long long nbuffer=(unsigned long long)(par->lpt_buffer_fraction*par->nz_here*
+						  ((long)(par->n_grid*par->n_grid)));
+  flouble *x_b=my_malloc(nbuffer*sizeof(flouble));
+  flouble *y_b=my_malloc(nbuffer*sizeof(flouble));
+  flouble *z_b=my_malloc(nbuffer*sizeof(flouble));
+  flouble *vx_b=my_malloc(nbuffer*sizeof(flouble));
+  flouble *vy_b=my_malloc(nbuffer*sizeof(flouble));
+  flouble *vz_b=my_malloc(nbuffer*sizeof(flouble));
+
+  for(inode=0;inode<NNodes;inode++) {
+    z_left[inode]=par->iz0_all[inode]*dx;
+    z_right[inode]=(par->iz0_all[inode]+par->nz_all[inode])*dx;
+    z_true_left[inode]=(par->iz0_all[inode]+(par->lpt_interp_type+1)*0.5)*dx;
+    z_true_right[inode]=(par->iz0_all[inode]+par->nz_all[inode]-(par->lpt_interp_type+1)*0.5)*dx;
+    z_bleft_left[inode]=(par->iz0_all[inode]-(par->lpt_interp_type+1)*0.5)*dx;
+    z_bleft_right[inode]=z_left[inode];
+    z_bright_left[inode]=z_right[inode];
+    z_bright_right[inode]=(par->iz0_all[inode]+par->nz_all[inode]+(par->lpt_interp_type+1)*0.5)*dx;
+    if(inode==0) {
+      z_bleft_left[inode]=(par->n_grid-(par->lpt_interp_type+1)*0.5)*dx;
+      z_bleft_right[inode]=par->n_grid*dx;
+    }
+    else if(inode==NNodes-1) {
+      z_bright_left[inode]=0;
+      z_bright_right[inode]=(par->lpt_interp_type+1)*0.5*dx;
+    }
+  }
+
+  //Figure out which particles need to be moved and which stay
+  unsigned long long n_inrange=0,n_inbuffer=0;
+  for(ip=0;ip<np_real;ip++) {
+    int include=0,send=0;
+    if(((z[ip]>=z_left[NodeThis]) && (z[ip]<z_right[NodeThis])) ||
+       ((z[ip]>=z_bleft_left[NodeThis]) && (z[ip]<z_bleft_right[NodeThis])) ||
+       ((z[ip]>=z_bright_left[NodeThis]) && (z[ip]<z_bright_right[NodeThis])))
+      include=1;
+    if((z[ip]<z_true_left[NodeThis]) || (z[ip]>=z_true_right[NodeThis]))
+      send=1;
+
+    if(send) {
+      if(n_inbuffer>=nbuffer)
+	report_error(1,"Out of memory, enlarge buffer %llu (%llu,%llu) %llu\n",
+		     np_allocated,n_inbuffer,nbuffer,n_inrange);
+      x_b[n_inbuffer]=x[ip];
+      y_b[n_inbuffer]=y[ip];
+      z_b[n_inbuffer]=z[ip];
+      vx_b[n_inbuffer]=vx[ip];
+      vy_b[n_inbuffer]=vy[ip];
+      vz_b[n_inbuffer]=vz[ip];
+      n_inbuffer++;
+    }
+
+    if(include) {
+      if(n_inrange>=np_allocated)
+	report_error(1,"Out of memory, enlarge buffer %llu %llu %llu\n",np_allocated,n_inbuffer,n_inrange);
+      x[n_inrange]=x[ip];
+      y[n_inrange]=y[ip];
+      z[n_inrange]=z[ip];
+      vx[n_inrange]=vx[ip];
+      vy[n_inrange]=vy[ip];
+      vz[n_inrange]=vz[ip];
+      n_inrange++;
+    }
+  }
+
+  for(inode=1;inode<NNodes;inode++) {
+    int node_to=(NodeThis+inode+NNodes)%NNodes;
+    int node_from=(NodeThis-inode+NNodes)%NNodes;
+    int i=0,j=n_inbuffer-1;
+
+    while(1) {
+      while(i<n_inbuffer && 
+	    !(((z_b[i]>=z_left[node_to]) && (z_b[i]<z_right[node_to])) ||
+	      ((z_b[i]>=z_bleft_left[node_to]) && (z_b[i]<z_bleft_right[node_to])) ||
+	      ((z_b[i]>=z_bright_left[node_to]) && (z_b[i]<z_bright_right[node_to]))))
+	i++;
+      while(j>=0 && 
+	    (((z_b[j]>=z_left[node_to]) && (z_b[j]<z_right[node_to])) ||
+	     ((z_b[j]>=z_bleft_left[node_to]) && (z_b[j]<z_bleft_right[node_to])) ||
+	     ((z_b[j]>=z_bright_left[node_to]) && (z_b[j]<z_bright_right[node_to]))))
+	j--;
+
+      if(i<j) {
+	flouble tmp;
+	tmp=x_b[i]; x_b[i]=x_b[j]; x_b[j]=tmp;
+	tmp=y_b[i]; y_b[i]=y_b[j]; y_b[j]=tmp;
+	tmp=z_b[i]; z_b[i]=z_b[j]; z_b[j]=tmp;
+	tmp=vx_b[i]; vx_b[i]=vx_b[j]; vx_b[j]=tmp;
+	tmp=vy_b[i]; vy_b[i]=vy_b[j]; vy_b[j]=tmp;
+	tmp=vz_b[i]; vz_b[i]=vz_b[j]; vz_b[j]=tmp;
+	i++; j--;
+      }
+      else
+	break;
+    }
+
+    int nsend,nrecv,nstay;
+    if(j==-1) {
+      nsend=n_inbuffer;
+      nstay=0;
+    }
+    else if(i==n_inbuffer) {
+      nsend=0;
+      nstay=n_inbuffer;
+    }
+    else {
+      if(j+1!=i)
+	report_error(1,"Error sharing particles\n");
+      nstay=i;
+      nsend=n_inbuffer-i;
+    }
+
+#ifdef _HAVE_MPI
+    flouble *x_send=x_b+nstay;
+    flouble *y_send=y_b+nstay;
+    flouble *z_send=z_b+nstay;
+    flouble *vx_send=vx_b+nstay;
+    flouble *vy_send=vy_b+nstay;
+    flouble *vz_send=vz_b+nstay;
+#endif //_HAVE_MPI
+    int tag=500+5*inode;
+
+#ifdef _HAVE_MPI
+    MPI_Status status;
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Sendrecv(&nsend,1,MPI_INT,node_to,tag,&nrecv,1,MPI_INT,node_from,tag,MPI_COMM_WORLD,&status);
+#endif //_HAVE_MPI
+    tag++;
+    
+    if(n_inrange+nrecv>np_allocated)
+      report_error(1,"Not enough memory, enlarge buffer\n");
+
+#ifdef _HAVE_MPI
+    MPI_Sendrecv(x_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
+		 x+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
+    MPI_Sendrecv(y_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
+		 y+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
+    MPI_Sendrecv(z_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
+		 z+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
+    MPI_Sendrecv(vx_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
+		 vx+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
+    MPI_Sendrecv(vy_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
+		 vy+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
+    MPI_Sendrecv(vz_send,nsend*sizeof(flouble),FLOUBLE_MPI,node_to,tag,
+		 vz+n_inrange,nrecv*sizeof(flouble),FLOUBLE_MPI,node_from,tag,MPI_COMM_WORLD,&status);
+#endif //_HAVE_MPI
+
+    n_inrange+=nrecv;
+  }
+
+  *np_here=n_inrange;
+
+  free(z_left);
+  free(z_right);
+  free(z_bleft_left);
+  free(z_bleft_right);
+  free(z_bright_left);
+  free(z_bright_right);
+  free(x_b);
+  free(y_b);
+  free(z_b);
+  free(vx_b);
+  free(vy_b);
+  free(vz_b);
+
+  return;
+}
+#endif //_HAVE_MPI
+
 static void lpt_1(ParamCoLoRe *par)
 {
   int axis;
@@ -496,6 +771,12 @@ static void lpt_1(ParamCoLoRe *par)
 	    disp[ax][index]=p;
 	  }
 	  par->grid_dens[index]=0;
+	//Fill the 2LPT velocities with zero not needed (Maybe improve?)
+        if (par->lpt_vels) {
+    	   par->grid_velx[index] = 0;
+    	   par->grid_vely[index] = 0;
+    	   par->grid_velz[index] = 0;
+	   }
 	}
       }
     } //end omp for
@@ -646,23 +927,34 @@ static void lpt_1(ParamCoLoRe *par)
 static void lpt_2(ParamCoLoRe *par)
 {
   int axis;
-
-  dftw_complex *(cdisp[3]),*(cdigrad[6]);
-  flouble *(disp[3]),*(digrad[6]);
+  print_info(" 2LPT\n");
+  dftw_complex *(cdisp[3]),*(cdigrad[9]);
+  flouble *(disp[3]),*(digrad[9]);
+  if (par->lpt_vels){
+     print_info(" with 2LPT velocities\n");
+  } else {
+     print_info(" without 2LPT velocities\n");
+  }
   ptrdiff_t dsize=par->nz_here*((long)(par->n_grid*(par->n_grid/2+1)));
   ptrdiff_t dsize_buff=(ptrdiff_t)(dsize*(1+par->lpt_buffer_fraction));
-
-  print_info(" 2LPT\n");
 
   print_info(" - Transforming density field\n");
   for(axis=0;axis<2;axis++) {
     cdisp[axis]=dftw_alloc_complex(dsize_buff);
     disp[axis]=(flouble *)cdisp[axis];
   }
-  for(axis=0;axis<6;axis++) {
-    cdigrad[axis]=dftw_alloc_complex(dsize_buff);
-    digrad[axis]=(flouble *)cdigrad[axis];
+  if (par->lpt_vels) {
+    for(axis=0; axis<9; axis++) {
+      cdigrad[axis] = dftw_alloc_complex(dsize_buff);
+      digrad[axis] = (flouble *)cdigrad[axis];
+    }
+  } else {
+    for(axis=0; axis<6; axis++) {
+      cdigrad[axis] = dftw_alloc_complex(dsize_buff);
+      digrad[axis] = (flouble *)cdigrad[axis];
+    }
   }
+  
   cdisp[2]=par->grid_dens_f;
   disp[2]=par->grid_dens;
   fftw_wrap_r2c(par->n_grid,par->grid_dens,par->grid_dens_f);
@@ -858,12 +1150,20 @@ static void lpt_2(ParamCoLoRe *par)
 	for(ix=0;ix<par->n_grid;ix++) {
 	  int ax;
 	  double r,dg,d2g;
+	  //Define growth rates and H(z)^-1
+	  double f1g,f2g,invhz;
 	  long index=ix+indexy+indexz;
 	  long index_nopad=ix+par->n_grid*((long)(iy+par->n_grid*iz));
 	  xv[0]=(ix+0.0)*dx-par->pos_obs[0];
 	  r=sqrt(xv[0]*xv[0]+xv[1]*xv[1]+xv[2]*xv[2]);
 	  dg=get_bg(par,r,BG_D1,0);
 	  d2g=get_bg(par,r,BG_D2,0);
+	  if (par->lpt_vels) { //Calculate growth rates and H(z)^-1
+	     f1g=get_bg(par,r,BG_F1,0);
+	     f2g=get_bg(par,r,BG_F2,0);
+	     invhz=get_bg(par,r,BG_IH,0);
+          }
+          
 	  for(ax=0;ax<3;ax++) {
 #ifdef _DEBUG
 	    d_mean_1_thr[ax]+=disp[ax][index];
@@ -872,11 +1172,21 @@ static void lpt_2(ParamCoLoRe *par)
 	    d_sigma2_2_thr+=digrad[ax][index]*digrad[ax][index];
 #endif //_DEBUG
 	    flouble p=xv[ax]+dg*disp[ax][index]+d2g*digrad[ax][index]+par->pos_obs[ax];
+	    if (par->lpt_vels) { //Get the particles 2LPT velocities!
+	       flouble vels = (dg*f1g*disp[ax][index]+d2g*f2g*digrad[ax][index])/invhz;
+	       digrad[6+ax][index_nopad]=vels;
+            }
 	    if(p<0) p+=par->l_box;
 	    if(p>=par->l_box) p-=par->l_box;
 	    digrad[3+ax][index_nopad]=p;
 	  }
 	  par->grid_dens[index]=0;
+	  // Keep the grids to zero, we will fill them with interpolation scheme (only CIC now; see above)
+	  if (par->lpt_vels) {
+           par->grid_velx[index] = 0;
+           par->grid_vely[index] = 0;
+           par->grid_velz[index] = 0;
+           }
 	}
       }
     } //end omp for
@@ -946,24 +1256,37 @@ static void lpt_2(ParamCoLoRe *par)
 #endif //_SPREC
 
   unsigned long long np_here;
-  if(par->output_lpt) {
+  if (par->output_lpt) {
     np_here=par->nz_here*((long)(par->n_grid*par->n_grid));
     print_info(" - Writing LPT positions\n");
-    write_lpt(par,np_here,digrad[3],digrad[4],digrad[5]);
+    if (par->lpt_vels) {
+       write_lpt_wvel(par,np_here,digrad[3],digrad[4],digrad[5], digrad[6], digrad[7], digrad[8]);
+    } else {
+       write_lpt(par,np_here,digrad[3],digrad[4],digrad[5]);
+    }
   }
 
 #ifdef _HAVE_MPI
   print_info(" - Sharing particle positions\n");
-  share_particles(par,(unsigned long long)(2*dsize_buff),
+  if (par->lpt_vels) {
+     share_particles_2lpt(par,(unsigned long long)(2*dsize_buff),
+                  (unsigned long long)(par->nz_here*((long)(par->n_grid*par->n_grid))),
+                  digrad[3],digrad[4],digrad[5],digrad[6],digrad[7],digrad[8],&np_here);
+  } else {
+     share_particles(par,(unsigned long long)(2*dsize_buff),
 		  (unsigned long long)(par->nz_here*((long)(par->n_grid*par->n_grid))),
 		  digrad[3],digrad[4],digrad[5],&np_here);
+  }
 #else //_HAVE_MPI
   np_here=par->nz_here*((long)(par->n_grid*par->n_grid));
 #endif //_HAVE_MPI
 
   print_info(" - Interpolating positions into density field\n");
-  pos_2_dens(par,np_here,digrad[3],digrad[4],digrad[5],par->grid_dens);
-
+  if (par->lpt_vels) {
+     pos_2_dens_2lpt(par,np_here,digrad[3],digrad[4],digrad[5],par->grid_dens,digrad[6], digrad[7], digrad[8], par->grid_velx, par->grid_vely, par->grid_velz);
+  } else {
+     pos_2_dens(par,np_here,digrad[3],digrad[4],digrad[5],par->grid_dens);
+  }
 #ifdef _SPREC
   for(axis=0;axis<3;axis++)
     fftwf_free(cdigrad[3+axis]);

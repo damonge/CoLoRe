@@ -94,22 +94,24 @@
 #define NSIDE_MAX_HPX 8192
 
 //Background tags
-#define BG_Z 1000
-#define BG_D1 1001
-#define BG_D2 1002
-#define BG_V1 1003
-#define BG_PD 1004
-#define BG_IH 1005
-#define BG_NZ_SRCS 1006
-#define BG_BZ_SRCS 1007
-#define BG_TZ_SRCS 1015
-#define BG_NORM_SRCS 1008
-#define BG_TZ_IMAP 1009
-#define BG_BZ_IMAP 1010
-#define BG_NORM_IMAP 1011
-#define BG_KZ_CSTM 1012
-#define BG_BZ_CSTM 1013
-#define BG_NORM_CSTM 1014
+#define BG_Z 2000
+#define BG_D1 2001
+#define BG_D2 2002
+#define BG_V1 2003
+#define BG_PD 2004
+#define BG_IH 2005
+#define BG_NZ_SRCS 2006
+#define BG_BZ_SRCS 2007
+#define BG_TZ_SRCS 2008
+#define BG_NORM_SRCS 2009
+#define BG_TZ_IMAP 2010
+#define BG_BZ_IMAP 2011
+#define BG_NORM_IMAP 2012
+#define BG_KZ_CSTM 2013
+#define BG_BZ_CSTM 2014
+#define BG_NORM_CSTM 2015
+#define BG_F1 2016
+#define BG_F2 2017
 
 //Density field parameters
 #define DZ_SIGMA 0.05
@@ -248,6 +250,8 @@ typedef struct {
   double growth_d2_arr[NA]; //Array of density growth factors used to compute D_d(r)
   double growth_v_arr[NA]; //Array of velocity growth factors used to compute D_v(r)
   double growth_pd_arr[NA]; //Array of potential derivative factors used to compute \dot{\phi}
+  double growth_f1_arr[NA]; // Array of 1 order growth rates used to compute f_d(r)
+  double growth_f2_arr[NA]; // Array of 2 order growth rates used to compute f_d(r)
   double ihub_arr[NA]; //Array of 1/H(z)
   double glob_idr; //1/dr, where dr is the radial comoving distance interval used in the arrays above
   // Power spectra
@@ -267,6 +271,7 @@ typedef struct {
   int smooth_potential; //Do we smooth the newtonian potential as well?
   int dens_type; //Method to produce the density field
   int lpt_interp_type;
+  int lpt_vels; // Use 2LPT velocities (only makes sense if dens_type is 2LPT)
   double lpt_buffer_fraction; //Fraction of memory saved for buffer particles
   int output_lpt;
   unsigned int seed_rng; //RNG seed
@@ -284,6 +289,12 @@ typedef struct {
   dftw_complex *grid_dens_f; //Fourier-space grid for the density field
   flouble *grid_dens; //Real-space grid for the density field
   dftw_complex *grid_npot_f; //Fourier-space grid for the Newtonian potential
+  flouble *grid_velx; //Real-space grid for the x component of the 2lpt velocity field
+  flouble *grid_vely; //Real-space grid for the y component of the 2lpt velocity field
+  flouble *grid_velz; //Real-space grid for the z component of the 2lpt velocity field
+  dftw_complex *grid_velx_f; //Fourier-space grid for the x component of the 2lpt velocity field (not used right?)
+  dftw_complex *grid_vely_f; //Fourier-space grid for the y component of the 2lpt velocity field (not used right?)
+  dftw_complex *grid_velz_f; //Fourier-space grid for the z component of the 2lpt velocity field (not used right?)
   flouble *grid_npot; //Real-space grid for the Newtonian potential
   flouble *slice_left; //Dummy array to store grid cells coming from the left node
   flouble *slice_right; //Dummy array to store grid cells coming from the right node
@@ -448,6 +459,7 @@ flouble *compute_lensing_spacing(ParamCoLoRe *par);
 ParamCoLoRe *read_run_params(char *fname,int test_memory);
 void write_density_grid(ParamCoLoRe *par,char *prefix_dens);
 void write_lpt(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z);
+void write_lpt_wvel(ParamCoLoRe *par,unsigned long long npart,flouble *x,flouble *y,flouble *z, flouble *vx, flouble *vy, flouble *vz); //Same as above but including 2lpt velocities (merge)
 void write_srcs(ParamCoLoRe *par);
 void write_imap(ParamCoLoRe *par);
 void write_cstm(ParamCoLoRe *par);

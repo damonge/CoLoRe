@@ -67,14 +67,20 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 
   //Get velocity
   if(flag_return & RETURN_VEL) {
-    v[0]=par->grid_npot[ix_hi+iy_0+iz_0]-par->grid_npot[ix_lo+iy_0+iz_0];
-    v[1]=par->grid_npot[ix_0+iy_hi+iz_0]-par->grid_npot[ix_0+iy_lo+iz_0];
-    if(iz==0)
-      v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->slice_left[ix_0+iy_0];
-    else if(iz==par->nz_here-1)
-      v[2]=par->slice_right[ix_0+iy_0]-par->grid_npot[ix_0+iy_0+iz_lo];
-    else
-      v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
+    if (par->lpt_vels){
+       v[0]=par->grid_velx[ix_0+iy_0+iz_0];
+       v[1]=par->grid_vely[ix_0+iy_0+iz_0];
+       v[2]=par->grid_velz[ix_0+iy_0+iz_0];
+    } else {
+       v[0]=par->grid_npot[ix_hi+iy_0+iz_0]-par->grid_npot[ix_lo+iy_0+iz_0];
+       v[1]=par->grid_npot[ix_0+iy_hi+iz_0]-par->grid_npot[ix_0+iy_lo+iz_0];
+       if(iz==0)
+          v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->slice_left[ix_0+iy_0];
+       else if(iz==par->nz_here-1)
+         v[2]=par->slice_right[ix_0+iy_0]-par->grid_npot[ix_0+iy_0+iz_lo];
+       else
+         v[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
+    }
   }
 
   //Get ISW
@@ -319,6 +325,9 @@ void get_beam_properties(ParamCoLoRe *par)
 #ifdef _HAVE_MPI
   long size_slice_npot=(par->nz_max+2)*((long)(2*par->n_grid*(par->n_grid/2+1)));
   long size_slice_dens=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
+  long size_slice_velx=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
+  long size_slice_vely=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
+  long size_slice_velz=par->nz_max*((long)(2*par->n_grid*(par->n_grid/2+1)));
   flouble *buffer_sr=my_malloc(size_slice_npot*sizeof(flouble));
 #endif //_HAVE_MPI
 
@@ -330,7 +339,11 @@ void get_beam_properties(ParamCoLoRe *par)
 #endif //_DEBUG
     mpi_sendrecv_wrap(par->grid_npot,buffer_sr,size_slice_npot,i);
     mpi_sendrecv_wrap(par->grid_dens,buffer_sr,size_slice_dens,i);
-
+    if (par->lpt_vels) {
+        mpi_sendrecv_wrap(par->grid_velx,buffer_sr,size_slice_velx,i);
+        mpi_sendrecv_wrap(par->grid_vely,buffer_sr,size_slice_vely,i);
+        mpi_sendrecv_wrap(par->grid_velz,buffer_sr,size_slice_velz,i);
+        }
 #endif //_HAVE_MPI
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
