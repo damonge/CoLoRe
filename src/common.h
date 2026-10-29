@@ -94,24 +94,24 @@
 #define NSIDE_MAX_HPX 8192
 
 //Background tags
-#define BG_Z 1000
-#define BG_D1 1001
-#define BG_D2 1002
-#define BG_V1 1003
-#define BG_PD 1004
-#define BG_IH 1005
-#define BG_NZ_SRCS 1006
-#define BG_BZ_SRCS 1007
-#define BG_TZ_SRCS 1015
-#define BG_NORM_SRCS 1008
-#define BG_TZ_IMAP 1009
-#define BG_BZ_IMAP 1010
-#define BG_NORM_IMAP 1011
-#define BG_KZ_CSTM 1012
-#define BG_BZ_CSTM 1013
-#define BG_NORM_CSTM 1014
-#define BG_F1 1015
-#define BG_F2 1016
+#define BG_Z 2000
+#define BG_D1 2001
+#define BG_D2 2002
+#define BG_V1 2003
+#define BG_PD 2004
+#define BG_IH 2005
+#define BG_NZ_SRCS 2006
+#define BG_BZ_SRCS 2007
+#define BG_TZ_SRCS 2008
+#define BG_NORM_SRCS 2009
+#define BG_TZ_IMAP 2010
+#define BG_BZ_IMAP 2011
+#define BG_NORM_IMAP 2012
+#define BG_KZ_CSTM 2013
+#define BG_BZ_CSTM 2014
+#define BG_NORM_CSTM 2015
+#define BG_F1 2016
+#define BG_F2 2017
 
 //Density field parameters
 #define DZ_SIGMA 0.05
