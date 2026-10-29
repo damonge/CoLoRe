@@ -345,9 +345,7 @@ int need_newtonian_potential(ParamCoLoRe *par)
 {
   //The Newtonian potential is only used along the line of sight for velocities when they are not
   //provided by the LPT (lpt_vels=0), and for the tidal tensor (lensing, kappa) and the ISW term.
-  //COLORE_SEND_NPOT keeps it, for comparisons with the original code.
-  int need=!par->lpt_vels || par->do_kappa || par->do_isw || par->do_lensing ||
-    (getenv("COLORE_SEND_NPOT")!=NULL);
+  int need=!par->lpt_vels || par->do_kappa || par->do_isw || par->do_lensing;
   if(par->do_srcs) {
     int ipop;
     for(ipop=0;ipop<par->n_srcs;ipop++) {

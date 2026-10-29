@@ -312,10 +312,7 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
                 MPI_COMM_WORLD,MPI_STATUS_IGNORE);
   }
   double t1=MPI_Wtime();
-  if(getenv("COLORE_SERIAL_COPY"))
-    memcpy(data,buff,count*sizeof(flouble));
-  else
-    copy_slab(data,buff,count);
+  copy_slab(data,buff,count);
   t_ring_mpi+=t1-t0;
   t_ring_copy+=MPI_Wtime()-t1;
 }
@@ -438,11 +435,7 @@ void get_beam_properties(ParamCoLoRe *par)
   int use_overlap=0;
 #ifdef _HAVE_MPI
   use_overlap=(NNodes>1) && !need_npot && par->lpt_vels && par->do_srcs && !par->do_kappa &&
-    !par->do_isw && !par->do_lensing && !par->do_imap && !par->do_cstm && !getenv("COLORE_NO_OVERLAP");
-  if(use_overlap) {
-    if(size_slice_velx!=size_slice_dens || size_slice_vely!=size_slice_dens || size_slice_velz!=size_slice_dens)
-      use_overlap=0;
-  }
+    !par->do_isw && !par->do_lensing && !par->do_imap && !par->do_cstm;
   if(use_overlap) {
     ring_overlapped(par,size_slice_dens);
   }
