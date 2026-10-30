@@ -4,7 +4,7 @@ CoLoRe is a parallelized code to generate fast 3D realization of a wide variety 
 
 ## 1 Methods
 
-The methods used by CoLoRe are described in [Ramirez-Perez et al. 2021](https://arxiv.org/abs/2111.05069).
+The methods used by CoLoRe are described in [Ramirez-Perez et al. 2021](https://arxiv.org/abs/2111.05069) and [Ruiz-Herrera Bernal et al. 2026](https://arxiv.org/abs/2607.27412).
 
 When in doubt, bear in mind that by default CoLoRe uses the following units:
  - Lenghts: Mpc/h
@@ -63,8 +63,9 @@ also exemplifies how to interpret the different outputs.
 
 CoLoRe is distributed under the GPL license (see COPYING in the root
 directory). We kindly ask you to cite the companion paper
-[Ramirez-Perez et al. 2021](TBD) when using the code.
-
+[Ramirez-Perez et al. 2021](https://arxiv.org/abs/2111.05069) when using the code.
+If using 2LPT, particularly the 2LPT velocities, you should also cite
+[Ruiz-Herrera Bernal et al. 2026](https://arxiv.org/abs/2607.27412).
 
 ## 5 Contact
 
@@ -72,3 +73,4 @@ Regarding bugs, suggestions, questions or petitions, feel free to contact
 the authors:
     David Alonso: david.alonso@physics.ox.ac.uk
     Cesar Ramirez: cramirez@ifae.es
+    Manuel Ruiz-Herrera Bernal: manuelfrancisco.ruiz-herrera@ciemat.es
