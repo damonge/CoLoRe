@@ -273,6 +273,25 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
   return added_anything;
 }
 
+//All the beam operations on the slab that the task holds now (par->nz_here, par->iz0_here and the fields)
+static void beam_operations_one_slab(ParamCoLoRe *par)
+{
+  if(par->do_kappa)
+    kappa_get_beam_properties(par);
+#ifdef _USE_FAST_LENSING
+  if(par->do_lensing)
+    lensing_get_beam_properties(par);
+#endif //_USE_FAST_LENSING
+  if(par->do_isw)
+    isw_get_beam_properties(par);
+  if(par->do_srcs)
+    srcs_get_beam_properties(par);
+  if(par->do_imap)
+    imap_get_beam_properties(par);
+  if(par->do_cstm)
+    cstm_get_beam_properties(par);
+}
+
 #ifdef _HAVE_MPI
 static double t_ring_mpi=0,t_ring_copy=0; //Time spent in the ring exchange (for COLORE_TIMING)
 
@@ -319,57 +338,78 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 #endif //_HAVE_MPI
 
 #ifdef _HAVE_MPI
-//Ring exchange of the density and velocity slabs in which the transfer of the next slab runs while the
-//current one is processed, and no copy back: two sets of buffers, swapped after every round.
-//Only used when the line of sight just fills the skewers of the sources (every skewer point gets
-//a contribution from at most two slabs, so the order of the slabs does not change the result).
-//The own slab is processed first, then the slab of the left neighbour, and so on.
-static void ring_overlapped(ParamCoLoRe *par,long size_slice)
+//Ring exchange of the slabs in which the transfer of the next slab runs while the current one is
+//processed, and no copy back: two sets of buffers, swapped after every round.
+//The fields that go around the ring are the density, the velocities if they come from the LPT, and the
+//Newtonian potential if something reads it (its buffer has the two neighbouring planes at the end, which
+//are used by the tidal tensor, the velocities and the ISW term, so they travel with the slab).
+//The own slab is processed first, then the slab of the left neighbour, and so on. Every beam operation
+//adds the contribution of each slab to what it has accumulated, so the order of the slabs only changes
+//the rounding of the sums (for the source skewers, with at most two slabs per point, not even that).
+static void ring_overlapped(ParamCoLoRe *par,int need_npot)
 {
-  int i,k;
-  flouble *orig[4]={par->grid_dens,par->grid_velx,par->grid_vely,par->grid_velz};
-  flouble *cur[4],*alt[4];
-  long nbatch=(size_slice+SENDRECV_BATCH-1)/SENDRECV_BATCH;
-  MPI_Request *req=my_malloc(2*4*nbatch*sizeof(MPI_Request));
-  for(k=0;k<4;k++) {
-    cur[k]=orig[k];
-    alt[k]=my_malloc(size_slice*sizeof(flouble));
+  int i,k,nf=0;
+  long size_plane=2*((long)par->n_grid)*(par->n_grid/2+1);
+  flouble **slot[5],*orig[5],*cur[5],*alt[5];
+  long size[5],nbatch[5],nbatch_max=0;
+  long off_left=0,off_right=0;
+  if(need_npot) {
+    slot[nf]=&(par->grid_npot);
+    size[nf]=(par->nz_max+2)*size_plane;
+    off_left=par->slice_left-par->grid_npot;
+    off_right=par->slice_right-par->grid_npot;
+    nf++;
   }
+  slot[nf]=&(par->grid_dens); size[nf]=par->nz_max*size_plane; nf++;
+  if(par->lpt_vels) {
+    slot[nf]=&(par->grid_velx); size[nf]=par->nz_max*size_plane; nf++;
+    slot[nf]=&(par->grid_vely); size[nf]=par->nz_max*size_plane; nf++;
+    slot[nf]=&(par->grid_velz); size[nf]=par->nz_max*size_plane; nf++;
+  }
+  for(k=0;k<nf;k++) {
+    orig[k]=*(slot[k]);
+    cur[k]=orig[k];
+    alt[k]=my_malloc(size[k]*sizeof(flouble));
+    nbatch[k]=(size[k]+SENDRECV_BATCH-1)/SENDRECV_BATCH;
+    if(nbatch[k]>nbatch_max) nbatch_max=nbatch[k];
+  }
+  MPI_Request *req=my_malloc(2*nf*nbatch_max*sizeof(MPI_Request));
   for(i=0;i<NNodes;i++) {
     int node_i_am_now=(NodeThis-i+NNodes)%NNodes;
     int nreq=0;
     double t_proc0;
-    par->grid_dens=cur[0];
-    par->grid_velx=cur[1];
-    par->grid_vely=cur[2];
-    par->grid_velz=cur[3];
+    for(k=0;k<nf;k++)
+      *(slot[k])=cur[k];
+    if(need_npot) {
+      par->slice_left=par->grid_npot+off_left;
+      par->slice_right=par->grid_npot+off_right;
+    }
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
     if(i<NNodes-1) {
       int b;
-      for(k=0;k<4;k++) {
-        for(b=0;b<nbatch;b++) {
-          long lo=b*(long)SENDRECV_BATCH,n=size_slice-lo;
+      for(k=0;k<nf;k++) {
+        for(b=0;b<nbatch[k];b++) {
+          long lo=b*(long)SENDRECV_BATCH,n=size[k]-lo;
           if(n>SENDRECV_BATCH) n=SENDRECV_BATCH;
-          MPI_Isend(&(cur[k][lo]),(int)n,FLOUBLE_MPI,NodeRight,(int)(k*nbatch+b),MPI_COMM_WORLD,&(req[nreq++]));
-          MPI_Irecv(&(alt[k][lo]),(int)n,FLOUBLE_MPI,NodeLeft ,(int)(k*nbatch+b),MPI_COMM_WORLD,&(req[nreq++]));
+          MPI_Isend(&(cur[k][lo]),(int)n,FLOUBLE_MPI,NodeRight,(int)(k*nbatch_max+b),MPI_COMM_WORLD,&(req[nreq++]));
+          MPI_Irecv(&(alt[k][lo]),(int)n,FLOUBLE_MPI,NodeLeft ,(int)(k*nbatch_max+b),MPI_COMM_WORLD,&(req[nreq++]));
         }
       }
     }
     t_proc0=MPI_Wtime();
-    srcs_get_beam_properties(par);
+    beam_operations_one_slab(par);
     if(getenv("COLORE_TIMING")) {
-      double t_proc=MPI_Wtime()-t_proc0,t_max,t_sum,t_w0=MPI_Wtime();
+      double t_proc=MPI_Wtime()-t_proc0,t_max,t_sum;
       MPI_Allreduce(&t_proc,&t_max,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
       MPI_Allreduce(&t_proc,&t_sum,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
       print_info("  - slab %d processed (processing time over tasks: max %.2f s, mean %.2f s)\n",i,t_max,t_sum/NNodes);
-      (void)t_w0;
     }
     if(i<NNodes-1) {
       double t_wait0=MPI_Wtime();
       MPI_Waitall(nreq,req,MPI_STATUSES_IGNORE);
       t_ring_mpi+=MPI_Wtime()-t_wait0; //time waiting for the transfer after the processing
-      for(k=0;k<4;k++) {
+      for(k=0;k<nf;k++) {
         flouble *tmp=cur[k];
         cur[k]=alt[k];
         alt[k]=tmp;
@@ -377,13 +417,15 @@ static void ring_overlapped(ParamCoLoRe *par,long size_slice)
     }
   }
   //Back to the original buffers (the content of the fields is not needed after the line of sight)
-  par->grid_dens=orig[0];
-  par->grid_velx=orig[1];
-  par->grid_vely=orig[2];
-  par->grid_velz=orig[3];
+  for(k=0;k<nf;k++)
+    *(slot[k])=orig[k];
+  if(need_npot) {
+    par->slice_left=par->grid_npot+off_left;
+    par->slice_right=par->grid_npot+off_right;
+  }
   par->nz_here=par->nz_all[NodeThis];
   par->iz0_here=par->iz0_all[NodeThis];
-  for(k=0;k<4;k++) {
+  for(k=0;k<nf;k++) {
     //whichever of the two buffers is not an original one was allocated here
     if(cur[k]!=orig[k]) free(cur[k]);
     else free(alt[k]);
@@ -434,11 +476,9 @@ void get_beam_properties(ParamCoLoRe *par)
 
   int use_overlap=0;
 #ifdef _HAVE_MPI
-  use_overlap=(NNodes>1) && !need_npot && par->lpt_vels && par->do_srcs && !par->do_kappa &&
-    !par->do_isw && !par->do_lensing && !par->do_imap && !par->do_cstm;
-  if(use_overlap) {
-    ring_overlapped(par,size_slice_dens);
-  }
+  use_overlap=(NNodes>1);
+  if(use_overlap)
+    ring_overlapped(par,need_npot);
 #endif //_HAVE_MPI
 
   for(i=0;i<NNodes && !use_overlap;i++) {
@@ -463,20 +503,7 @@ void get_beam_properties(ParamCoLoRe *par)
     double t_proc0=MPI_Wtime();
 #endif //_HAVE_MPI
 
-    if(par->do_kappa)
-      kappa_get_beam_properties(par);
-#ifdef _USE_FAST_LENSING
-    if(par->do_lensing)
-      lensing_get_beam_properties(par);
-#endif //_USE_FAST_LENSING
-    if(par->do_isw)
-      isw_get_beam_properties(par);
-    if(par->do_srcs)
-      srcs_get_beam_properties(par);
-    if(par->do_imap)
-      imap_get_beam_properties(par);
-    if(par->do_cstm)
-      cstm_get_beam_properties(par);
+    beam_operations_one_slab(par);
     if(getenv("COLORE_TIMING")) {
 #ifdef _HAVE_MPI
       double t_proc=MPI_Wtime()-t_proc0,t_max,t_sum;
