@@ -19,6 +19,7 @@
 // along with CoLoRe.  If not, see <http://www.gnu.org/licenses/>.   //
 //                                                                   //
 ///////////////////////////////////////////////////////////////////////
+#include <time.h>
 #include "common.h"
 
 #ifdef _HAVE_OMP
@@ -283,7 +284,17 @@ void print_info(char *fmt,...)
     vsprintf(msg,fmt,args);
     va_end(args);
 
+    if(getenv("COLORE_TIMING")) { //Optional wall-clock stamp, for profiling
+      static double t_start=-1;
+      struct timespec ts;
+      clock_gettime(CLOCK_MONOTONIC,&ts);
+      double t_now=ts.tv_sec+1E-9*ts.tv_nsec;
+      if(t_start<0) t_start=t_now;
+      printf("[%8.2f s] ",t_now-t_start);
+    }
     printf("%s",msg);
+    if(getenv("COLORE_TIMING")) //with timing on, show the progress at once (a killed job otherwise loses the buffered log)
+      fflush(stdout);
   }
 }
 
@@ -329,6 +340,21 @@ void get_random_angles(gsl_rng *rng,int ipix_nest,int ipix0,int nside,double *th
   (*th)+=(rng_01(rng)-0.5)*0.57/(nside*n_extra);
 }
 */
+
+int need_newtonian_potential(ParamCoLoRe *par)
+{
+  //The Newtonian potential is only used along the line of sight for velocities when they are not
+  //provided by the LPT (lpt_vels=0), and for the tidal tensor (lensing, kappa) and the ISW term.
+  int need=!par->lpt_vels || par->do_kappa || par->do_isw || par->do_lensing;
+  if(par->do_srcs) {
+    int ipop;
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      if(par->lensing_srcs[ipop])
+        need=1;
+    }
+  }
+  return need;
+}
 
 void get_radial_params(double rmax,int ngrid,int *nr,double *dr)
 {
@@ -379,12 +405,12 @@ Catalog *catalog_alloc(int nsrcs,int has_lensing,int has_skw,
     cat->idr=1./cat->dr;
     if(has_skw) {
       if(skw_gauss) {
-        cat->g_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+        cat->g_skw=my_calloc((size_t)cat->nsrc*cat->nr,sizeof(float));
       }
       else {
-        cat->d_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+        cat->d_skw=my_calloc((size_t)cat->nsrc*cat->nr,sizeof(float));
       }
-      cat->v_skw=my_calloc(cat->nsrc*cat->nr,sizeof(float));
+      cat->v_skw=my_calloc((size_t)cat->nsrc*cat->nr,sizeof(float));
     }
   }
   else {

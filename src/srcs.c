@@ -746,7 +746,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       if (!par->lpt_vels){
          if(cat->has_skw) {
 	   int i_r,i_r_max=MAX((int)(r*cat->idr+0.5),cat->nr-1);
-	   long offp=ii*cat->nr;
+	   long offp=(long)ii*cat->nr;
 	   for(i_r=0;i_r<=i_r_max;i_r++) {
 	     vg=get_bg(par,(i_r+0.5)*cat->dr,BG_V1,0);
 	     cat->v_skw[offp+i_r]*=vg*factor_vel;
