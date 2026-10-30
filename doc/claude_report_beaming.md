@@ -1,0 +1,65 @@
+# CoLoRe: overlapped ring for all the beam operations, and a fix of the custom maps
+
+Follow-up of PR 81 (`doc/claude_report_PR81.md`). Two changes, on top of `master` (`7dc1ac8`):
+
+1. **The overlapped ring is used for every beam operation**, not only for the source skewers (commit `3f4b2bb`).
+2. **`write_cstm` bug fix** (commit `bdfb6fe`): the custom maps were written wrongly with more than one MPI task.
+
+The outputs of the beam operations other than the source skewers no longer match the previous ones bit by bit (the
+sums get the slabs in a different order); they match to float rounding (below). No new parameters, no environment
+variables.
+
+## 1. Overlapped ring for all the beam operations
+
+The line of sight sends the density (and velocity and Newtonian potential) slabs around a ring of the MPI tasks and
+applies the beam operations to each slab. In PR 81 the ring in which the next slab is sent while the current one is
+processed was used only for the source skewers, because for those every point gets contributions from at most two
+slabs and the output stays bit-identical. Every other operation (kappa, lensing, ISW, intensity maps, custom maps)
+adds the contribution of each slab to what it has accumulated, so the order of the slabs only changes the rounding of
+the sums.
+
+What changed (`src/beaming.c`):
+
+- `ring_overlapped` takes the list of fields from the run: the density; the three velocities if `lpt_vels = 1`; the
+  Newtonian potential if something reads it (`lpt_vels = 0`, kappa, ISW, lensing, or sources with lensing). The
+  potential travels with its two neighbouring planes (`slice_left`, `slice_right`, which sit at the end of its
+  buffer); the pointers to them are set again at every round.
+- The per-slab calls of the operations are in one function (`beam_operations_one_slab`) used by both rings.
+- The overlapped ring is used whenever there is more than one task. The original ring stays for a single task.
+
+## 2. Bug in `write_cstm` (`src/io.c`)
+
+Each task holds `num_pix = npix / NNodes` pixels of a custom map, listed in `listpix` (HEALPix nested indices).
+`write_cstm` looped over all `npix` pixels of the full map and added `data[ip]` and `nadd[ip]` without `listpix`:
+it read past the end of both arrays (garbage, sometimes NaN, in pixels the task does not hold) and put the local
+pixels at the wrong positions. `write_kappa`, `write_isw` and `write_imap` already use `listpix`. Found with
+AddressSanitizer (heap-buffer-overflow at `io.c` line 883). With one task `num_pix = npix` and the loop is harmless.
+The fix uses `listpix` as the other writers do.
+
+## What was checked
+
+A 256^3 box (z from 0.05 to 1.0, 4 and 3 tasks on one node) with every output on at once: two source populations
+(one with `include_lensing`), an intensity map, a custom map, kappa, ISW and, in the build with
+`-D_USE_FAST_LENSING`, the lensing shells (nside 32 to 64). Master with the `write_cstm` fix against the new ring, for
+the default build and the fast-lensing build, `lpt_vels = 1` and `0`: 8 runs, 17 to 24 files each.
+
+- No NaN or garbage anywhere. The largest difference of any column, relative to the rms of the column of the master
+  output, is 2.8e-6 (float32 resolution is 1.2e-7; the maps are sums over up to a thousand shells and slabs).
+- The skewer files of the source population without lensing are byte-identical; the lensed one and all the maps
+  agree to rounding.
+- Smaller boxes (64^3 and 128^3 with 2, 3 and 4 tasks) agree to 2e-6 as well.
+- The first comparison, before the `write_cstm` fix, showed garbage in the custom map in the new build and in the
+  master build alike (the master one happens to read zeros or garbage depending on the memory layout); with the fix
+  both agree.
+
+**Timing: 2048^3 on 8 nodes** (8 tasks x 128 threads, same parameters as above with nside 64): *to be filled in from
+job 60566323.*
+
+## Known limits
+
+- The speed-up depends on how much of the line-of-sight time is the exchange: with small maps (nside 32 or 64 here)
+  the processing per slab is short and the gain is mostly the removal of the copy and the wait; with large maps the
+  overlap hides more of the transfer.
+- The overlapped ring needs four to five more slabs of memory per task (one set of buffers per field).
+- A ring with the potential and all the velocities sends five fields per round; fields that no active operation reads
+  (the density when only kappa is on) are still sent, as in the original ring.
