@@ -52,8 +52,20 @@ the default build and the fast-lensing build, `lpt_vels = 1` and `0`: 8 runs, 17
   master build alike (the master one happens to read zeros or garbage depending on the memory layout); with the fix
   both agree.
 
-**Timing: 2048^3 on 8 nodes** (8 tasks x 128 threads, same parameters as above with nside 64): *to be filled in from
-job 60566323.*
+**Timing: 2048^3 on 8 nodes** (8 tasks x 128 threads, one task per node, same parameters as above with nside 64: kappa,
+ISW, custom and intensity maps, two source populations, one with lensing; `lpt_vels = 1`). Master (with the
+`write_cstm` fix) and the new ring run one after the other in one job (60566323), one run each:
+
+| | Master | New ring |
+|---|---|---|
+| Line of sight | 24.5 s | 11.2 s (2.2 times faster) |
+| Whole run | 84.4 s | 74.5 s |
+
+The master log shows 5.4 s of MPI time in the first slab alone; in the new ring task 0 waited 5.5 s for transfers in
+total. The processing per slab is about 0.1 s with maps of nside 64, so most of the gain is the removed copy and wait,
+and little of it is transfer hidden behind computation; with larger maps more of the transfer is hidden. Outputs: 27
+FITS files compared; 8 byte-identical, 19 equal to rounding (largest difference 7.2e-6 of the rms of the column), no
+NaN. Single measurements.
 
 ## Known limits
 
