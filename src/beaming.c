@@ -340,28 +340,52 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 #ifdef _HAVE_MPI
 //Ring exchange of the slabs in which the transfer of the next slab runs while the current one is
 //processed, and no copy back: two sets of buffers, swapped after every round.
-//The fields that go around the ring are the density, the velocities if they come from the LPT, and the
-//Newtonian potential if something reads it (its buffer has the two neighbouring planes at the end, which
-//are used by the tidal tensor, the velocities and the ISW term, so they travel with the slab).
+//Only the fields that some active beam operation reads go around the ring (see ring_fields_needed):
+//the density, the velocities if they come from the LPT, and the Newtonian potential (its buffer has the
+//two neighbouring planes at the end, which are used by the tidal tensor, the velocities and the ISW
+//term, so they travel with the slab). The pointers of the fields that are not sent are NULL while the
+//slabs are processed, so that a read of one of them stops the run instead of using the wrong slab.
 //The own slab is processed first, then the slab of the left neighbour, and so on. Every beam operation
 //adds the contribution of each slab to what it has accumulated, so the order of the slabs only changes
 //the rounding of the sums (for the source skewers, with at most two slabs per point, not even that).
-static void ring_overlapped(ParamCoLoRe *par,int need_npot)
+static void ring_fields_needed(ParamCoLoRe *par,int need_npot,int *send_dens,int *send_vel,int *send_npot)
+{
+  int ipop,srcs_lensing=0;
+  if(par->do_srcs) {
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      if(par->lensing_srcs[ipop])
+        srcs_lensing=1;
+    }
+  }
+  //Density: the skewers of the sources and the custom maps (the intensity maps read it before the line of sight)
+  *send_dens=par->do_cstm || (par->do_srcs && par->do_skewers);
+  //Velocities from the LPT: the RSD of the sources and the lensing shells
+  *send_vel=par->lpt_vels && (par->do_srcs || par->do_lensing);
+  //Potential: tidal tensor (kappa, lensing, lensing of the sources), ISW, and the velocities if not from the LPT
+  *send_npot=need_npot && (par->do_kappa || par->do_isw || par->do_lensing || srcs_lensing ||
+                           (par->do_srcs && !par->lpt_vels));
+}
+
+static void ring_overlapped(ParamCoLoRe *par,int send_dens,int send_vel,int send_npot)
 {
   int i,k,nf=0;
   long size_plane=2*((long)par->n_grid)*(par->n_grid/2+1);
   flouble **slot[5],*orig[5],*cur[5],*alt[5];
   long size[5],nbatch[5],nbatch_max=0;
   long off_left=0,off_right=0;
-  if(need_npot) {
+  flouble *hidden_npot=par->grid_npot,*hidden_left=par->slice_left,*hidden_right=par->slice_right;
+  flouble *hidden_dens=par->grid_dens,*hidden_velx=par->grid_velx,*hidden_vely=par->grid_vely,*hidden_velz=par->grid_velz;
+  if(send_npot) {
     slot[nf]=&(par->grid_npot);
     size[nf]=(par->nz_max+2)*size_plane;
     off_left=par->slice_left-par->grid_npot;
     off_right=par->slice_right-par->grid_npot;
     nf++;
   }
-  slot[nf]=&(par->grid_dens); size[nf]=par->nz_max*size_plane; nf++;
-  if(par->lpt_vels) {
+  if(send_dens) {
+    slot[nf]=&(par->grid_dens); size[nf]=par->nz_max*size_plane; nf++;
+  }
+  if(send_vel) {
     slot[nf]=&(par->grid_velx); size[nf]=par->nz_max*size_plane; nf++;
     slot[nf]=&(par->grid_vely); size[nf]=par->nz_max*size_plane; nf++;
     slot[nf]=&(par->grid_velz); size[nf]=par->nz_max*size_plane; nf++;
@@ -373,14 +397,26 @@ static void ring_overlapped(ParamCoLoRe *par,int need_npot)
     nbatch[k]=(size[k]+SENDRECV_BATCH-1)/SENDRECV_BATCH;
     if(nbatch[k]>nbatch_max) nbatch_max=nbatch[k];
   }
-  MPI_Request *req=my_malloc(2*nf*nbatch_max*sizeof(MPI_Request));
+  MPI_Request *req=my_malloc((2*nf*nbatch_max+1)*sizeof(MPI_Request));
+  //The fields that are not sent are not to be read
+  if(!send_npot) {
+    par->grid_npot=NULL;
+    par->slice_left=NULL;
+    par->slice_right=NULL;
+  }
+  if(!send_dens) par->grid_dens=NULL;
+  if(!send_vel) {
+    par->grid_velx=NULL;
+    par->grid_vely=NULL;
+    par->grid_velz=NULL;
+  }
   for(i=0;i<NNodes;i++) {
     int node_i_am_now=(NodeThis-i+NNodes)%NNodes;
     int nreq=0;
     double t_proc0;
     for(k=0;k<nf;k++)
       *(slot[k])=cur[k];
-    if(need_npot) {
+    if(send_npot) {
       par->slice_left=par->grid_npot+off_left;
       par->slice_right=par->grid_npot+off_right;
     }
@@ -419,9 +455,20 @@ static void ring_overlapped(ParamCoLoRe *par,int need_npot)
   //Back to the original buffers (the content of the fields is not needed after the line of sight)
   for(k=0;k<nf;k++)
     *(slot[k])=orig[k];
-  if(need_npot) {
+  if(send_npot) {
     par->slice_left=par->grid_npot+off_left;
     par->slice_right=par->grid_npot+off_right;
+  }
+  else {
+    par->grid_npot=hidden_npot;
+    par->slice_left=hidden_left;
+    par->slice_right=hidden_right;
+  }
+  if(!send_dens) par->grid_dens=hidden_dens;
+  if(!send_vel) {
+    par->grid_velx=hidden_velx;
+    par->grid_vely=hidden_vely;
+    par->grid_velz=hidden_velz;
   }
   par->nz_here=par->nz_all[NodeThis];
   par->iz0_here=par->iz0_all[NodeThis];
@@ -477,8 +524,13 @@ void get_beam_properties(ParamCoLoRe *par)
   int use_overlap=0;
 #ifdef _HAVE_MPI
   use_overlap=(NNodes>1);
-  if(use_overlap)
-    ring_overlapped(par,need_npot);
+  if(use_overlap) {
+    int send_dens,send_vel,send_npot;
+    ring_fields_needed(par,need_npot,&send_dens,&send_vel,&send_npot);
+    print_info("  Fields sent around the ring: %s%s%s\n",send_dens ? "density " : "",send_vel ? "velocities " : "",
+               send_npot ? "potential" : "");
+    ring_overlapped(par,send_dens,send_vel,send_npot);
+  }
 #endif //_HAVE_MPI
 
   for(i=0;i<NNodes && !use_overlap;i++) {
