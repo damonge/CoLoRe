@@ -447,6 +447,9 @@ static void srcs_beams_preproc_single(ParamCoLoRe *par,int ipop)
       par->cats[ipop]->srcs[ii].dz_rsd=0; //Here is were really dz_rsd is initialize since get_beam_properties calls this first and cleans!
       par->cats[ipop]->srcs[ii].e1=0;
       par->cats[ipop]->srcs[ii].e2=0;
+      par->cats[ipop]->srcs[ii].kappa=0;
+      par->cats[ipop]->srcs[ii].dra=0;
+      par->cats[ipop]->srcs[ii].ddec=0;
     }//end omp for
   }//end omp parallel
 }
