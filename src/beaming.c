@@ -389,9 +389,8 @@ static void ring_fields_needed(ParamCoLoRe *par,int need_npot,int *send_dens,int
   }
   //Density: the skewers of the sources and the custom maps (the intensity maps read it before the line of sight)
   *send_dens=par->do_cstm || (par->do_srcs && par->do_skewers);
-  //Velocities from the LPT: the RSD of the sources, and the lensing shells of the fast lensing, which add
-  //the velocity term of the deflection (RETURN_VEL | RETURN_TID in lensing_get_beam_properties)
-  *send_vel=par->lpt_vels && (par->do_srcs || par->do_lensing);
+  //Velocities from the LPT: the RSD of the sources.
+  *send_vel=par->lpt_vels && par->do_srcs;
   //Potential: tidal tensor (kappa, lensing, lensing of the sources), ISW, and the velocities if not from the LPT
   *send_npot=need_npot && (par->do_kappa || par->do_isw || par->do_lensing || srcs_lensing ||
                            (par->do_srcs && !par->lpt_vels));
