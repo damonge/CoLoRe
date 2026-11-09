@@ -29,7 +29,7 @@
 #define IND_ZZ 5
 
 static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
-      flouble *d,flouble v[3],flouble t[6],flouble *pdot,flouble *g,
+      flouble *d,flouble v[3],flouble dfl[3],flouble t[6],flouble *pdot,flouble *g,
       int flag_return)
 {
   long ngx=2*(par->n_grid/2+1);
@@ -83,6 +83,18 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
     }
   }
 
+  //Get deflection
+  if(flag_return & RETURN_DFL) {
+    dfl[0]=par->grid_npot[ix_hi+iy_0+iz_0]-par->grid_npot[ix_lo+iy_0+iz_0];
+    dfl[1]=par->grid_npot[ix_0+iy_hi+iz_0]-par->grid_npot[ix_0+iy_lo+iz_0];
+    if(iz==0)
+      dfl[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->slice_left[ix_0+iy_0];
+    else if(iz==par->nz_here-1)
+      dfl[2]=par->slice_right[ix_0+iy_0]-par->grid_npot[ix_0+iy_0+iz_lo];
+    else
+      dfl[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
+  }
+
   //Get ISW
   if(flag_return & RETURN_PDOT)
     *pdot=par->grid_npot[ix_0+iy_0+iz_0];
@@ -124,7 +136,8 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 
 //WARNING!!!! !: x should go from 0 to ngrid-1!!!!! Remove this when taken care of
 int interpolate_from_grid(ParamCoLoRe *par,double *x,
-                          flouble *d,flouble v[3],flouble t[6],flouble *pd,flouble *g,
+                          flouble *d,flouble v[3],flouble dfl[3],
+			  flouble t[6],flouble *pd,flouble *g,
                           int flag_return,int interp_type)
 {
   long ix0[3];
@@ -141,6 +154,11 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
   if(flag_return & RETURN_VEL) {
     for(ax=0;ax<3;ax++)
       v[ax]=0;
+  }
+
+  if(flag_return & RETURN_DFL) {
+    for(ax=0;ax<3;ax++)
+      dfl[ax]=0;
   }
 
   if(flag_return & RETURN_TID) {
@@ -163,11 +181,11 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
     ix0[2]-=par->iz0_here;
 
     if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-      flouble d_000,g_000,v_000[3],t_000[6],pd_000;
+      flouble d_000,g_000,v_000[3],dfl_000[3],t_000[6],pd_000;
       flouble w_000=h0x[2]*h0x[1]*h0x[0];
 
       added_anything=1;
-      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,&g_000,flag_return);
+      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,dfl_000,t_000,&pd_000,&g_000,flag_return);
       if(flag_return & RETURN_DENS)
         *d+=d_000*w_000;
 
@@ -177,6 +195,10 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       if(flag_return & RETURN_VEL) {
         for(ax=0;ax<3;ax++)
           v[ax]+=v_000[ax]*w_000;
+      }
+      if(flag_return & RETURN_DFL) {
+        for(ax=0;ax<3;ax++)
+          dfl[ax]+=dfl_000[ax]*w_000;
       }
       if(flag_return & RETURN_TID) {
         for(ax=0;ax<6;ax++)
@@ -209,20 +231,20 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
     ix1[2]-=par->iz0_here;
 
     if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-      flouble d_000,v_000[3],t_000[6],pd_000,g_000;
-      flouble d_001,v_001[3],t_001[6],pd_001,g_001;
-      flouble d_010,v_010[3],t_010[6],pd_010,g_010;
-      flouble d_011,v_011[3],t_011[6],pd_011,g_011;
+      flouble d_000,v_000[3],dfl_000[3],t_000[6],pd_000,g_000;
+      flouble d_001,v_001[3],dfl_001[3],t_001[6],pd_001,g_001;
+      flouble d_010,v_010[3],dfl_010[3],t_010[6],pd_010,g_010;
+      flouble d_011,v_011[3],dfl_011[3],t_011[6],pd_011,g_011;
       flouble w_000=h1x[2]*h1x[1]*h1x[0];
       flouble w_001=h1x[2]*h1x[1]*h0x[0];
       flouble w_010=h1x[2]*h0x[1]*h1x[0];
       flouble w_011=h1x[2]*h0x[1]*h0x[0];
 
       added_anything=1;
-      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,&g_000,flag_return);
-      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001,&pd_001,&g_001,flag_return);
-      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010,&pd_010,&g_010,flag_return);
-      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011,&pd_011,&g_011,flag_return);
+      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,dfl_000,t_000,&pd_000,&g_000,flag_return);
+      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,dfl_001,t_001,&pd_001,&g_001,flag_return);
+      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,dfl_010,t_010,&pd_010,&g_010,flag_return);
+      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,dfl_011,t_011,&pd_011,&g_011,flag_return);
       if(flag_return & RETURN_DENS)
         *d+=(d_000*w_000+d_001*w_001+d_010*w_010+d_011*w_011);
       if(flag_return & RETURN_GAUSS)
@@ -230,6 +252,10 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       if(flag_return & RETURN_VEL) {
         for(ax=0;ax<3;ax++)
           v[ax]+=(v_000[ax]*w_000+v_001[ax]*w_001+v_010[ax]*w_010+v_011[ax]*w_011);
+      }
+      if(flag_return & RETURN_DFL) {
+        for(ax=0;ax<3;ax++)
+          dfl[ax]+=(dfl_000[ax]*w_000+dfl_001[ax]*w_001+dfl_010[ax]*w_010+dfl_011[ax]*w_011);
       }
       if(flag_return & RETURN_TID) {
         for(ax=0;ax<6;ax++)
@@ -239,20 +265,20 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
         *pd+=(pd_000*w_000+pd_001*w_001+pd_010*w_010+pd_011*w_011);
     }
     if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
-      flouble d_100,v_100[3],t_100[6],pd_100,g_100;
-      flouble d_101,v_101[3],t_101[6],pd_101,g_101;
-      flouble d_110,v_110[3],t_110[6],pd_110,g_110;
-      flouble d_111,v_111[3],t_111[6],pd_111,g_111;
+      flouble d_100,v_100[3],dfl_100[3],t_100[6],pd_100,g_100;
+      flouble d_101,v_101[3],dfl_101[3],t_101[6],pd_101,g_101;
+      flouble d_110,v_110[3],dfl_110[3],t_110[6],pd_110,g_110;
+      flouble d_111,v_111[3],dfl_111[3],t_111[6],pd_111,g_111;
       flouble w_100=h0x[2]*h1x[1]*h1x[0];
       flouble w_101=h0x[2]*h1x[1]*h0x[0];
       flouble w_110=h0x[2]*h0x[1]*h1x[0];
       flouble w_111=h0x[2]*h0x[1]*h0x[0];
 
       added_anything=1;
-      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100,&pd_100,&g_100,flag_return);
-      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101,&pd_101,&g_101,flag_return);
-      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110,&pd_110,&g_110,flag_return);
-      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111,&pd_111,&g_111,flag_return);
+      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,dfl_100,t_100,&pd_100,&g_100,flag_return);
+      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,dfl_101,t_101,&pd_101,&g_101,flag_return);
+      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,dfl_110,t_110,&pd_110,&g_110,flag_return);
+      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,dfl_111,t_111,&pd_111,&g_111,flag_return);
       if(flag_return & RETURN_DENS)
         *d+=(d_100*w_100+d_101*w_101+d_110*w_110+d_111*w_111);
       if(flag_return & RETURN_GAUSS)
@@ -260,6 +286,10 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       if(flag_return & RETURN_VEL) {
         for(ax=0;ax<3;ax++)
           v[ax]+=(v_100[ax]*w_100+v_101[ax]*w_101+v_110[ax]*w_110+v_111[ax]*w_111);
+      }
+      if(flag_return & RETURN_DFL) {
+        for(ax=0;ax<3;ax++)
+          dfl[ax]+=(dfl_100[ax]*w_100+dfl_101[ax]*w_101+dfl_110[ax]*w_110+dfl_111[ax]*w_111);
       }
       if(flag_return & RETURN_TID) {
         for(ax=0;ax<6;ax++)

@@ -509,7 +509,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       }
 
       //Compute RSD
-      added=interpolate_from_grid(par,xn,NULL,v,NULL,NULL,NULL,RETURN_VEL,INTERP_TYPE_SKW);
+      added=interpolate_from_grid(par,xn,NULL,v,NULL,NULL,NULL,NULL,RETURN_VEL,INTERP_TYPE_SKW);
       if(added) {
 	if (par->lpt_vels) { //This is directly velocity
            vr=(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
@@ -528,10 +528,10 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
           for(ax=0;ax<3;ax++)
       	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
 	  if(cat->skw_gauss) {
-	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
+	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
 	  }
 	  else {
-	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
+	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
 	  }
       	  if(added) {
 	    if (par->lpt_vels) { //Same as above
@@ -604,7 +604,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  double rm=(i_r+0.5)*cat->dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,vp,tp,NULL,NULL,RETURN_VEL | RETURN_TID,
+	  added=interpolate_from_grid(par,xn,NULL,NULL,vp,tp,NULL,NULL,RETURN_DFL | RETURN_TID,
                                       INTERP_TYPE_LENSING);
 	  if(added) {
 	    double fr=fac_r_1[i_r]*r-fac_r_2[i_r];
