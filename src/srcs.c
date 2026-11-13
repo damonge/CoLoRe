@@ -727,11 +727,11 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
         ipix_up-=ibase*smap->num_pix_per_beam[ir_s+1];
 	if((ipix_up<0) || (ipix_up>=smap->num_pix_per_beam[ir_s+1]))
 	  report_error(1,"Bad pixel!!\n");
-        g1_up=smap->data[ibase_here][ir_s+1][2*ipix_up+0];
-        g2_up=smap->data[ibase_here][ir_s+1][2*ipix_up+1];
-        kp_up=smap->data[ibase_here][ir_s+1][2*ipix_up+2];
-        dx_up=smap->data[ibase_here][ir_s+1][2*ipix_up+3];
-        dy_up=smap->data[ibase_here][ir_s+1][2*ipix_up+4];
+        g1_up=smap->data[ibase_here][ir_s+1][5*ipix_up+0];
+        g2_up=smap->data[ibase_here][ir_s+1][5*ipix_up+1];
+        kp_up=smap->data[ibase_here][ir_s+1][5*ipix_up+2];
+        dx_up=smap->data[ibase_here][ir_s+1][5*ipix_up+3];
+        dy_up=smap->data[ibase_here][ir_s+1][5*ipix_up+4];
 
         //Interpolate
         cat->srcs[ii].e1=g1_lo*(1-h)+g1_up*h;
