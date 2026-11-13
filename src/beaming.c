@@ -29,7 +29,7 @@
 #define IND_ZZ 5
 
 static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
-      flouble *d,flouble v[3],flouble t[6],flouble *pdot,flouble *g,
+      flouble *d,flouble v[3],flouble dfl[3],flouble t[6],flouble *pdot,flouble *g,
       int flag_return)
 {
   long ngx=2*(par->n_grid/2+1);
@@ -83,6 +83,18 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
     }
   }
 
+  //Get deflection
+  if(flag_return & RETURN_DFL) {
+    dfl[0]=par->grid_npot[ix_hi+iy_0+iz_0]-par->grid_npot[ix_lo+iy_0+iz_0];
+    dfl[1]=par->grid_npot[ix_0+iy_hi+iz_0]-par->grid_npot[ix_0+iy_lo+iz_0];
+    if(iz==0)
+      dfl[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->slice_left[ix_0+iy_0];
+    else if(iz==par->nz_here-1)
+      dfl[2]=par->slice_right[ix_0+iy_0]-par->grid_npot[ix_0+iy_0+iz_lo];
+    else
+      dfl[2]=par->grid_npot[ix_0+iy_0+iz_hi]-par->grid_npot[ix_0+iy_0+iz_lo];
+  }
+
   //Get ISW
   if(flag_return & RETURN_PDOT)
     *pdot=par->grid_npot[ix_0+iy_0+iz_0];
@@ -124,7 +136,8 @@ static void get_element(ParamCoLoRe *par,long ix,long iy,long iz,
 
 //WARNING!!!! !: x should go from 0 to ngrid-1!!!!! Remove this when taken care of
 int interpolate_from_grid(ParamCoLoRe *par,double *x,
-                          flouble *d,flouble v[3],flouble t[6],flouble *pd,flouble *g,
+                          flouble *d,flouble v[3],flouble dfl[3],
+			  flouble t[6],flouble *pd,flouble *g,
                           int flag_return,int interp_type)
 {
   long ix0[3];
@@ -141,6 +154,11 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
   if(flag_return & RETURN_VEL) {
     for(ax=0;ax<3;ax++)
       v[ax]=0;
+  }
+
+  if(flag_return & RETURN_DFL) {
+    for(ax=0;ax<3;ax++)
+      dfl[ax]=0;
   }
 
   if(flag_return & RETURN_TID) {
@@ -163,11 +181,11 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
     ix0[2]-=par->iz0_here;
 
     if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-      flouble d_000,g_000,v_000[3],t_000[6],pd_000;
+      flouble d_000,g_000,v_000[3],dfl_000[3],t_000[6],pd_000;
       flouble w_000=h0x[2]*h0x[1]*h0x[0];
 
       added_anything=1;
-      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,&g_000,flag_return);
+      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,dfl_000,t_000,&pd_000,&g_000,flag_return);
       if(flag_return & RETURN_DENS)
         *d+=d_000*w_000;
 
@@ -177,6 +195,10 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       if(flag_return & RETURN_VEL) {
         for(ax=0;ax<3;ax++)
           v[ax]+=v_000[ax]*w_000;
+      }
+      if(flag_return & RETURN_DFL) {
+        for(ax=0;ax<3;ax++)
+          dfl[ax]+=dfl_000[ax]*w_000;
       }
       if(flag_return & RETURN_TID) {
         for(ax=0;ax<6;ax++)
@@ -209,20 +231,20 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
     ix1[2]-=par->iz0_here;
 
     if((ix0[2]>=0) && (ix0[2]<par->nz_here)) {
-      flouble d_000,v_000[3],t_000[6],pd_000,g_000;
-      flouble d_001,v_001[3],t_001[6],pd_001,g_001;
-      flouble d_010,v_010[3],t_010[6],pd_010,g_010;
-      flouble d_011,v_011[3],t_011[6],pd_011,g_011;
+      flouble d_000,v_000[3],dfl_000[3],t_000[6],pd_000,g_000;
+      flouble d_001,v_001[3],dfl_001[3],t_001[6],pd_001,g_001;
+      flouble d_010,v_010[3],dfl_010[3],t_010[6],pd_010,g_010;
+      flouble d_011,v_011[3],dfl_011[3],t_011[6],pd_011,g_011;
       flouble w_000=h1x[2]*h1x[1]*h1x[0];
       flouble w_001=h1x[2]*h1x[1]*h0x[0];
       flouble w_010=h1x[2]*h0x[1]*h1x[0];
       flouble w_011=h1x[2]*h0x[1]*h0x[0];
 
       added_anything=1;
-      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,t_000,&pd_000,&g_000,flag_return);
-      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,t_001,&pd_001,&g_001,flag_return);
-      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,t_010,&pd_010,&g_010,flag_return);
-      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,t_011,&pd_011,&g_011,flag_return);
+      get_element(par,ix0[0],ix0[1],ix0[2],&d_000,v_000,dfl_000,t_000,&pd_000,&g_000,flag_return);
+      get_element(par,ix1[0],ix0[1],ix0[2],&d_001,v_001,dfl_001,t_001,&pd_001,&g_001,flag_return);
+      get_element(par,ix0[0],ix1[1],ix0[2],&d_010,v_010,dfl_010,t_010,&pd_010,&g_010,flag_return);
+      get_element(par,ix1[0],ix1[1],ix0[2],&d_011,v_011,dfl_011,t_011,&pd_011,&g_011,flag_return);
       if(flag_return & RETURN_DENS)
         *d+=(d_000*w_000+d_001*w_001+d_010*w_010+d_011*w_011);
       if(flag_return & RETURN_GAUSS)
@@ -230,6 +252,10 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       if(flag_return & RETURN_VEL) {
         for(ax=0;ax<3;ax++)
           v[ax]+=(v_000[ax]*w_000+v_001[ax]*w_001+v_010[ax]*w_010+v_011[ax]*w_011);
+      }
+      if(flag_return & RETURN_DFL) {
+        for(ax=0;ax<3;ax++)
+          dfl[ax]+=(dfl_000[ax]*w_000+dfl_001[ax]*w_001+dfl_010[ax]*w_010+dfl_011[ax]*w_011);
       }
       if(flag_return & RETURN_TID) {
         for(ax=0;ax<6;ax++)
@@ -239,20 +265,20 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
         *pd+=(pd_000*w_000+pd_001*w_001+pd_010*w_010+pd_011*w_011);
     }
     if((ix1[2]>=0) && (ix1[2]<par->nz_here)) {
-      flouble d_100,v_100[3],t_100[6],pd_100,g_100;
-      flouble d_101,v_101[3],t_101[6],pd_101,g_101;
-      flouble d_110,v_110[3],t_110[6],pd_110,g_110;
-      flouble d_111,v_111[3],t_111[6],pd_111,g_111;
+      flouble d_100,v_100[3],dfl_100[3],t_100[6],pd_100,g_100;
+      flouble d_101,v_101[3],dfl_101[3],t_101[6],pd_101,g_101;
+      flouble d_110,v_110[3],dfl_110[3],t_110[6],pd_110,g_110;
+      flouble d_111,v_111[3],dfl_111[3],t_111[6],pd_111,g_111;
       flouble w_100=h0x[2]*h1x[1]*h1x[0];
       flouble w_101=h0x[2]*h1x[1]*h0x[0];
       flouble w_110=h0x[2]*h0x[1]*h1x[0];
       flouble w_111=h0x[2]*h0x[1]*h0x[0];
 
       added_anything=1;
-      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,t_100,&pd_100,&g_100,flag_return);
-      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,t_101,&pd_101,&g_101,flag_return);
-      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,t_110,&pd_110,&g_110,flag_return);
-      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,t_111,&pd_111,&g_111,flag_return);
+      get_element(par,ix0[0],ix0[1],ix1[2],&d_100,v_100,dfl_100,t_100,&pd_100,&g_100,flag_return);
+      get_element(par,ix1[0],ix0[1],ix1[2],&d_101,v_101,dfl_101,t_101,&pd_101,&g_101,flag_return);
+      get_element(par,ix0[0],ix1[1],ix1[2],&d_110,v_110,dfl_110,t_110,&pd_110,&g_110,flag_return);
+      get_element(par,ix1[0],ix1[1],ix1[2],&d_111,v_111,dfl_111,t_111,&pd_111,&g_111,flag_return);
       if(flag_return & RETURN_DENS)
         *d+=(d_100*w_100+d_101*w_101+d_110*w_110+d_111*w_111);
       if(flag_return & RETURN_GAUSS)
@@ -260,6 +286,10 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
       if(flag_return & RETURN_VEL) {
         for(ax=0;ax<3;ax++)
           v[ax]+=(v_100[ax]*w_100+v_101[ax]*w_101+v_110[ax]*w_110+v_111[ax]*w_111);
+      }
+      if(flag_return & RETURN_DFL) {
+        for(ax=0;ax<3;ax++)
+          dfl[ax]+=(dfl_100[ax]*w_100+dfl_101[ax]*w_101+dfl_110[ax]*w_110+dfl_111[ax]*w_111);
       }
       if(flag_return & RETURN_TID) {
         for(ax=0;ax<6;ax++)
@@ -271,6 +301,25 @@ int interpolate_from_grid(ParamCoLoRe *par,double *x,
   }
 
   return added_anything;
+}
+
+//All the beam operations on the slab that the task holds now (par->nz_here, par->iz0_here and the fields)
+static void beam_operations_one_slab(ParamCoLoRe *par)
+{
+  if(par->do_kappa)
+    kappa_get_beam_properties(par);
+#ifdef _USE_FAST_LENSING
+  if(par->do_lensing)
+    lensing_get_beam_properties(par);
+#endif //_USE_FAST_LENSING
+  if(par->do_isw)
+    isw_get_beam_properties(par);
+  if(par->do_srcs)
+    srcs_get_beam_properties(par);
+  if(par->do_imap)
+    imap_get_beam_properties(par);
+  if(par->do_cstm)
+    cstm_get_beam_properties(par);
 }
 
 #ifdef _HAVE_MPI
@@ -319,57 +368,114 @@ static void mpi_sendrecv_wrap(flouble *data,flouble *buff,long count,int tag)
 #endif //_HAVE_MPI
 
 #ifdef _HAVE_MPI
-//Ring exchange of the density and velocity slabs in which the transfer of the next slab runs while the
-//current one is processed, and no copy back: two sets of buffers, swapped after every round.
-//Only used when the line of sight just fills the skewers of the sources (every skewer point gets
-//a contribution from at most two slabs, so the order of the slabs does not change the result).
-//The own slab is processed first, then the slab of the left neighbour, and so on.
-static void ring_overlapped(ParamCoLoRe *par,long size_slice)
+//Ring exchange of the slabs in which the transfer of the next slab runs while the current one is
+//processed, and no copy back: two sets of buffers, swapped after every round.
+//Only the fields that some active beam operation reads go around the ring (see ring_fields_needed):
+//the density, the velocities if they come from the LPT, and the Newtonian potential (its buffer has the
+//two neighbouring planes at the end, which are used by the tidal tensor, the velocities and the ISW
+//term, so they travel with the slab). The pointers of the fields that are not sent are NULL while the
+//slabs are processed, so that a read of one of them stops the run instead of using the wrong slab.
+//The own slab is processed first, then the slab of the left neighbour, and so on. Every beam operation
+//adds the contribution of each slab to what it has accumulated, so the order of the slabs only changes
+//the rounding of the sums (for the source skewers, with at most two slabs per point, not even that).
+static void ring_fields_needed(ParamCoLoRe *par,int need_npot,int *send_dens,int *send_vel,int *send_npot)
 {
-  int i,k;
-  flouble *orig[4]={par->grid_dens,par->grid_velx,par->grid_vely,par->grid_velz};
-  flouble *cur[4],*alt[4];
-  long nbatch=(size_slice+SENDRECV_BATCH-1)/SENDRECV_BATCH;
-  MPI_Request *req=my_malloc(2*4*nbatch*sizeof(MPI_Request));
-  for(k=0;k<4;k++) {
+  int ipop,srcs_lensing=0;
+  if(par->do_srcs) {
+    for(ipop=0;ipop<par->n_srcs;ipop++) {
+      if(par->lensing_srcs[ipop])
+        srcs_lensing=1;
+    }
+  }
+  //Density: the skewers of the sources and the custom maps (the intensity maps read it before the line of sight)
+  *send_dens=par->do_cstm || (par->do_srcs && par->do_skewers);
+  //Velocities from the LPT: the RSD of the sources.
+  *send_vel=par->lpt_vels && par->do_srcs;
+  //Potential: tidal tensor (kappa, lensing, lensing of the sources), ISW, and the velocities if not from the LPT
+  *send_npot=need_npot && (par->do_kappa || par->do_isw || par->do_lensing || srcs_lensing ||
+                           (par->do_srcs && !par->lpt_vels));
+}
+
+static void ring_overlapped(ParamCoLoRe *par,int send_dens,int send_vel,int send_npot)
+{
+  int i,k,nf=0;
+  long size_plane=2*((long)par->n_grid)*(par->n_grid/2+1);
+  flouble **slot[5],*orig[5],*cur[5],*alt[5];
+  long size[5],nbatch[5],nbatch_max=0;
+  long off_left=0,off_right=0;
+  flouble *hidden_npot=par->grid_npot,*hidden_left=par->slice_left,*hidden_right=par->slice_right;
+  flouble *hidden_dens=par->grid_dens,*hidden_velx=par->grid_velx,*hidden_vely=par->grid_vely,*hidden_velz=par->grid_velz;
+  if(send_npot) {
+    slot[nf]=&(par->grid_npot);
+    size[nf]=(par->nz_max+2)*size_plane;
+    off_left=par->slice_left-par->grid_npot;
+    off_right=par->slice_right-par->grid_npot;
+    nf++;
+  }
+  if(send_dens) {
+    slot[nf]=&(par->grid_dens); size[nf]=par->nz_max*size_plane; nf++;
+  }
+  if(send_vel) {
+    slot[nf]=&(par->grid_velx); size[nf]=par->nz_max*size_plane; nf++;
+    slot[nf]=&(par->grid_vely); size[nf]=par->nz_max*size_plane; nf++;
+    slot[nf]=&(par->grid_velz); size[nf]=par->nz_max*size_plane; nf++;
+  }
+  for(k=0;k<nf;k++) {
+    orig[k]=*(slot[k]);
     cur[k]=orig[k];
-    alt[k]=my_malloc(size_slice*sizeof(flouble));
+    alt[k]=my_malloc(size[k]*sizeof(flouble));
+    nbatch[k]=(size[k]+SENDRECV_BATCH-1)/SENDRECV_BATCH;
+    if(nbatch[k]>nbatch_max) nbatch_max=nbatch[k];
+  }
+  MPI_Request *req=my_malloc((2*nf*nbatch_max+1)*sizeof(MPI_Request));
+  //The fields that are not sent are not to be read
+  if(!send_npot) {
+    par->grid_npot=NULL;
+    par->slice_left=NULL;
+    par->slice_right=NULL;
+  }
+  if(!send_dens) par->grid_dens=NULL;
+  if(!send_vel) {
+    par->grid_velx=NULL;
+    par->grid_vely=NULL;
+    par->grid_velz=NULL;
   }
   for(i=0;i<NNodes;i++) {
     int node_i_am_now=(NodeThis-i+NNodes)%NNodes;
     int nreq=0;
     double t_proc0;
-    par->grid_dens=cur[0];
-    par->grid_velx=cur[1];
-    par->grid_vely=cur[2];
-    par->grid_velz=cur[3];
+    for(k=0;k<nf;k++)
+      *(slot[k])=cur[k];
+    if(send_npot) {
+      par->slice_left=par->grid_npot+off_left;
+      par->slice_right=par->grid_npot+off_right;
+    }
     par->nz_here=par->nz_all[node_i_am_now];
     par->iz0_here=par->iz0_all[node_i_am_now];
     if(i<NNodes-1) {
       int b;
-      for(k=0;k<4;k++) {
-        for(b=0;b<nbatch;b++) {
-          long lo=b*(long)SENDRECV_BATCH,n=size_slice-lo;
+      for(k=0;k<nf;k++) {
+        for(b=0;b<nbatch[k];b++) {
+          long lo=b*(long)SENDRECV_BATCH,n=size[k]-lo;
           if(n>SENDRECV_BATCH) n=SENDRECV_BATCH;
-          MPI_Isend(&(cur[k][lo]),(int)n,FLOUBLE_MPI,NodeRight,(int)(k*nbatch+b),MPI_COMM_WORLD,&(req[nreq++]));
-          MPI_Irecv(&(alt[k][lo]),(int)n,FLOUBLE_MPI,NodeLeft ,(int)(k*nbatch+b),MPI_COMM_WORLD,&(req[nreq++]));
+          MPI_Isend(&(cur[k][lo]),(int)n,FLOUBLE_MPI,NodeRight,(int)(k*nbatch_max+b),MPI_COMM_WORLD,&(req[nreq++]));
+          MPI_Irecv(&(alt[k][lo]),(int)n,FLOUBLE_MPI,NodeLeft ,(int)(k*nbatch_max+b),MPI_COMM_WORLD,&(req[nreq++]));
         }
       }
     }
     t_proc0=MPI_Wtime();
-    srcs_get_beam_properties(par);
+    beam_operations_one_slab(par);
     if(getenv("COLORE_TIMING")) {
-      double t_proc=MPI_Wtime()-t_proc0,t_max,t_sum,t_w0=MPI_Wtime();
+      double t_proc=MPI_Wtime()-t_proc0,t_max,t_sum;
       MPI_Allreduce(&t_proc,&t_max,1,MPI_DOUBLE,MPI_MAX,MPI_COMM_WORLD);
       MPI_Allreduce(&t_proc,&t_sum,1,MPI_DOUBLE,MPI_SUM,MPI_COMM_WORLD);
       print_info("  - slab %d processed (processing time over tasks: max %.2f s, mean %.2f s)\n",i,t_max,t_sum/NNodes);
-      (void)t_w0;
     }
     if(i<NNodes-1) {
       double t_wait0=MPI_Wtime();
       MPI_Waitall(nreq,req,MPI_STATUSES_IGNORE);
       t_ring_mpi+=MPI_Wtime()-t_wait0; //time waiting for the transfer after the processing
-      for(k=0;k<4;k++) {
+      for(k=0;k<nf;k++) {
         flouble *tmp=cur[k];
         cur[k]=alt[k];
         alt[k]=tmp;
@@ -377,13 +483,26 @@ static void ring_overlapped(ParamCoLoRe *par,long size_slice)
     }
   }
   //Back to the original buffers (the content of the fields is not needed after the line of sight)
-  par->grid_dens=orig[0];
-  par->grid_velx=orig[1];
-  par->grid_vely=orig[2];
-  par->grid_velz=orig[3];
+  for(k=0;k<nf;k++)
+    *(slot[k])=orig[k];
+  if(send_npot) {
+    par->slice_left=par->grid_npot+off_left;
+    par->slice_right=par->grid_npot+off_right;
+  }
+  else {
+    par->grid_npot=hidden_npot;
+    par->slice_left=hidden_left;
+    par->slice_right=hidden_right;
+  }
+  if(!send_dens) par->grid_dens=hidden_dens;
+  if(!send_vel) {
+    par->grid_velx=hidden_velx;
+    par->grid_vely=hidden_vely;
+    par->grid_velz=hidden_velz;
+  }
   par->nz_here=par->nz_all[NodeThis];
   par->iz0_here=par->iz0_all[NodeThis];
-  for(k=0;k<4;k++) {
+  for(k=0;k<nf;k++) {
     //whichever of the two buffers is not an original one was allocated here
     if(cur[k]!=orig[k]) free(cur[k]);
     else free(alt[k]);
@@ -434,10 +553,13 @@ void get_beam_properties(ParamCoLoRe *par)
 
   int use_overlap=0;
 #ifdef _HAVE_MPI
-  use_overlap=(NNodes>1) && !need_npot && par->lpt_vels && par->do_srcs && !par->do_kappa &&
-    !par->do_isw && !par->do_lensing && !par->do_imap && !par->do_cstm;
+  use_overlap=(NNodes>1);
   if(use_overlap) {
-    ring_overlapped(par,size_slice_dens);
+    int send_dens,send_vel,send_npot;
+    ring_fields_needed(par,need_npot,&send_dens,&send_vel,&send_npot);
+    print_info("  Fields sent around the ring: %s%s%s\n",send_dens ? "density " : "",send_vel ? "velocities " : "",
+               send_npot ? "potential" : "");
+    ring_overlapped(par,send_dens,send_vel,send_npot);
   }
 #endif //_HAVE_MPI
 
@@ -463,20 +585,7 @@ void get_beam_properties(ParamCoLoRe *par)
     double t_proc0=MPI_Wtime();
 #endif //_HAVE_MPI
 
-    if(par->do_kappa)
-      kappa_get_beam_properties(par);
-#ifdef _USE_FAST_LENSING
-    if(par->do_lensing)
-      lensing_get_beam_properties(par);
-#endif //_USE_FAST_LENSING
-    if(par->do_isw)
-      isw_get_beam_properties(par);
-    if(par->do_srcs)
-      srcs_get_beam_properties(par);
-    if(par->do_imap)
-      imap_get_beam_properties(par);
-    if(par->do_cstm)
-      cstm_get_beam_properties(par);
+    beam_operations_one_slab(par);
     if(getenv("COLORE_TIMING")) {
 #ifdef _HAVE_MPI
       double t_proc=MPI_Wtime()-t_proc0,t_max,t_sum;

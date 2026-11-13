@@ -879,9 +879,10 @@ void write_cstm(ParamCoLoRe *par)
       map_nadd[ip]=0;
     }
     sprintf(fname,"!%s_custom_s%d.fits",par->prefixOut,ipop+1);
-    for(ip=0;ip<npx;ip++) {
-      map_write[ip]+=cmap->data[ip];
-      map_nadd[ip]+=cmap->nadd[ip];
+    for(ip=0;ip<cmap->num_pix;ip++) {
+      int id_pix=cmap->listpix[ip];
+      map_write[id_pix]+=cmap->data[ip];
+      map_nadd[ id_pix]+=cmap->nadd[ip];
     }
 
     //Collect all dummy maps

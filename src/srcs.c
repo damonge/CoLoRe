@@ -447,6 +447,9 @@ static void srcs_beams_preproc_single(ParamCoLoRe *par,int ipop)
       par->cats[ipop]->srcs[ii].dz_rsd=0; //Here is were really dz_rsd is initialize since get_beam_properties calls this first and cleans!
       par->cats[ipop]->srcs[ii].e1=0;
       par->cats[ipop]->srcs[ii].e2=0;
+      par->cats[ipop]->srcs[ii].kappa=0;
+      par->cats[ipop]->srcs[ii].dra=0;
+      par->cats[ipop]->srcs[ii].ddec=0;
     }//end omp for
   }//end omp parallel
 }
@@ -506,7 +509,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
       }
 
       //Compute RSD
-      added=interpolate_from_grid(par,xn,NULL,v,NULL,NULL,NULL,RETURN_VEL,INTERP_TYPE_SKW);
+      added=interpolate_from_grid(par,xn,NULL,v,NULL,NULL,NULL,NULL,RETURN_VEL,INTERP_TYPE_SKW);
       if(added) {
 	if (par->lpt_vels) { //This is directly velocity
            vr=(v[0]*u[0]+v[1]*u[1]+v[2]*u[2]);
@@ -525,10 +528,10 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
           for(ax=0;ax<3;ax++)
       	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
 	  if(cat->skw_gauss) {
-	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
+	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,NULL,&gauss,RETURN_GAUSS | RETURN_VEL,INTERP_TYPE_SKW);
 	  }
 	  else {
-	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
+	    added=interpolate_from_grid(par,xn,&dens,v,NULL,NULL,NULL,&gauss,RETURN_DENS | RETURN_VEL,INTERP_TYPE_SKW);
 	  }
       	  if(added) {
 	    if (par->lpt_vels) { //Same as above
@@ -601,7 +604,7 @@ static void srcs_get_beam_properties_single(ParamCoLoRe *par,int ipop)
 	  double rm=(i_r+0.5)*cat->dr;
 	  for(ax=0;ax<3;ax++)
 	    xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-	  added=interpolate_from_grid(par,xn,NULL,vp,tp,NULL,NULL,RETURN_VEL | RETURN_TID,
+	  added=interpolate_from_grid(par,xn,NULL,NULL,vp,tp,NULL,NULL,RETURN_DFL | RETURN_TID,
                                       INTERP_TYPE_LENSING);
 	  if(added) {
 	    double fr=fac_r_1[i_r]*r-fac_r_2[i_r];
@@ -724,11 +727,11 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
         ipix_up-=ibase*smap->num_pix_per_beam[ir_s+1];
 	if((ipix_up<0) || (ipix_up>=smap->num_pix_per_beam[ir_s+1]))
 	  report_error(1,"Bad pixel!!\n");
-        g1_up=smap->data[ibase_here][ir_s+1][2*ipix_up+0];
-        g2_up=smap->data[ibase_here][ir_s+1][2*ipix_up+1];
-        kp_up=smap->data[ibase_here][ir_s+1][2*ipix_up+2];
-        dx_up=smap->data[ibase_here][ir_s+1][2*ipix_up+3];
-        dy_up=smap->data[ibase_here][ir_s+1][2*ipix_up+4];
+        g1_up=smap->data[ibase_here][ir_s+1][5*ipix_up+0];
+        g2_up=smap->data[ibase_here][ir_s+1][5*ipix_up+1];
+        kp_up=smap->data[ibase_here][ir_s+1][5*ipix_up+2];
+        dx_up=smap->data[ibase_here][ir_s+1][5*ipix_up+3];
+        dy_up=smap->data[ibase_here][ir_s+1][5*ipix_up+4];
 
         //Interpolate
         cat->srcs[ii].e1=g1_lo*(1-h)+g1_up*h;
@@ -745,7 +748,7 @@ static void srcs_beams_postproc_single(ParamCoLoRe *par,int ipop)
       //2LPT Velocities are already normalized!
       if (!par->lpt_vels){
          if(cat->has_skw) {
-	   int i_r,i_r_max=MAX((int)(r*cat->idr+0.5),cat->nr-1);
+	   int i_r,i_r_max=MIN((int)(r*cat->idr+0.5),cat->nr-1);
 	   long offp=(long)ii*cat->nr;
 	   for(i_r=0;i_r<=i_r_max;i_r++) {
 	     vg=get_bg(par,(i_r+0.5)*cat->dr,BG_V1,0);

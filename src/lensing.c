@@ -190,7 +190,7 @@ void lensing_get_beam_properties(ParamCoLoRe *par)
             double rm=(irr+0.5)*dr;
             for(ax=0;ax<3;ax++)
               xn[ax]=(rm*u[ax]+par->pos_obs[ax])*idx;
-            added=interpolate_from_grid(par,xn,NULL,v,t,NULL,NULL,RETURN_VEL | RETURN_TID,
+            added=interpolate_from_grid(par,xn,NULL,NULL,v,t,NULL,NULL,RETURN_DFL | RETURN_TID,
                                         INTERP_TYPE_LENSING);
             if(added) {
               double dotk=0,dote1=0,dote2=0,dotvx=0,dotvy=0;
